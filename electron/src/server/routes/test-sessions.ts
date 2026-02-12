@@ -1,0 +1,708 @@
+/**
+ * Test Session API Routes
+ * CRUD operations for test sessions and event management
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { Router } from 'express';
+import {
+  getTestSessions,
+  getTestSessionById,
+  createTestSession,
+  updateTestSession,
+  deleteTestSession,
+  addEventToSession,
+  removeEventFromSession,
+  getSiteById,
+} from '../../core/library-store';
+import { TestSession, TestEvent, SessionStatus } from '../../core/models/workflow';
+import { sessionDataCollector } from '../../core/session-data-collector';
+import {
+  analyzeSession,
+  extractJammingWindows,
+  DroneTrackData,
+} from '../../core/metrics-engine';
+import { calculateTrackerMetrics } from '../../core/tracker-metrics-calculator';
+import { TrackerPosition } from '../../core/mock-tracker-provider';
+import { loadConfig } from '../../core/config';
+import { getDashboardApp } from '../index';
+import log from 'electron-log';
+
+export function testSessionRoutes(): Router {
+  const router = Router();
+
+  // GET /api/test-sessions - List all sessions
+  router.get('/test-sessions', (req, res) => {
+    try {
+      let sessions = getTestSessions();
+
+      // Optional status filter
+      const status = req.query.status as SessionStatus | undefined;
+      if (status) {
+        sessions = sessions.filter(s => s.status === status);
+      }
+
+      // Optional site filter
+      const siteId = req.query.site_id as string | undefined;
+      if (siteId) {
+        sessions = sessions.filter(s => s.site_id === siteId);
+      }
+
+      // Sort by created_at descending (newest first)
+      sessions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      res.json(sessions);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch test sessions' });
+    }
+  });
+
+  // GET /api/test-sessions/:id - Get session by ID
+  router.get('/test-sessions/:id', (req, res) => {
+    try {
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+      res.json(session);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch test session' });
+    }
+  });
+
+  // POST /api/test-sessions - Create new session
+  router.post('/test-sessions', (req, res) => {
+    try {
+      const sessionData = req.body as Omit<TestSession, 'id' | 'created_at' | 'updated_at'>;
+
+      // Validate required fields (site_id is optional)
+      if (!sessionData.name) {
+        return res.status(400).json({ error: 'Missing required field: name' });
+      }
+
+      // Verify site exists only if site_id is provided
+      if (sessionData.site_id) {
+        const site = getSiteById(sessionData.site_id);
+        if (!site) {
+          return res.status(400).json({ error: 'Site not found' });
+        }
+      }
+
+      // Set defaults
+      const session = createTestSession({
+        ...sessionData,
+        status: sessionData.status || 'planning',
+        tracker_assignments: sessionData.tracker_assignments || [],
+        cuas_placements: sessionData.cuas_placements || [],
+        events: sessionData.events || [],
+        sd_card_merged: false,
+        analysis_completed: false,
+      });
+
+      res.status(201).json(session);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to create test session' });
+    }
+  });
+
+  // PUT /api/test-sessions/:id - Update session
+  router.put('/test-sessions/:id', (req, res) => {
+    try {
+      const updates = req.body as Partial<TestSession>;
+      const session = updateTestSession(req.params.id, updates);
+
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      res.json(session);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update test session' });
+    }
+  });
+
+  // DELETE /api/test-sessions/:id - Delete session
+  router.delete('/test-sessions/:id', (req, res) => {
+    try {
+      const deleted = deleteTestSession(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to delete test session' });
+    }
+  });
+
+  // POST /api/test-sessions/:id/start - Start live session
+  router.post('/test-sessions/:id/start', (req, res) => {
+    try {
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      if (session.status !== 'planning') {
+        return res.status(400).json({ error: 'Session must be in planning status to start' });
+      }
+
+      // Extract assigned tracker IDs from tracker_assignments
+      const assignedTrackerIds = session.tracker_assignments?.map(a => a.tracker_id) ?? [];
+      log.info(`Starting session ${session.id} with ${assignedTrackerIds.length} assigned trackers: ${assignedTrackerIds.join(', ') || 'none (recording all)'}`);
+
+      // Start recording for this session with tracker filter
+      sessionDataCollector.startSession(session.id, assignedTrackerIds);
+
+      // Create session directory for CSV export
+      const config = loadConfig();
+      const safeName = session.name.replace(/[^a-zA-Z0-9-_]/g, '_');
+      const sessionDirName = `${safeName}_${Date.now()}`;
+      const sessionPath = path.join(config.log_root_folder, 'test-sessions', sessionDirName);
+
+      // Create directory
+      fs.mkdirSync(sessionPath, { recursive: true });
+      log.info(`Created session directory: ${sessionPath}`);
+
+      const updated = updateTestSession(req.params.id, {
+        status: 'active',
+        start_time: new Date().toISOString(),
+        live_data_path: sessionPath,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      log.error('Failed to start session:', error);
+      res.status(500).json({ error: 'Failed to start session' });
+    }
+  });
+
+  // POST /api/test-sessions/:id/stop - Stop live session
+  router.post('/test-sessions/:id/stop', async (req, res) => {
+    try {
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      if (session.status !== 'active') {
+        return res.status(400).json({ error: 'Session must be active to stop' });
+      }
+
+      // Stop recording
+      sessionDataCollector.stopSession(session.id);
+
+      // Export data to CSV files
+      let exportSummary = {
+        files_created: [] as string[],
+        total_positions: 0,
+        trackers_exported: [] as string[],
+      };
+
+      if (session.live_data_path) {
+        try {
+          const createdFiles = await sessionDataCollector.exportToCSV(session.id, session.live_data_path);
+          const summary = sessionDataCollector.getSessionSummary(session.id);
+
+          exportSummary = {
+            files_created: createdFiles.map(f => path.basename(f)),
+            total_positions: summary?.totalPositions || 0,
+            trackers_exported: summary?.trackerSummaries.map(t => t.trackerId) || [],
+          };
+
+          log.info(`Session ${session.id} exported: ${createdFiles.length} files, ${exportSummary.total_positions} positions`);
+        } catch (exportError) {
+          log.error('Error exporting session data:', exportError);
+          // Continue even if export fails
+        }
+      }
+
+      // Calculate duration from start_time
+      const endTime = Date.now();
+      const startTime = session.start_time ? new Date(session.start_time).getTime() : null;
+      const duration_seconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
+
+      const updated = updateTestSession(req.params.id, {
+        status: 'completed',
+        end_time: new Date(endTime).toISOString(),
+        duration_seconds,
+      });
+
+      res.json({
+        ...updated,
+        export_summary: exportSummary,
+      });
+    } catch (error) {
+      log.error('Failed to stop session:', error);
+      res.status(500).json({ error: 'Failed to stop session' });
+    }
+  });
+
+  // POST /api/test-sessions/:id/analyze - Run analysis on session
+  router.post('/test-sessions/:id/analyze', (req, res) => {
+    try {
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      if (session.status !== 'completed' && session.status !== 'capturing' && session.status !== 'analyzing') {
+        return res.status(400).json({ error: 'Session must be completed, capturing, or analyzing status' });
+      }
+
+      // Update status to analyzing
+      const updated = updateTestSession(req.params.id, {
+        status: 'analyzing',
+      });
+
+      // In a real implementation, this would trigger actual analysis
+      // For now, we just update the status and return
+      // The frontend will handle displaying analysis UI
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to start analysis' });
+    }
+  });
+
+  // GET /api/test-sessions/:id/analysis - Get analysis results
+  router.get('/test-sessions/:id/analysis', (req, res) => {
+    try {
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      // Get recorded live data from session collector
+      const positionsByTracker = sessionDataCollector.getPositionsByTracker(req.params.id);
+      const sessionSummary = sessionDataCollector.getSessionSummary(req.params.id);
+
+      // Convert recorded positions to DroneTrackData format
+      const trackData = new Map<string, DroneTrackData>();
+
+      for (const [trackerId, positions] of positionsByTracker) {
+        if (positions.length === 0) continue;
+
+        // Sort by timestamp
+        const sortedPositions = [...positions].sort(
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
+
+        // Convert to enhanced format expected by metrics engine
+        const enhancedPoints = sortedPositions.map((p: TrackerPosition) => ({
+          lat: p.latitude,
+          lon: p.longitude,
+          alt_m: p.altitude_m,
+          baro_alt_m: null,
+          timestamp_ms: new Date(p.timestamp).getTime(),
+          hdop: null,
+          satellites: null,
+          speed_mps: p.speed_ms,
+          course_deg: p.heading_deg,
+          fix_valid: p.gps_quality !== 'poor',
+          rssi_dbm: p.rssi_dbm ?? null,
+          quality: (p.gps_quality === 'good' ? 'good' : p.gps_quality === 'degraded' ? 'degraded' : 'lost') as 'good' | 'degraded' | 'lost',
+          source: (p.source === 'mock' ? 'live' : p.source) as 'live' | 'sd_card' | 'interpolated',
+        }));
+
+        trackData.set(trackerId, {
+          tracker_id: trackerId,
+          points: enhancedPoints,
+          start_time_ms: new Date(sortedPositions[0].timestamp).getTime(),
+          end_time_ms: new Date(sortedPositions[sortedPositions.length - 1].timestamp).getTime(),
+        });
+      }
+
+      // Build CUAS positions map
+      const cuasPositions = new Map<string, { lat: number; lon: number }>();
+      for (const placement of session.cuas_placements || []) {
+        if (placement.position) {
+          cuasPositions.set(placement.cuas_profile_id, {
+            lat: placement.position.lat,
+            lon: placement.position.lon,
+          });
+        }
+      }
+
+      // Run analysis
+      let analysisResults;
+      if (trackData.size > 0) {
+        analysisResults = analyzeSession(session, trackData, cuasPositions);
+      }
+
+      // Extract jamming windows
+      const jammingWindows = extractJammingWindows(session.events);
+
+      // Build response
+      const response = {
+        session_id: session.id,
+        session_name: session.name,
+        status: session.status,
+        tracker_count: trackData.size,
+        total_points: sessionSummary?.totalPositions || 0,
+        duration_seconds: sessionSummary?.duration_seconds || 0,
+        jamming_windows: jammingWindows,
+        total_jamming_time_s: jammingWindows.reduce((sum, w) => sum + w.duration_s, 0),
+        events: session.events,
+        trackers: [] as Array<{
+          tracker_id: string;
+          point_count: number;
+          metrics: Record<string, unknown>;
+          altitude_profile: Array<{ time_ms: number; alt_m: number }>;
+          position_drift: Array<{ time_ms: number; drift_m: number }>;
+          gps_quality_changes: Array<{ time_ms: number; quality: string }>;
+        }>,
+      };
+
+      // Add per-tracker analysis
+      if (analysisResults) {
+        for (const [trackerId, result] of analysisResults) {
+          response.trackers.push({
+            tracker_id: trackerId,
+            point_count: trackData.get(trackerId)?.points.length || 0,
+            metrics: result.metrics as unknown as Record<string, unknown>,
+            altitude_profile: result.altitude_profile,
+            position_drift: result.position_drift,
+            gps_quality_changes: result.gps_quality_changes,
+          });
+        }
+      }
+
+      // If no track data available, provide placeholder metrics for UI
+      if (response.trackers.length === 0) {
+        // Return minimal structure so UI doesn't break
+        log.info(`No track data available for session ${req.params.id} analysis`);
+      }
+
+      res.json(response);
+    } catch (error) {
+      log.error('Analysis error:', error);
+      res.status(500).json({ error: 'Failed to get analysis results' });
+    }
+  });
+
+  // GET /api/test-sessions/:id/tracker-metrics - Get per-tracker CUAS effectiveness metrics
+  router.get('/test-sessions/:id/tracker-metrics', (req, res) => {
+    try {
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      // Optional tracker_id filter
+      const filterTrackerId = req.query.tracker_id as string | undefined;
+
+      // Get recorded live data from session collector
+      const positionsByTracker = sessionDataCollector.getPositionsByTracker(req.params.id);
+
+      // Get GPS health tracker for fix loss events
+      let gpsHealthTracker = null;
+      try {
+        gpsHealthTracker = getDashboardApp().stateManager.getGPSHealthTracker();
+      } catch (e) {
+        log.warn('Could not get GPS health tracker:', e);
+      }
+
+      // Build track data and fix loss events maps
+      const trackDataMap = new Map<string, DroneTrackData>();
+      const fixLossEventsMap = new Map<string, import('../../core/models').GPSFixLossEvent[]>();
+
+      for (const [trackerId, positions] of positionsByTracker) {
+        // Apply filter if specified
+        if (filterTrackerId && trackerId !== filterTrackerId) continue;
+        if (positions.length === 0) continue;
+
+        // Sort by timestamp
+        const sortedPositions = [...positions].sort(
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
+
+        // Convert to enhanced format
+        const enhancedPoints = sortedPositions.map((p: TrackerPosition) => ({
+          lat: p.latitude,
+          lon: p.longitude,
+          alt_m: p.altitude_m,
+          baro_alt_m: null,
+          timestamp_ms: new Date(p.timestamp).getTime(),
+          hdop: null,
+          satellites: null,
+          speed_mps: p.speed_ms,
+          course_deg: p.heading_deg,
+          fix_valid: p.gps_quality !== 'poor',
+          rssi_dbm: p.rssi_dbm ?? null,
+          quality: (p.gps_quality === 'good' ? 'good' : p.gps_quality === 'degraded' ? 'degraded' : 'lost') as 'good' | 'degraded' | 'lost',
+          source: 'live' as 'live' | 'sd_card' | 'interpolated',
+        }));
+
+        trackDataMap.set(trackerId, {
+          tracker_id: trackerId,
+          points: enhancedPoints,
+          start_time_ms: new Date(sortedPositions[0].timestamp).getTime(),
+          end_time_ms: new Date(sortedPositions[sortedPositions.length - 1].timestamp).getTime(),
+        });
+
+        // Get fix loss events for this tracker
+        if (gpsHealthTracker) {
+          const fixLossEvents = gpsHealthTracker.getFixLossEvents(trackerId);
+          fixLossEventsMap.set(trackerId, fixLossEvents);
+        }
+      }
+
+      // Calculate metrics for each tracker
+      const trackerMetrics = [];
+      for (const [trackerId, trackData] of trackDataMap) {
+        const fixLossEvents = fixLossEventsMap.get(trackerId) ?? [];
+        const metrics = calculateTrackerMetrics(
+          trackerId,
+          session.id,
+          trackData,
+          session.events,
+          session.cuas_placements || [],
+          fixLossEvents
+        );
+        trackerMetrics.push(metrics);
+      }
+
+      res.json({
+        session_id: session.id,
+        tracker_metrics: trackerMetrics,
+      });
+    } catch (error) {
+      log.error('Tracker metrics error:', error);
+      res.status(500).json({ error: 'Failed to get tracker metrics' });
+    }
+  });
+
+  // ==========================================================================
+  // Event Management
+  // ==========================================================================
+
+  // GET /api/test-sessions/:id/events - Get all events
+  router.get('/test-sessions/:id/events', (req, res) => {
+    try {
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      // Optional type filter
+      const type = req.query.type as string | undefined;
+      let events = session.events;
+      if (type) {
+        events = events.filter(e => e.type === type);
+      }
+
+      // Sort by timestamp
+      events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+      res.json(events);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch events' });
+    }
+  });
+
+  // POST /api/test-sessions/:id/events - Add event
+  router.post('/test-sessions/:id/events', (req, res) => {
+    try {
+      const eventData = req.body as Omit<TestEvent, 'id'>;
+
+      // Validate required fields
+      if (!eventData.type || !eventData.timestamp || !eventData.source) {
+        return res.status(400).json({ error: 'Missing required fields: type, timestamp, source' });
+      }
+
+      const session = addEventToSession(req.params.id, eventData);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      // Return the newly added event
+      const newEvent = session.events[session.events.length - 1];
+      res.status(201).json(newEvent);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to add event' });
+    }
+  });
+
+  // DELETE /api/test-sessions/:id/events/:eventId - Remove event
+  router.delete('/test-sessions/:id/events/:eventId', (req, res) => {
+    try {
+      const session = removeEventFromSession(req.params.id, req.params.eventId);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session or event not found' });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to remove event' });
+    }
+  });
+
+  // ==========================================================================
+  // Tracker Assignments
+  // ==========================================================================
+
+  // POST /api/test-sessions/:id/assign-tracker - Assign tracker to drone
+  router.post('/test-sessions/:id/assign-tracker', (req, res) => {
+    try {
+      const { tracker_id, drone_profile_id, session_color, target_altitude_m, flight_plan } = req.body;
+
+      if (!tracker_id || !drone_profile_id) {
+        return res.status(400).json({ error: 'Missing required fields: tracker_id, drone_profile_id' });
+      }
+
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      // Check if tracker already assigned
+      const existingAssignment = session.tracker_assignments.find(a => a.tracker_id === tracker_id);
+      if (existingAssignment) {
+        return res.status(400).json({ error: 'Tracker already assigned in this session' });
+      }
+
+      const assignment = {
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        tracker_id,
+        drone_profile_id,
+        session_color: session_color || generateColor(session.tracker_assignments.length),
+        target_altitude_m,
+        flight_plan,
+        assigned_at: new Date().toISOString(),
+      };
+
+      const updated = updateTestSession(req.params.id, {
+        tracker_assignments: [...session.tracker_assignments, assignment],
+      });
+
+      res.status(201).json(assignment);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to assign tracker' });
+    }
+  });
+
+  // DELETE /api/test-sessions/:id/assign-tracker/:assignmentId - Remove tracker assignment
+  router.delete('/test-sessions/:id/assign-tracker/:assignmentId', (req, res) => {
+    try {
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      const updated = updateTestSession(req.params.id, {
+        tracker_assignments: session.tracker_assignments.filter(a => a.id !== req.params.assignmentId),
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to remove tracker assignment' });
+    }
+  });
+
+  // ==========================================================================
+  // CUAS Placements
+  // ==========================================================================
+
+  // POST /api/test-sessions/:id/cuas-placement - Add CUAS placement
+  router.post('/test-sessions/:id/cuas-placement', (req, res) => {
+    try {
+      const { cuas_profile_id, position, height_agl_m, orientation_deg, elevation_deg, notes } = req.body;
+
+      if (!cuas_profile_id || !position || typeof height_agl_m !== 'number' || typeof orientation_deg !== 'number') {
+        return res.status(400).json({
+          error: 'Missing required fields: cuas_profile_id, position, height_agl_m, orientation_deg',
+        });
+      }
+
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      const placement = {
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        cuas_profile_id,
+        position,
+        height_agl_m,
+        orientation_deg,
+        elevation_deg,
+        active: true,
+        notes,
+      };
+
+      const updated = updateTestSession(req.params.id, {
+        cuas_placements: [...session.cuas_placements, placement],
+      });
+
+      res.status(201).json(placement);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to add CUAS placement' });
+    }
+  });
+
+  // PUT /api/test-sessions/:id/cuas-placement/:placementId - Update CUAS placement
+  router.put('/test-sessions/:id/cuas-placement/:placementId', (req, res) => {
+    try {
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      const placementIndex = session.cuas_placements.findIndex(p => p.id === req.params.placementId);
+      if (placementIndex === -1) {
+        return res.status(404).json({ error: 'CUAS placement not found' });
+      }
+
+      const updatedPlacements = [...session.cuas_placements];
+      updatedPlacements[placementIndex] = {
+        ...updatedPlacements[placementIndex],
+        ...req.body,
+        id: req.params.placementId, // Prevent ID change
+      };
+
+      const updated = updateTestSession(req.params.id, {
+        cuas_placements: updatedPlacements,
+      });
+
+      res.json(updatedPlacements[placementIndex]);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update CUAS placement' });
+    }
+  });
+
+  // DELETE /api/test-sessions/:id/cuas-placement/:placementId - Remove CUAS placement
+  router.delete('/test-sessions/:id/cuas-placement/:placementId', (req, res) => {
+    try {
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      const updated = updateTestSession(req.params.id, {
+        cuas_placements: session.cuas_placements.filter(p => p.id !== req.params.placementId),
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to remove CUAS placement' });
+    }
+  });
+
+  return router;
+}
+
+// Helper function to generate distinct colors for drones
+function generateColor(index: number): string {
+  const colors = [
+    '#ff6b00', // Orange (primary)
+    '#00c8b4', // Cyan
+    '#6366f1', // Indigo
+    '#a855f7', // Purple
+    '#22c55e', // Green
+    '#f59e0b', // Amber
+    '#ef4444', // Red
+    '#3b82f6', // Blue
+  ];
+  return colors[index % colors.length];
+}

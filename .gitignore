@@ -1,0 +1,43 @@
+# Build artifacts
+dist/
+dist2/
+build/
+*.spec
+installer_output/
+
+# Electron
+electron/node_modules/
+electron/dist/
+electron/out/
+node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Config files (local)
+config.json
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db
+nul
+
+# Backup files
+*.backup
+*.bak

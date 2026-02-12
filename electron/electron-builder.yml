@@ -1,0 +1,53 @@
+appId: com.scensus.dashboard
+productName: SCENSUS Dashboard
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**/*
+  - resources/**/*
+asarUnpack:
+  - out/renderer/**/*
+mac:
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
+  category: public.app-category.utilities
+  darkModeSupport: true
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+  window:
+    width: 540
+    height: 380
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  sign: sign.js
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+publish:
+  provider: github
+  owner: jassibey-ux
+  repo: scensus-dashboard
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/
