@@ -149,6 +149,19 @@ class EngagementTargetRole(str, Enum):
     OBSERVER = "observer"
 
 
+class EmitterType(str, Enum):
+    """Type of emitter for an engagement."""
+    CUAS_SYSTEM = "cuas_system"
+    ACTOR = "actor"
+
+
+class JamBurstSource(str, Enum):
+    """Source of jam burst data."""
+    LIVE = "live"
+    SD_CARD = "sd_card"
+    RECOMPUTED = "recomputed"
+
+
 # ============================================================================
 # SITE MODEL
 # ============================================================================
@@ -340,6 +353,7 @@ class TestSession(Base):
     tags = relationship("SessionTag", back_populates="session", cascade="all, delete-orphan")
     annotations = relationship("SessionAnnotation", back_populates="session", cascade="all, delete-orphan")
     engagements = relationship("Engagement", back_populates="session", cascade="all, delete-orphan")
+    session_actors = relationship("SessionActor", back_populates="session", cascade="all, delete-orphan")
 
     # Indexes
     __table_args__ = (
@@ -403,6 +417,7 @@ class CUASPlacement(Base):
     # Orientation
     orientation_deg = Column(Float)  # Azimuth
     elevation_deg = Column(Float)  # Tilt angle
+    heading_deg = Column(Float)  # Heading direction
 
     # Status
     active = Column(Boolean, default=True)
@@ -489,6 +504,10 @@ class TestEvent(Base):
     tracker_id = Column(String(100))
     drone_profile_id = Column(String(36), ForeignKey("drone_profiles.id"))
     engagement_id = Column(String(36), ForeignKey("engagements.id"), nullable=True)
+    burst_id = Column(String(36), ForeignKey("engagement_jam_bursts.id"), nullable=True)
+
+    # Client-reported timestamp (created_at/timestamp is authoritative)
+    client_timestamp = Column(DateTime)
 
     # Outcome
     outcome = Column(String(20))  # success, partial, failed, aborted
@@ -499,6 +518,7 @@ class TestEvent(Base):
     session = relationship("TestSession", back_populates="events")
     cuas_profile = relationship("CUASProfile", back_populates="test_events")
     engagement = relationship("Engagement", back_populates="events")
+    burst = relationship("EngagementJamBurst", back_populates="events")
 
     __table_args__ = (
         Index("idx_events_session", "session_id"),
@@ -618,13 +638,17 @@ class SessionAnnotation(Base):
 # ============================================================================
 
 class Engagement(Base):
-    """Links one CUAS placement to target drones for a specific test run."""
+    """Links one CUAS placement or session actor to target drones for a specific test run."""
 
     __tablename__ = "engagements"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     session_id = Column(String(36), ForeignKey("test_sessions.id"), nullable=False)
-    cuas_placement_id = Column(String(36), ForeignKey("cuas_placements.id"), nullable=False)
+    cuas_placement_id = Column(String(36), ForeignKey("cuas_placements.id"), nullable=True)  # nullable for backward compat
+
+    # Emitter polymorphism: 'cuas_system' | 'actor'
+    emitter_type = Column(String(20), nullable=False, default=EmitterType.CUAS_SYSTEM.value)
+    emitter_id = Column(String(36), nullable=False, default="")  # FK to cuas_placements OR session_actors
 
     # Identification
     name = Column(String(255))
@@ -652,11 +676,13 @@ class Engagement(Base):
     targets = relationship("EngagementTarget", back_populates="engagement", cascade="all, delete-orphan")
     metrics = relationship("EngagementMetrics", back_populates="engagement", uselist=False, cascade="all, delete-orphan")
     events = relationship("TestEvent", back_populates="engagement")
+    bursts = relationship("EngagementJamBurst", back_populates="engagement", cascade="all, delete-orphan", order_by="EngagementJamBurst.burst_seq")
 
     __table_args__ = (
         Index("idx_engagements_session", "session_id"),
         Index("idx_engagements_status", "status"),
         Index("idx_engagements_cuas_placement", "cuas_placement_id"),
+        Index("idx_engagements_emitter", "emitter_type", "emitter_id"),
     )
 
     def __repr__(self):
@@ -739,11 +765,111 @@ class EngagementMetrics(Base):
     metrics_json = Column(JSONType)  # Per-target breakdown + extended metrics
     analyzed_at = Column(DateTime, default=datetime.utcnow)
 
+    # Enhanced metrics (burst-aware)
+    anchor_type = Column(String(20), default="first_jam_on")
+    anchor_timestamp = Column(DateTime)
+    denial_onset_timestamp = Column(DateTime)
+    denial_angle_off_boresight_deg_v2 = Column(Float)  # Refined denial angle
+    reacquisition_time_s = Column(Float)
+    telemetry_loss_duration_s = Column(Float)
+    per_burst_json = Column(JSONType)  # Metrics broken down by burst
+    computation_version = Column(String(50), default="2.0")
+    job_id = Column(String(100))  # Worker job ID for traceability
+
     # Relationships
     engagement = relationship("Engagement", back_populates="metrics")
 
     def __repr__(self):
         return f"<EngagementMetrics(engagement={self.engagement_id}, pass_fail={self.pass_fail})>"
+
+
+# ============================================================================
+# SESSION ACTOR MODEL
+# ============================================================================
+
+class SessionActor(Base):
+    """Mobile emitter actor within a session (e.g., handheld jammer operator)."""
+
+    __tablename__ = "session_actors"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    session_id = Column(String(36), ForeignKey("test_sessions.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    callsign = Column(String(50))
+
+    # Position (manual or tracker-derived)
+    lat = Column(Float)
+    lon = Column(Float)
+    heading_deg = Column(Float)
+
+    # Optional linked tracker for auto-position
+    tracker_unit_id = Column(String(100))
+
+    # Status
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    session = relationship("TestSession", back_populates="session_actors")
+
+    __table_args__ = (
+        Index("idx_actors_session", "session_id"),
+    )
+
+    def __repr__(self):
+        return f"<SessionActor(id={self.id}, name={self.name}, session={self.session_id})>"
+
+
+# ============================================================================
+# ENGAGEMENT JAM BURST MODEL
+# ============================================================================
+
+class EngagementJamBurst(Base):
+    """Discrete jam burst within an engagement (jam-on to jam-off window)."""
+
+    __tablename__ = "engagement_jam_bursts"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    engagement_id = Column(String(36), ForeignKey("engagements.id", ondelete="CASCADE"), nullable=False)
+    burst_seq = Column(Integer, nullable=False)
+
+    # Timing
+    jam_on_at = Column(DateTime, nullable=False)
+    jam_off_at = Column(DateTime)
+    duration_s = Column(Float)
+
+    # Emitter snapshot at jam_on
+    emitter_lat = Column(Float)
+    emitter_lon = Column(Float)
+    emitter_heading_deg = Column(Float)
+
+    # Per-target snapshots as JSON
+    # [{tracker_id, lat, lon, range_m, bearing_deg, gps_status}]
+    target_snapshots = Column(JSONType)
+
+    # Denial detection (populated by worker or inline)
+    gps_denial_detected = Column(Boolean, default=False)
+    denial_onset_at = Column(DateTime)
+    time_to_effect_s = Column(Float)
+
+    # Metadata
+    notes = Column(Text)
+    source = Column(String(20), default=JamBurstSource.LIVE.value)  # live, sd_card, recomputed
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    engagement = relationship("Engagement", back_populates="bursts")
+    events = relationship("TestEvent", back_populates="burst")
+
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "burst_seq", name="uq_engagement_burst_seq"),
+        Index("idx_bursts_engagement", "engagement_id"),
+        Index("idx_bursts_time", "jam_on_at"),
+    )
+
+    def __repr__(self):
+        return f"<EngagementJamBurst(engagement={self.engagement_id}, seq={self.burst_seq})>"
 
 
 # ============================================================================

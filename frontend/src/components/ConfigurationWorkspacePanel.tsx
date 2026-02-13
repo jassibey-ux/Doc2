@@ -663,12 +663,12 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                             <Badge color="blue" size="sm">
                               {site.environment_type.replace('_', ' ')}
                             </Badge>
-                            {site.markers.length > 0 && (
+                            {site.markers && site.markers.length > 0 && (
                               <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>
                                 {site.markers.length} markers
                               </span>
                             )}
-                            {site.zones.length > 0 && (
+                            {site.zones && site.zones.length > 0 && (
                               <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>
                                 {site.zones.length} zones
                               </span>

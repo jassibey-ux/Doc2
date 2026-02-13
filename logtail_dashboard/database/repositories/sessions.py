@@ -19,6 +19,7 @@ from ..models import (
     SessionMetrics,
     TrackerAssignment,
     CUASPlacement,
+    CUASProfile,
     SessionStatus,
     Engagement,
 )
@@ -79,12 +80,17 @@ class SessionRepository(BaseRepository[TestSession]):
                 selectinload(TestSession.annotations),
                 selectinload(TestSession.session_metrics),
                 selectinload(TestSession.tracker_assignments),
-                selectinload(TestSession.cuas_placements),
+                selectinload(TestSession.cuas_placements).selectinload(CUASPlacement.cuas_profile),
                 selectinload(TestSession.events),
                 selectinload(TestSession.engagements)
                     .selectinload(Engagement.targets),
                 selectinload(TestSession.engagements)
                     .selectinload(Engagement.metrics),
+                selectinload(TestSession.engagements)
+                    .selectinload(Engagement.cuas_placement)
+                    .selectinload(CUASPlacement.cuas_profile),
+                selectinload(TestSession.engagements)
+                    .selectinload(Engagement.bursts),
             )
             .where(TestSession.id == session_id)
         )
@@ -116,6 +122,8 @@ class SessionRepository(BaseRepository[TestSession]):
             selectinload(TestSession.site),
             selectinload(TestSession.tags),
             selectinload(TestSession.session_metrics),
+            selectinload(TestSession.tracker_assignments),
+            selectinload(TestSession.cuas_placements),
         )
 
         # Count query (before pagination)

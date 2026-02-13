@@ -13,7 +13,7 @@ import { GlassButton, Badge } from './ui/GlassUI';
 import MapComponent from './Map';
 import Map3DViewer from './Map3DViewer';
 import DroneDetailPanel from './DroneDetailPanel';
-import type { TestEvent, CUASPlacement, CUASProfile } from '../types/workflow';
+import type { TestEvent, CUASPlacement, CUASProfile, JamBurst } from '../types/workflow';
 import {
   ArrowLeft,
   Square,
@@ -96,7 +96,6 @@ export default function SessionConsole() {
     addEvent,
     sites,
     selectSite,
-    testSessions,
   } = useWorkflow();
 
   // Get session phase data
@@ -112,6 +111,10 @@ export default function SessionConsole() {
     activeEngagements,
     quickEngage,
     disengage,
+    jamOn,
+    jamOff,
+    activeBursts,
+    refreshEngagements,
   } = useTestSessionPhase();
 
   // Debug: Log session state for diagnosing JAM button and event log issues
@@ -128,14 +131,11 @@ export default function SessionConsole() {
 
   // Load session by URL parameter if not already loaded
   useEffect(() => {
-    if (sessionId && testSessions.length > 0) {
-      // If activeSession doesn't match URL sessionId, load it
-      if (!activeSession || activeSession.id !== sessionId) {
-        console.log('[SessionConsole] Loading session from URL:', sessionId);
-        loadSessionById(sessionId);
-      }
+    if (sessionId && (!activeSession || activeSession.id !== sessionId)) {
+      console.log('[SessionConsole] Loading session from URL:', sessionId);
+      loadSessionById(sessionId);
     }
-  }, [sessionId, testSessions, activeSession, loadSessionById]);
+  }, [sessionId, activeSession, loadSessionById]);
 
   // Determine if this is a completed session (not live)
   const isCompletedSession = activeSession?.status === 'completed' || activeSession?.status === 'analyzing';
@@ -236,12 +236,12 @@ export default function SessionConsole() {
   // Count active jammers
   const activeJammerCount = Array.from(cuasJamStates.values()).filter(v => v).length;
 
-  // Redirect if no active session
+  // Redirect if no active session (but not if we have a URL sessionId — it's still loading)
   useEffect(() => {
-    if (currentPhase === 'idle' && !activeSession) {
+    if (currentPhase === 'idle' && !activeSession && !sessionId) {
       navigate('/');
     }
-  }, [currentPhase, activeSession, navigate]);
+  }, [currentPhase, activeSession, sessionId, navigate]);
 
   // Ensure site is selected in WorkflowContext for map visualization
   useEffect(() => {
@@ -351,8 +351,13 @@ export default function SessionConsole() {
 
   // Handle disengage action
   const handleDisengage = useCallback(async (engagementId?: string) => {
+    console.log('[SessionConsole] handleDisengage called, engagementId:', engagementId, 'activeEngagements.size:', activeEngagements.size, 'keys:', Array.from(activeEngagements.keys()));
     const targetId = engagementId || (activeEngagements.size === 1 ? Array.from(activeEngagements.keys())[0] : null);
-    if (!targetId) return;
+    if (!targetId) {
+      console.warn('[SessionConsole] No targetId found for disengage');
+      return;
+    }
+    console.log('[SessionConsole] Disengaging targetId:', targetId);
     try {
       const result = await disengage(targetId);
       if (result?.metrics) {
@@ -367,6 +372,44 @@ export default function SessionConsole() {
     }
   }, [activeEngagements, disengage, showToast]);
 
+  // Determine if there's an active jam burst for the current engagement
+  const activeEngagementId = activeEngagements.size > 0 ? Array.from(activeEngagements.keys())[0] : null;
+  const activeJamBurst: JamBurst | undefined = activeEngagementId
+    ? activeBursts.get(activeEngagementId)
+    : undefined;
+  const hasOpenBurst = !!activeJamBurst && !activeJamBurst.jam_off_at;
+
+  // Burst elapsed timer
+  const [burstElapsed, setBurstElapsed] = useState(0);
+  useEffect(() => {
+    if (!hasOpenBurst || !activeJamBurst?.jam_on_at) {
+      setBurstElapsed(0);
+      return;
+    }
+    const startTime = new Date(activeJamBurst.jam_on_at).getTime();
+    const tick = () => setBurstElapsed(Math.floor((Date.now() - startTime) / 1000));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [hasOpenBurst, activeJamBurst?.jam_on_at]);
+
+  // Handle JAM ON / JAM OFF toggle on active engagement
+  const handleJamToggle = useCallback(async () => {
+    if (!activeEngagementId) return;
+    try {
+      if (hasOpenBurst) {
+        await jamOff(activeEngagementId);
+        showToast('success', 'JAM OFF');
+      } else {
+        await jamOn(activeEngagementId);
+        showToast('success', 'JAM ON');
+      }
+      await refreshEngagements();
+    } catch (error) {
+      showToast('error', 'Failed to toggle jam burst');
+    }
+  }, [activeEngagementId, hasOpenBurst, jamOn, jamOff, refreshEngagements, showToast]);
+
   // Keyboard shortcuts
   useEffect(() => {
     if (currentPhase !== 'active') return;
@@ -378,30 +421,36 @@ export default function SessionConsole() {
 
       const key = e.key.toLowerCase();
 
-      // E or J = Engage (J is backward compat)
-      if (key === 'e' || key === 'j') {
+      // J = JAM ON/OFF burst toggle on active engagement
+      if (key === 'j') {
         e.preventDefault();
-        if (activeEngagements.size > 0 && key === 'j') {
-          // J with active engagement = legacy JAM toggle, still works
+        if (activeEngagements.size > 0) {
+          handleJamToggle();
+        } else {
+          // Fallback: legacy jam toggle when no engagement active
           if (hasMultipleJammers) {
             setShowJammerDropdown(prev => !prev);
           } else if (cuasPlacements.length === 1) {
             const isJamming = cuasJamStates.get(cuasPlacements[0].id) || false;
             handleMarkEvent(isJamming ? 'jam_off' : 'jam_on', undefined, cuasPlacements[0].id);
           }
+        }
+        return;
+      }
+
+      // E = Engage workflow
+      if (key === 'e') {
+        e.preventDefault();
+        if (activeEngagements.size > 0) {
+          // Already have active engagement, ignore
+          return;
+        }
+        if (hasMultipleJammers) {
+          setShowEngageDropdown(prev => !prev);
+        } else if (cuasPlacements.length === 1) {
+          handleEngage(cuasPlacements[0].id);
         } else {
-          // E = Engage workflow
-          if (activeEngagements.size > 0) {
-            // Already have active engagement, ignore
-            return;
-          }
-          if (hasMultipleJammers) {
-            setShowEngageDropdown(prev => !prev);
-          } else if (cuasPlacements.length === 1) {
-            handleEngage(cuasPlacements[0].id);
-          } else {
-            handleEngage();
-          }
+          handleEngage();
         }
         return;
       }
@@ -437,7 +486,7 @@ export default function SessionConsole() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentPhase, hasMultipleJammers, cuasPlacements, cuasJamStates, handleMarkEvent, activeEngagements, handleEngage, handleDisengage]);
+  }, [currentPhase, hasMultipleJammers, cuasPlacements, cuasJamStates, handleMarkEvent, activeEngagements, handleEngage, handleDisengage, handleJamToggle]);
 
   // If no active session, show loading or redirect
   if (!activeSession) {
@@ -925,6 +974,20 @@ export default function SessionConsole() {
                 )}
               </div>
             )}
+
+            {/* JAM ON / JAM OFF burst toggle button */}
+            <button
+              className={`sc-event-btn ${hasOpenBurst ? 'sc-event-btn--jam-active' : 'sc-event-btn--jam-ready'}`}
+              onClick={handleJamToggle}
+              disabled={!activeEngagementId}
+              title={activeEngagementId ? (hasOpenBurst ? 'JAM OFF (J)' : 'JAM ON (J)') : 'No active engagement'}
+            >
+              <Zap size={14} />
+              <span>{hasOpenBurst ? 'JAM OFF' : 'JAM ON'}</span>
+              {hasOpenBurst && burstElapsed > 0 && (
+                <span className="sc-jam-timer">{formatDuration(burstElapsed)}</span>
+              )}
+            </button>
 
             {/* Legacy JAM button (secondary, for manual jam without engagement) */}
             <div className="sc-event-btn-wrapper" ref={dropdownRef}>
@@ -1870,6 +1933,53 @@ const styles = `
   @keyframes pulse-engage {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
+  }
+
+  /* JAM ON/OFF burst button styles */
+  .sc-event-btn--jam-ready {
+    background: rgba(239, 68, 68, 0.2) !important;
+    border-color: rgba(239, 68, 68, 0.4) !important;
+    color: #ef4444 !important;
+    font-weight: 700 !important;
+  }
+
+  .sc-event-btn--jam-ready:hover {
+    background: rgba(239, 68, 68, 0.3) !important;
+  }
+
+  .sc-event-btn--jam-ready:disabled {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border-color: rgba(255, 255, 255, 0.06) !important;
+    color: rgba(255, 255, 255, 0.25) !important;
+    cursor: not-allowed !important;
+  }
+
+  .sc-event-btn--jam-active {
+    background: rgba(249, 115, 22, 0.25) !important;
+    border-color: rgba(249, 115, 22, 0.5) !important;
+    color: #f97316 !important;
+    font-weight: 700 !important;
+    animation: pulse-jam-burst 1.2s ease-in-out infinite;
+  }
+
+  .sc-event-btn--jam-active:hover {
+    background: rgba(249, 115, 22, 0.35) !important;
+  }
+
+  @keyframes pulse-jam-burst {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(249, 115, 22, 0.3); }
+    50% { opacity: 0.75; box-shadow: 0 0 16px rgba(249, 115, 22, 0.5); }
+  }
+
+  .sc-jam-timer {
+    font-family: monospace;
+    font-size: 10px;
+    font-weight: 600;
+    color: #f97316;
+    margin-left: 4px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 6px;
+    border-radius: 3px;
   }
 
   /* CUAS inline engaged badge */

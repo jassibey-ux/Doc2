@@ -31,6 +31,8 @@ from .database import (
     Engagement,
     EngagementTarget,
     EngagementMetrics,
+    SessionActor,
+    EngagementJamBurst,
 )
 from .database.models import (
     TrackerAssignment,
@@ -39,6 +41,7 @@ from .database.models import (
     TrackerTelemetry,
     generate_uuid,
     EngagementStatus,
+    EmitterType,
 )
 from .database.repositories import (
     SessionRepository,
@@ -48,6 +51,7 @@ from .database.repositories import (
     TelemetryRepository,
     AuditRepository,
     EngagementRepository,
+    SessionActorRepository,
 )
 from .database.repositories.sessions import SessionFilters
 
@@ -112,6 +116,20 @@ class SessionUpdateRequest(BaseModel):
     classification: Optional[str] = None
 
 
+class SessionSearchRequest(BaseModel):
+    """Request body for session search."""
+    search: Optional[str] = None
+    status: Optional[List[str]] = None
+    siteId: Optional[str] = None
+    tags: Optional[List[str]] = None
+    passFail: Optional[str] = None
+    droneProfileId: Optional[str] = None
+    cuasProfileId: Optional[str] = None
+    startDate: Optional[str] = None
+    endDate: Optional[str] = None
+    operatorName: Optional[str] = None
+
+
 class TagRequest(BaseModel):
     """Request to add/remove a tag."""
     tag: str
@@ -151,7 +169,9 @@ class EngagementTargetInput(BaseModel):
 
 class EngagementCreateRequest(BaseModel):
     """Request to create an engagement."""
-    cuas_placement_id: str
+    cuas_placement_id: Optional[str] = None  # nullable for actor-based engagements
+    emitter_type: str = "cuas_system"  # 'cuas_system' | 'actor'
+    emitter_id: Optional[str] = None  # FK to cuas_placements OR session_actors
     name: Optional[str] = None
     engagement_type: str = "test"
     targets: List[EngagementTargetInput]
@@ -170,6 +190,28 @@ class EngagementUpdateRequest(BaseModel):
     name: Optional[str] = None
     notes: Optional[str] = None
     targets: Optional[List[EngagementTargetInput]] = None
+
+
+# Session Actor Models
+class SessionActorCreateRequest(BaseModel):
+    """Request to create a session actor."""
+    name: str
+    callsign: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    heading_deg: Optional[float] = None
+    tracker_unit_id: Optional[str] = None
+
+
+class SessionActorUpdateRequest(BaseModel):
+    """Request to update a session actor."""
+    name: Optional[str] = None
+    callsign: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    heading_deg: Optional[float] = None
+    tracker_unit_id: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 # Site Models
@@ -336,11 +378,13 @@ def session_to_dict_full(session: TestSession) -> Dict[str, Any]:
         {
             "id": cp.id,
             "cuas_profile_id": cp.cuas_profile_id,
+            "cuas_profile_name": cp.cuas_profile.name if hasattr(cp, 'cuas_profile') and cp.cuas_profile else None,
             "position": {"lat": cp.lat, "lon": cp.lon},
             "lat": cp.lat,
             "lon": cp.lon,
             "height_agl_m": cp.height_agl_m,
             "orientation_deg": cp.orientation_deg,
+            "heading_deg": cp.heading_deg,
             "active": cp.active,
         }
         for cp in (session.cuas_placements or [])
@@ -373,12 +417,71 @@ def session_to_dict_full(session: TestSession) -> Dict[str, Any]:
     return result
 
 
+def burst_to_dict(b: EngagementJamBurst) -> Dict[str, Any]:
+    """Convert a jam burst to a dictionary."""
+    return {
+        "id": b.id,
+        "engagement_id": b.engagement_id,
+        "burst_seq": b.burst_seq,
+        "jam_on_at": b.jam_on_at.isoformat() if b.jam_on_at else None,
+        "jam_off_at": b.jam_off_at.isoformat() if b.jam_off_at else None,
+        "duration_s": b.duration_s,
+        "emitter_lat": b.emitter_lat,
+        "emitter_lon": b.emitter_lon,
+        "emitter_heading_deg": b.emitter_heading_deg,
+        "target_snapshots": b.target_snapshots,
+        "gps_denial_detected": b.gps_denial_detected,
+        "denial_onset_at": b.denial_onset_at.isoformat() if b.denial_onset_at else None,
+        "time_to_effect_s": b.time_to_effect_s,
+        "source": b.source,
+        "notes": b.notes,
+        "created_at": b.created_at.isoformat() if b.created_at else None,
+    }
+
+
+def actor_to_dict(a: SessionActor) -> Dict[str, Any]:
+    """Convert a session actor to a dictionary."""
+    return {
+        "id": a.id,
+        "session_id": a.session_id,
+        "name": a.name,
+        "callsign": a.callsign,
+        "lat": a.lat,
+        "lon": a.lon,
+        "heading_deg": a.heading_deg,
+        "tracker_unit_id": a.tracker_unit_id,
+        "is_active": a.is_active,
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+        "updated_at": a.updated_at.isoformat() if a.updated_at else None,
+    }
+
+
+def _json_safe(obj):
+    """Recursively convert datetime objects to ISO strings for JSON serialization."""
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    return obj
+
+
 def engagement_to_dict(eng: Engagement) -> Dict[str, Any]:
     """Convert an engagement model to a dictionary."""
+    # Resolve CUAS profile name via placement → profile
+    cuas_name = None
+    if hasattr(eng, 'cuas_placement') and eng.cuas_placement:
+        if hasattr(eng.cuas_placement, 'cuas_profile') and eng.cuas_placement.cuas_profile:
+            cuas_name = eng.cuas_placement.cuas_profile.name
+
     return {
         "id": eng.id,
         "session_id": eng.session_id,
         "cuas_placement_id": eng.cuas_placement_id,
+        "cuas_name": cuas_name,
+        "emitter_type": eng.emitter_type,
+        "emitter_id": eng.emitter_id,
         "name": eng.name,
         "engagement_type": eng.engagement_type,
         "status": eng.status,
@@ -408,6 +511,7 @@ def engagement_to_dict(eng: Engagement) -> Dict[str, Any]:
             }
             for t in (eng.targets or [])
         ],
+        "bursts": [burst_to_dict(b) for b in (eng.bursts or [])],
         "metrics": engagement_metrics_to_dict(eng.metrics) if eng.metrics else None,
     }
 
@@ -436,6 +540,14 @@ def engagement_metrics_to_dict(m: EngagementMetrics) -> Dict[str, Any]:
         "data_source": m.data_source,
         "metrics_json": m.metrics_json,
         "analyzed_at": m.analyzed_at.isoformat() if m.analyzed_at else None,
+        # Enhanced burst-aware fields
+        "anchor_type": m.anchor_type,
+        "anchor_timestamp": m.anchor_timestamp.isoformat() if m.anchor_timestamp else None,
+        "denial_onset_timestamp": m.denial_onset_timestamp.isoformat() if m.denial_onset_timestamp else None,
+        "reacquisition_time_s": m.reacquisition_time_s,
+        "telemetry_loss_duration_s": m.telemetry_loss_duration_s,
+        "per_burst_json": m.per_burst_json,
+        "computation_version": m.computation_version,
     }
 
 
@@ -559,6 +671,48 @@ async def list_sessions(
     }
 
 
+@router.post("/sessions/search")
+async def search_sessions(
+    request: SessionSearchRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Search sessions with filters (POST body)."""
+    repo = SessionRepository(db)
+
+    start_date = None
+    end_date = None
+    if request.startDate:
+        try:
+            start_date = datetime.fromisoformat(request.startDate)
+        except ValueError:
+            pass
+    if request.endDate:
+        try:
+            end_date = datetime.fromisoformat(request.endDate)
+        except ValueError:
+            pass
+
+    filters = SessionFilters(
+        status=request.status,
+        site_id=request.siteId,
+        start_date=start_date,
+        end_date=end_date,
+        tags=request.tags,
+        search=request.search,
+        operator_name=request.operatorName,
+        pass_fail=request.passFail,
+        drone_profile_id=request.droneProfileId,
+        cuas_profile_id=request.cuasProfileId,
+    )
+
+    sessions, total = await repo.list_sessions(filters=filters, limit=200)
+
+    return {
+        "sessions": [session_to_dict(s) for s in sessions],
+        "total": total,
+    }
+
+
 @router.get("/sessions/{session_id}")
 async def get_session(
     session_id: str,
@@ -645,11 +799,16 @@ async def create_session(
             )
             db.add(cp)
 
+    session_id = session.id
     await db.commit()
 
-    # Re-fetch with relations
-    session = await repo.get_with_relations(session.id)
-    return session_to_dict_full(session)
+    # Re-fetch with all relations loaded
+    try:
+        session = await repo.get_with_relations(session_id)
+        return session_to_dict_full(session)
+    except Exception as e:
+        logger.error(f"Failed to re-fetch session {session_id} with relations: {e}")
+        raise HTTPException(status_code=500, detail=f"Session created but failed to load: {e}")
 
 
 @router.put("/sessions/{session_id}")
@@ -698,7 +857,7 @@ async def start_session(
 ):
     """Start a session — set status to active and record start time."""
     repo = SessionRepository(db)
-    session = await repo.get_with_relations(session_id)
+    session = await repo.get_by_id(session_id)
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -713,8 +872,12 @@ async def start_session(
     # (set via module-level variable picked up by api.py)
     _set_active_session_id(session_id)
 
-    session = await repo.get_with_relations(session_id)
-    return session_to_dict_full(session)
+    try:
+        session = await repo.get_with_relations(session_id)
+        return session_to_dict_full(session)
+    except Exception as e:
+        logger.error(f"Failed to re-fetch session {session_id} after start: {e}")
+        raise HTTPException(status_code=500, detail=f"Session started but failed to load: {e}")
 
 
 @router.post("/sessions/{session_id}/stop")
@@ -896,8 +1059,9 @@ async def add_session_tag(
     repo = SessionRepository(db)
 
     try:
-        tag = await repo.add_tag(session_id, request.tag)
-        return {"tag": tag.tag, "session_id": session_id}
+        await repo.add_tag(session_id, request.tag)
+        tags = await repo.get_tags(session_id)
+        return {"tags": tags, "session_id": session_id}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -915,7 +1079,8 @@ async def remove_session_tag(
     if not removed:
         raise HTTPException(status_code=404, detail="Tag not found")
 
-    return {"success": True}
+    tags = await repo.get_tags(session_id)
+    return {"tags": tags, "success": True}
 
 
 @router.get("/sessions/{session_id}/tags")
@@ -1059,22 +1224,49 @@ async def create_engagement(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new engagement (status=planned)."""
+    from sqlalchemy import select as sa_select
+
     session_repo = SessionRepository(db)
     session = await session_repo.get_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Validate CUAS placement belongs to session
-    from sqlalchemy import select as sa_select
-    placement_result = await db.execute(
-        sa_select(CUASPlacement).where(
-            CUASPlacement.id == request.cuas_placement_id,
-            CUASPlacement.session_id == session_id,
+    # Resolve emitter
+    emitter_type = request.emitter_type
+    emitter_id = request.emitter_id
+    cuas_placement_id = request.cuas_placement_id
+
+    if emitter_type == EmitterType.ACTOR.value:
+        # Validate actor exists in session
+        if not emitter_id:
+            raise HTTPException(status_code=400, detail="emitter_id required for actor emitter")
+        actor_result = await db.execute(
+            sa_select(SessionActor).where(
+                SessionActor.id == emitter_id,
+                SessionActor.session_id == session_id,
+            )
         )
-    )
-    placement = placement_result.scalar_one_or_none()
-    if not placement:
-        raise HTTPException(status_code=400, detail="CUAS placement not found in this session")
+        actor = actor_result.scalar_one_or_none()
+        if not actor:
+            raise HTTPException(status_code=400, detail="Session actor not found in this session")
+        cuas_placement_id = None  # No CUAS placement for actors
+    else:
+        # CUAS system emitter - backward compat
+        resolved_placement_id = cuas_placement_id or emitter_id
+        if not resolved_placement_id:
+            raise HTTPException(status_code=400, detail="cuas_placement_id or emitter_id required")
+
+        placement_result = await db.execute(
+            sa_select(CUASPlacement).where(
+                CUASPlacement.id == resolved_placement_id,
+                CUASPlacement.session_id == session_id,
+            )
+        )
+        placement = placement_result.scalar_one_or_none()
+        if not placement:
+            raise HTTPException(status_code=400, detail="CUAS placement not found in this session")
+        cuas_placement_id = resolved_placement_id
+        emitter_id = resolved_placement_id
 
     # Auto-generate name if not provided
     count_result = await db.execute(
@@ -1086,7 +1278,9 @@ async def create_engagement(
     engagement = Engagement(
         id=generate_uuid(),
         session_id=session_id,
-        cuas_placement_id=request.cuas_placement_id,
+        cuas_placement_id=cuas_placement_id,
+        emitter_type=emitter_type,
+        emitter_id=emitter_id,
         name=name,
         engagement_type=request.engagement_type,
         status=EngagementStatus.PLANNED.value,
@@ -1157,6 +1351,8 @@ async def quick_engage(
         id=generate_uuid(),
         session_id=session_id,
         cuas_placement_id=placement.id,
+        emitter_type=EmitterType.CUAS_SYSTEM.value,
+        emitter_id=placement.id,
         name=name,
         engagement_type=request.engagement_type,
         status=EngagementStatus.PLANNED.value,
@@ -1189,9 +1385,52 @@ async def quick_engage(
     from .analysis import compute_engagement_geometry
     await compute_engagement_geometry(db, engagement)
 
+    # Create engagement_start event (Fix 4)
+    engage_event = TestEvent(
+        id=generate_uuid(),
+        session_id=session_id,
+        type="engage",
+        timestamp=now,
+        source="manual",
+        cuas_id=placement.cuas_profile_id,
+        engagement_id=engagement.id,
+        note=f"Quick-engage started: {name}",
+    )
+    db.add(engage_event)
+
+    # Auto-create first jam burst (Fix 6)
+    burst = await eng_repo.create_burst({
+        "id": generate_uuid(),
+        "engagement_id": engagement.id,
+        "burst_seq": 1,
+        "jam_on_at": now,
+        "emitter_lat": placement.lat,
+        "emitter_lon": placement.lon,
+        "emitter_heading_deg": placement.heading_deg or placement.orientation_deg,
+        "source": "live",
+    })
+
+    # Create jam_on event for the auto-burst
+    jam_on_event = TestEvent(
+        id=generate_uuid(),
+        session_id=session_id,
+        type="jam_on",
+        timestamp=now,
+        source="system",
+        cuas_id=placement.cuas_profile_id,
+        engagement_id=engagement.id,
+        burst_id=burst.id,
+        note="Burst #1 started (auto)",
+    )
+    db.add(jam_on_event)
+
+    # Save ID before commit+expire cycle
+    eng_id = engagement.id
     await db.commit()
 
-    engagement = await eng_repo.get_with_relations(engagement.id)
+    # Expire cache so re-fetch picks up the new burst and events
+    db.expire_all()
+    engagement = await eng_repo.get_with_relations(eng_id)
     return engagement_to_dict(engagement)
 
 
@@ -1332,7 +1571,7 @@ async def disengage(
     engagement_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Transition active→complete, compute final geometry + metrics."""
+    """Transition active→complete, auto-close open burst, compute final geometry + metrics."""
     eng_repo = EngagementRepository(db)
     engagement = await eng_repo.get_with_relations(engagement_id)
     if not engagement:
@@ -1342,6 +1581,25 @@ async def disengage(
         raise HTTPException(status_code=400, detail="Can only disengage from active status")
 
     now = datetime.utcnow()
+
+    # Auto-close any open burst
+    open_burst = await eng_repo.get_open_burst(engagement_id)
+    if open_burst:
+        duration_s = (now - open_burst.jam_on_at).total_seconds()
+        await eng_repo.close_burst(open_burst.id, now, round(duration_s, 3))
+        # Record jam_off event for auto-closed burst
+        jam_off_event = TestEvent(
+            id=generate_uuid(),
+            session_id=engagement.session_id,
+            type="jam_off",
+            timestamp=now,
+            source="system",
+            engagement_id=engagement.id,
+            burst_id=open_burst.id,
+            note="Auto-closed by disengage",
+        )
+        db.add(jam_off_event)
+
     engagement.status = EngagementStatus.COMPLETE.value
     engagement.disengage_timestamp = now
 
@@ -1362,7 +1620,7 @@ async def disengage(
         cuas_id=engagement.cuas_placement.cuas_profile_id if engagement.cuas_placement else None,
         engagement_id=engagement.id,
         note=f"Engagement complete: {engagement.name}",
-        event_metadata={"metrics_summary": metrics} if metrics else None,
+        event_metadata={"metrics_summary": _json_safe(metrics)} if metrics else None,
     )
     db.add(event)
 
@@ -1482,6 +1740,299 @@ async def get_engagement_summary(
         ]
 
     return result
+
+
+# =============================================================================
+# Jam Burst Endpoints
+# =============================================================================
+
+@router.post("/engagements/{engagement_id}/jam-on")
+async def jam_on(
+    engagement_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Open a new jam burst. Engagement must be active with no open burst."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    if engagement.status != EngagementStatus.ACTIVE.value:
+        raise HTTPException(status_code=400, detail="Can only jam-on during active engagement")
+
+    # Check no open burst exists
+    open_burst = await eng_repo.get_open_burst(engagement_id)
+    if open_burst:
+        raise HTTPException(status_code=400, detail="A burst is already open — call jam-off first")
+
+    now = datetime.utcnow()
+    max_seq = await eng_repo.get_max_burst_seq(engagement_id)
+
+    # Resolve emitter position
+    emitter_lat = engagement.cuas_lat
+    emitter_lon = engagement.cuas_lon
+    emitter_heading = engagement.cuas_orientation_deg
+
+    if engagement.emitter_type == EmitterType.ACTOR.value:
+        from sqlalchemy import select as sa_select
+        actor_result = await db.execute(
+            sa_select(SessionActor).where(SessionActor.id == engagement.emitter_id)
+        )
+        actor = actor_result.scalar_one_or_none()
+        if actor:
+            emitter_lat = actor.lat
+            emitter_lon = actor.lon
+            emitter_heading = actor.heading_deg
+
+    # Build target snapshots
+    from .geo import compute_range_bearing
+    target_snapshots = []
+    for target in engagement.targets:
+        # Get latest telemetry for target
+        from sqlalchemy import select as sa_select
+        telem_result = await db.execute(
+            sa_select(TrackerTelemetry)
+            .where(TrackerTelemetry.session_id == engagement.session_id)
+            .where(TrackerTelemetry.tracker_id == target.tracker_id)
+            .order_by(TrackerTelemetry.time_local_received.desc())
+            .limit(1)
+        )
+        latest = telem_result.scalar_one_or_none()
+
+        snapshot = {"tracker_id": target.tracker_id}
+        if latest and latest.lat and latest.lon:
+            snapshot["lat"] = latest.lat
+            snapshot["lon"] = latest.lon
+            if emitter_lat and emitter_lon:
+                range_m, bearing_deg = await compute_range_bearing(
+                    emitter_lat, emitter_lon, latest.lat, latest.lon, db
+                )
+                snapshot["range_m"] = range_m
+                snapshot["bearing_deg"] = bearing_deg
+            gps_status = "good"
+            if not latest.fix_valid:
+                gps_status = "lost"
+            elif latest.hdop and latest.hdop > 5:
+                gps_status = "degraded"
+            snapshot["gps_status"] = gps_status
+        target_snapshots.append(snapshot)
+
+    # Create burst
+    burst = await eng_repo.create_burst({
+        "id": generate_uuid(),
+        "engagement_id": engagement_id,
+        "burst_seq": max_seq + 1,
+        "jam_on_at": now,
+        "emitter_lat": emitter_lat,
+        "emitter_lon": emitter_lon,
+        "emitter_heading_deg": emitter_heading,
+        "target_snapshots": target_snapshots,
+        "source": "live",
+    })
+
+    # Create jam_on event
+    event = TestEvent(
+        id=generate_uuid(),
+        session_id=engagement.session_id,
+        type="jam_on",
+        timestamp=now,
+        source="manual",
+        cuas_id=engagement.cuas_placement.cuas_profile_id if engagement.cuas_placement else None,
+        engagement_id=engagement.id,
+        burst_id=burst.id,
+        note=f"Burst #{max_seq + 1} started",
+    )
+    db.add(event)
+
+    await db.commit()
+    return burst_to_dict(burst)
+
+
+@router.post("/engagements/{engagement_id}/jam-off")
+async def jam_off(
+    engagement_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Close the open jam burst."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    if engagement.status != EngagementStatus.ACTIVE.value:
+        raise HTTPException(status_code=400, detail="Can only jam-off during active engagement")
+
+    open_burst = await eng_repo.get_open_burst(engagement_id)
+    if not open_burst:
+        raise HTTPException(status_code=400, detail="No open burst to close")
+
+    now = datetime.utcnow()
+    duration_s = round((now - open_burst.jam_on_at).total_seconds(), 3)
+
+    burst = await eng_repo.close_burst(open_burst.id, now, duration_s)
+
+    # Create jam_off event
+    event = TestEvent(
+        id=generate_uuid(),
+        session_id=engagement.session_id,
+        type="jam_off",
+        timestamp=now,
+        source="manual",
+        cuas_id=engagement.cuas_placement.cuas_profile_id if engagement.cuas_placement else None,
+        engagement_id=engagement.id,
+        burst_id=burst.id,
+        note=f"Burst #{burst.burst_seq} ended ({duration_s:.1f}s)",
+    )
+    db.add(event)
+
+    await db.commit()
+    return burst_to_dict(burst)
+
+
+@router.get("/engagements/{engagement_id}/bursts")
+async def list_bursts(
+    engagement_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """List all jam bursts for an engagement."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_by_id(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    bursts = await eng_repo.get_bursts(engagement_id)
+    return {"bursts": [burst_to_dict(b) for b in bursts]}
+
+
+# =============================================================================
+# Session Actor Endpoints
+# =============================================================================
+
+@router.post("/sessions/{session_id}/actors")
+async def create_actor(
+    session_id: str,
+    request: SessionActorCreateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new session actor."""
+    session_repo = SessionRepository(db)
+    session = await session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    actor_repo = SessionActorRepository(db)
+    actor = await actor_repo.create({
+        "session_id": session_id,
+        "name": request.name,
+        "callsign": request.callsign,
+        "lat": request.lat,
+        "lon": request.lon,
+        "heading_deg": request.heading_deg,
+        "tracker_unit_id": request.tracker_unit_id,
+    })
+
+    await db.commit()
+    return actor_to_dict(actor)
+
+
+@router.get("/sessions/{session_id}/actors")
+async def list_actors(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """List all actors for a session."""
+    actor_repo = SessionActorRepository(db)
+    actors = await actor_repo.get_by_session(session_id)
+    return {"actors": [actor_to_dict(a) for a in actors]}
+
+
+@router.put("/actors/{actor_id}")
+async def update_actor(
+    actor_id: str,
+    request: SessionActorUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a session actor."""
+    actor_repo = SessionActorRepository(db)
+    actor = await actor_repo.get_by_id(actor_id)
+    if not actor:
+        raise HTTPException(status_code=404, detail="Actor not found")
+
+    update_data = {}
+    for field in ["name", "callsign", "lat", "lon", "heading_deg", "tracker_unit_id", "is_active"]:
+        value = getattr(request, field, None)
+        if value is not None:
+            update_data[field] = value
+
+    if update_data:
+        await actor_repo.update(actor_id, update_data)
+
+    await db.commit()
+
+    actor = await actor_repo.get_by_id(actor_id)
+    return actor_to_dict(actor)
+
+
+@router.delete("/actors/{actor_id}")
+async def delete_actor(
+    actor_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a session actor."""
+    actor_repo = SessionActorRepository(db)
+    actor = await actor_repo.get_by_id(actor_id)
+    if not actor:
+        raise HTTPException(status_code=404, detail="Actor not found")
+
+    await actor_repo.delete(actor_id)
+    await db.commit()
+    return {"success": True}
+
+
+# =============================================================================
+# Engagement Metrics Retrieval & Recomputation
+# =============================================================================
+
+@router.get("/engagements/{engagement_id}/metrics")
+async def get_engagement_metrics(
+    engagement_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get metrics for an engagement."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    if not engagement.metrics:
+        return {"metrics": None, "message": "No metrics computed yet"}
+
+    return {"metrics": engagement_metrics_to_dict(engagement.metrics)}
+
+
+@router.post("/engagements/{engagement_id}/recompute")
+async def recompute_metrics(
+    engagement_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-compute metrics for an engagement (alias for compute-metrics)."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    if engagement.status not in (EngagementStatus.COMPLETE.value, EngagementStatus.ACTIVE.value):
+        raise HTTPException(status_code=400, detail="Can only recompute metrics for active or complete engagements")
+
+    from .analysis import compute_engagement_metrics
+    metrics = await compute_engagement_metrics(db, engagement)
+    if metrics is None:
+        raise HTTPException(status_code=400, detail="No telemetry data for metrics computation")
+
+    await db.commit()
+
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    return engagement_to_dict(engagement)
 
 
 # =============================================================================

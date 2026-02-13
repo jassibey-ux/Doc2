@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import type { DroneSummary, PositionPoint, GPSHealthStatus } from '../types/drone';
-import type { CUASPlacement, CUASProfile, EnhancedPositionPoint, SiteDefinition, GeoPoint, Engagement } from '../types/workflow';
+import type { CUASPlacement, CUASProfile, EnhancedPositionPoint, SiteDefinition, GeoPoint, Engagement, SessionActor, JamBurst } from '../types/workflow';
 import {
   generateCUASCoverageGeoJSON,
   generateCUASMarkersGeoJSON,
@@ -53,6 +53,10 @@ interface MapProps {
   showViewshed?: boolean;
   // Active engagement visualization
   activeEngagements?: Engagement[];
+  // Session actors (human emitter operators on the field)
+  sessionActors?: SessionActor[];
+  // Active jam bursts keyed by engagement ID
+  activeBursts?: Map<string, JamBurst>;
 }
 
 // Color palette for drone tracks (cycle through for different drones)
@@ -198,6 +202,8 @@ export default function MapComponent({
   viewshedBounds = null,
   showViewshed = true,
   activeEngagements = [],
+  sessionActors = [],
+  activeBursts = new Map(),
 }: MapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -209,6 +215,7 @@ export default function MapComponent({
   const sdCardSourceAddedRef = useRef<boolean>(false);
   const viewshedSourceAddedRef = useRef<boolean>(false);
   const engagementSourceAddedRef = useRef<boolean>(false);
+  const actorSourceAddedRef = useRef<boolean>(false);
 
   // Create a stable mapping of tracker_id to color index
   const droneColorMap = useMemo(() => {
@@ -332,28 +339,49 @@ export default function MapComponent({
     for (const eng of activeEngagements) {
       if (eng.status !== 'active') continue;
 
-      // Get CUAS position
-      const placement = cuasPlacements.find(p => p.id === eng.cuas_placement_id);
-      if (!placement) continue;
+      // Check if this engagement has an active burst
+      const activeBurst = activeBursts.get(eng.id);
+      const isJamming = !!activeBurst;
 
-      const cuasLon = eng.cuas_lon ?? placement.position.lon;
-      const cuasLat = eng.cuas_lat ?? placement.position.lat;
+      // Use emitter position from engagement snapshot (handles both CUAS and actor emitters)
+      // Fall back to CUAS placement lookup only if engagement snapshot has no position
+      let emitterLat = eng.cuas_lat;
+      let emitterLon = eng.cuas_lon;
+
+      if (isJamming && activeBurst.emitter_lat != null && activeBurst.emitter_lon != null) {
+        // Prefer burst emitter position (most current snapshot)
+        emitterLat = activeBurst.emitter_lat;
+        emitterLon = activeBurst.emitter_lon;
+      }
+
+      if (emitterLat == null || emitterLon == null) {
+        // Fall back to CUAS placement position
+        const placement = cuasPlacements.find(p => p.id === eng.cuas_placement_id);
+        if (!placement) continue;
+        emitterLat = placement.position.lat;
+        emitterLon = placement.position.lon;
+      }
 
       // Draw line to each target drone
       for (const target of eng.targets) {
         const drone = drones.get(target.tracker_id);
         if (!drone || drone.lat === null || drone.lon === null) continue;
 
-        // Determine line color based on GPS health
-        const gpsHealth = drone.gps_health?.health_status ?? 'healthy';
-        const lineColor = gpsHealth === 'healthy' ? '#22c55e' : gpsHealth === 'degraded' ? '#eab308' : '#ef4444';
+        // Determine line color: red when actively jamming, otherwise based on GPS health
+        let lineColor: string;
+        if (isJamming) {
+          lineColor = '#ef4444'; // Red for active jamming
+        } else {
+          const gpsHealth = drone.gps_health?.health_status ?? 'healthy';
+          lineColor = gpsHealth === 'healthy' ? '#22c55e' : gpsHealth === 'degraded' ? '#eab308' : '#ef4444';
+        }
 
         // Calculate range for label
         const R = 6371000;
-        const dLat = ((drone.lat - cuasLat) * Math.PI) / 180;
-        const dLon = ((drone.lon! - cuasLon) * Math.PI) / 180;
+        const dLat = ((drone.lat - emitterLat) * Math.PI) / 180;
+        const dLon = ((drone.lon! - emitterLon) * Math.PI) / 180;
         const a = Math.sin(dLat / 2) ** 2 +
-          Math.cos((cuasLat * Math.PI) / 180) * Math.cos((drone.lat * Math.PI) / 180) *
+          Math.cos((emitterLat * Math.PI) / 180) * Math.cos((drone.lat * Math.PI) / 180) *
           Math.sin(dLon / 2) ** 2;
         const rangeM = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
@@ -366,24 +394,26 @@ export default function MapComponent({
             trackerId: target.tracker_id,
             engagementId: eng.id,
             type: 'line',
+            isJamming,
           },
           geometry: {
             type: 'LineString',
             coordinates: [
-              [cuasLon, cuasLat],
+              [emitterLon, emitterLat],
               [drone.lon!, drone.lat],
             ],
           },
         });
 
         // Midpoint label feature
-        const midLon = (cuasLon + drone.lon!) / 2;
-        const midLat = (cuasLat + drone.lat) / 2;
+        const midLon = (emitterLon + drone.lon!) / 2;
+        const midLat = (emitterLat + drone.lat) / 2;
         features.push({
           type: 'Feature',
           properties: {
             label: `${Math.round(rangeM)}m`,
             type: 'label',
+            isJamming,
           },
           geometry: {
             type: 'Point',
@@ -394,7 +424,38 @@ export default function MapComponent({
     }
 
     return { type: 'FeatureCollection' as const, features };
-  }, [activeEngagements, cuasPlacements, drones]);
+  }, [activeEngagements, activeBursts, cuasPlacements, drones]);
+
+  // Generate session actor GeoJSON (human emitter operators on the field)
+  const sessionActorsGeoJSON = useMemo(() => {
+    if (!sessionActors || sessionActors.length === 0) {
+      return { type: 'FeatureCollection' as const, features: [] };
+    }
+
+    const features: GeoJSON.Feature[] = [];
+
+    for (const actor of sessionActors) {
+      // Only include active actors with valid positions
+      if (!actor.is_active || actor.lat == null || actor.lon == null) continue;
+
+      features.push({
+        type: 'Feature',
+        properties: {
+          id: actor.id,
+          name: actor.name,
+          callsign: actor.callsign ?? actor.name,
+          heading_deg: actor.heading_deg ?? 0,
+          is_active: actor.is_active,
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: [actor.lon, actor.lat],
+        },
+      });
+    }
+
+    return { type: 'FeatureCollection' as const, features };
+  }, [sessionActors]);
 
   // Generate CUAS coverage GeoJSON
   const cuasProfilesMap = useMemo(() => createProfilesMap(cuasProfiles), [cuasProfiles]);
@@ -507,6 +568,17 @@ export default function MapComponent({
     }
   }, [engagementLinesGeoJSON]);
 
+  // Update session actors when data changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !actorSourceAddedRef.current) return;
+
+    const source = map.getSource('session-actors') as maplibregl.GeoJSONSource;
+    if (source) {
+      source.setData(sessionActorsGeoJSON);
+    }
+  }, [sessionActorsGeoJSON]);
+
   // Toggle SD Card track visibility
   useEffect(() => {
     const map = mapRef.current;
@@ -532,6 +604,7 @@ export default function MapComponent({
       style: {
         version: 8,
         name: 'Dark',
+        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
         sources: {
           'carto-dark': {
             type: 'raster',
@@ -716,12 +789,12 @@ export default function MapComponent({
         data: { type: 'FeatureCollection', features: [] },
       });
 
-      // Engagement line layer (CUAS-to-drone connection)
+      // Engagement line layer - non-jamming (standard dashed line)
       map.addLayer({
         id: 'engagement-lines-line',
         type: 'line',
         source: 'engagement-lines',
-        filter: ['==', ['get', 'type'], 'line'],
+        filter: ['all', ['==', ['get', 'type'], 'line'], ['!=', ['get', 'isJamming'], true]],
         layout: {
           'line-join': 'round',
           'line-cap': 'round',
@@ -734,12 +807,30 @@ export default function MapComponent({
         },
       });
 
-      // Engagement line glow
+      // Engagement line layer - active jamming (red, wider, rapid dashes)
+      map.addLayer({
+        id: 'engagement-lines-jamming',
+        type: 'line',
+        source: 'engagement-lines',
+        filter: ['all', ['==', ['get', 'type'], 'line'], ['==', ['get', 'isJamming'], true]],
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': '#ef4444', // Red for active jamming
+          'line-width': 3.5,
+          'line-opacity': 0.95,
+          'line-dasharray': [2, 2],
+        },
+      });
+
+      // Engagement line glow - non-jamming
       map.addLayer({
         id: 'engagement-lines-glow',
         type: 'line',
         source: 'engagement-lines',
-        filter: ['==', ['get', 'type'], 'line'],
+        filter: ['all', ['==', ['get', 'type'], 'line'], ['!=', ['get', 'isJamming'], true]],
         layout: {
           'line-join': 'round',
           'line-cap': 'round',
@@ -751,6 +842,24 @@ export default function MapComponent({
           'line-blur': 3,
         },
       }, 'engagement-lines-line');
+
+      // Engagement line glow - active jamming (brighter red glow)
+      map.addLayer({
+        id: 'engagement-lines-jamming-glow',
+        type: 'line',
+        source: 'engagement-lines',
+        filter: ['all', ['==', ['get', 'type'], 'line'], ['==', ['get', 'isJamming'], true]],
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': '#ef4444',
+          'line-width': 10,
+          'line-opacity': 0.4,
+          'line-blur': 4,
+        },
+      }, 'engagement-lines-jamming');
 
       // Engagement range label layer
       map.addLayer({
@@ -765,13 +874,71 @@ export default function MapComponent({
           'text-allow-overlap': true,
         },
         paint: {
-          'text-color': '#ffffff',
+          'text-color': [
+            'case',
+            ['==', ['get', 'isJamming'], true],
+            '#fca5a5', // Light red text when jamming
+            '#ffffff',
+          ],
           'text-halo-color': 'rgba(0, 0, 0, 0.8)',
           'text-halo-width': 2,
         },
       });
 
       engagementSourceAddedRef.current = true;
+
+      // Add session actors source and layers
+      map.addSource('session-actors', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+
+      // Session actor circle layer (magenta dots for human operators)
+      map.addLayer({
+        id: 'session-actors-circle',
+        type: 'circle',
+        source: 'session-actors',
+        paint: {
+          'circle-radius': 7,
+          'circle-color': '#d946ef', // Magenta/fuchsia for actors
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+
+      // Session actor heading indicator (inner directional dot)
+      map.addLayer({
+        id: 'session-actors-inner',
+        type: 'circle',
+        source: 'session-actors',
+        paint: {
+          'circle-radius': 3,
+          'circle-color': '#ffffff',
+          'circle-translate': [0, -3], // Offset upward to hint at heading
+        },
+      });
+
+      // Session actor label layer (name/callsign text)
+      map.addLayer({
+        id: 'session-actors-label',
+        type: 'symbol',
+        source: 'session-actors',
+        layout: {
+          'text-field': ['get', 'callsign'],
+          'text-size': 10,
+          'text-font': ['Open Sans Bold'],
+          'text-offset': [0, 1.5],
+          'text-anchor': 'top',
+          'text-allow-overlap': false,
+        },
+        paint: {
+          'text-color': '#e879f9', // Light magenta for labels
+          'text-halo-color': 'rgba(0, 0, 0, 0.9)',
+          'text-halo-width': 1.5,
+        },
+      });
+
+      actorSourceAddedRef.current = true;
 
       // Add CUAS coverage source and layers
       map.addSource('cuas-coverage', {

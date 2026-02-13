@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import type { DroneSummary, WebSocketMessage, PositionPoint } from '../types/drone';
-import type { EventType, AlertLevel, EnhancedPositionPoint } from '../types/workflow';
+import type { EventType, AlertLevel, EnhancedPositionPoint, JamBurst } from '../types/workflow';
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
 
@@ -77,6 +77,11 @@ interface WebSocketContextType {
   clearAllSDCardTracks: () => void;
   showSDCardTracks: boolean;
   setShowSDCardTracks: (show: boolean) => void;
+  // Jam burst and engagement callback registration
+  setOnBurstOpened: (cb: ((burst: JamBurst) => void) | undefined) => void;
+  setOnBurstClosed: (cb: ((burst: JamBurst) => void) | undefined) => void;
+  setOnEngagementMetricsReady: (cb: ((data: { engagement_id: string }) => void) | undefined) => void;
+  setOnGpsDenialDetected: (cb: ((data: { engagement_id: string; burst_id: string; tracker_id: string }) => void) | undefined) => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
@@ -188,6 +193,26 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const reconnectAttempts = useRef(0);
   const isLiveRef = useRef(isLive);
 
+  // Callback refs for burst and engagement events
+  const onBurstOpenedRef = useRef<((burst: JamBurst) => void) | undefined>(undefined);
+  const onBurstClosedRef = useRef<((burst: JamBurst) => void) | undefined>(undefined);
+  const onEngagementMetricsReadyRef = useRef<((data: { engagement_id: string }) => void) | undefined>(undefined);
+  const onGpsDenialDetectedRef = useRef<((data: { engagement_id: string; burst_id: string; tracker_id: string }) => void) | undefined>(undefined);
+
+  // Callback registration setters (update refs so WebSocket handler sees latest)
+  const setOnBurstOpened = useCallback((cb: ((burst: JamBurst) => void) | undefined) => {
+    onBurstOpenedRef.current = cb;
+  }, []);
+  const setOnBurstClosed = useCallback((cb: ((burst: JamBurst) => void) | undefined) => {
+    onBurstClosedRef.current = cb;
+  }, []);
+  const setOnEngagementMetricsReady = useCallback((cb: ((data: { engagement_id: string }) => void) | undefined) => {
+    onEngagementMetricsReadyRef.current = cb;
+  }, []);
+  const setOnGpsDenialDetected = useCallback((cb: ((data: { engagement_id: string; burst_id: string; tracker_id: string }) => void) | undefined) => {
+    onGpsDenialDetectedRef.current = cb;
+  }, []);
+
   // Calculate timeline bounds based on history
   const getTimelineBounds = useCallback(() => {
     let earliest = Date.now();
@@ -209,14 +234,19 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     return { start: rangeStart, end: latest };
   }, [droneHistory, timeRange]);
 
-  const { start: timelineStart, end: timelineEnd } = getTimelineBounds();
+  const timelineBounds = useMemo(() => getTimelineBounds(), [getTimelineBounds]);
+  const { start: timelineStart, end: timelineEnd } = timelineBounds;
 
-  // Keep currentTime at latest when in live mode
+  // Keep currentTime at latest when in live mode — use interval instead of effect on timelineEnd
+  // to avoid infinite render loop (getTimelineBounds uses Date.now() which changes every render)
   useEffect(() => {
-    if (isLive) {
-      setCurrentTime(timelineEnd);
-    }
-  }, [isLive, timelineEnd]);
+    if (!isLive) return;
+    setCurrentTime(timelineEnd);
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isLive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep isLiveRef in sync so the WebSocket handler always has the current value
   useEffect(() => {
@@ -401,6 +431,34 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
             break;
           }
 
+          case 'burst_opened': {
+            const burst = message.data as unknown as JamBurst;
+            console.log('Burst opened:', burst.id);
+            onBurstOpenedRef.current?.(burst);
+            break;
+          }
+
+          case 'burst_closed': {
+            const burst = message.data as unknown as JamBurst;
+            console.log('Burst closed:', burst.id);
+            onBurstClosedRef.current?.(burst);
+            break;
+          }
+
+          case 'engagement_metrics_ready': {
+            const data = message.data as { engagement_id: string };
+            console.log('Engagement metrics ready:', data.engagement_id);
+            onEngagementMetricsReadyRef.current?.(data);
+            break;
+          }
+
+          case 'gps_denial_detected': {
+            const data = message.data as { engagement_id: string; burst_id: string; tracker_id: string };
+            console.log('GPS denial detected:', data.engagement_id, data.burst_id, data.tracker_id);
+            onGpsDenialDetectedRef.current?.(data);
+            break;
+          }
+
           default:
             console.log('Unknown message type:', message.type);
         }
@@ -472,6 +530,11 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     clearAllSDCardTracks,
     showSDCardTracks,
     setShowSDCardTracks,
+    // Jam burst and engagement callback registration
+    setOnBurstOpened,
+    setOnBurstClosed,
+    setOnEngagementMetricsReady,
+    setOnGpsDenialDetected,
   };
 
   return (

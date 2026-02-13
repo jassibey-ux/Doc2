@@ -5,8 +5,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Badge } from './ui/GlassUI';
-import { Square, AlertTriangle, Plus, Target } from 'lucide-react';
-import type { Engagement, CUASPlacement, CUASProfile } from '../types/workflow';
+import { Square, AlertTriangle, Plus, Target, User, Radio, Zap } from 'lucide-react';
+import type { Engagement, CUASPlacement, CUASProfile, JamBurst, EmitterType } from '../types/workflow';
 
 interface EngagementPanelProps {
   engagements: Engagement[];
@@ -16,6 +16,8 @@ interface EngagementPanelProps {
   onDisengage: (engagementId: string) => void;
   onNewEngagement?: () => void;
   isActive: boolean; // session is in active phase
+  activeBursts?: Map<string, JamBurst>; // active burst state keyed by engagement_id
+  sessionActors?: Array<{ id: string; name: string; callsign?: string }>;
 }
 
 function formatElapsed(startIso: string): string {
@@ -41,6 +43,8 @@ export default function EngagementPanel({
   onDisengage,
   onNewEngagement,
   isActive,
+  activeBursts,
+  sessionActors,
 }: EngagementPanelProps) {
   // Tick for live elapsed timers
   const [, setTick] = useState(0);
@@ -58,7 +62,8 @@ export default function EngagementPanel({
   const profilesMap = new Map<string, CUASProfile>();
   cuasProfiles.forEach(p => profilesMap.set(p.id, p));
 
-  const getCuasName = (cuasPlacementId: string): string => {
+  const getCuasName = (cuasPlacementId: string | undefined): string => {
+    if (!cuasPlacementId) return 'Unknown CUAS';
     const placement = cuasPlacements.find(p => p.id === cuasPlacementId);
     if (!placement) return 'Unknown CUAS';
     return profilesMap.get(placement.cuas_profile_id)?.name || 'CUAS';
@@ -66,6 +71,17 @@ export default function EngagementPanel({
 
   const getTargetNames = (eng: Engagement): string => {
     return eng.targets.map(t => t.tracker_id).join(', ') || 'No targets';
+  };
+
+  const getEmitterLabel = (eng: Engagement): string => {
+    if (eng.emitter_type === 'actor') {
+      const actor = sessionActors?.find(a => a.id === eng.emitter_id);
+      return actor?.callsign || actor?.name || 'Actor';
+    }
+    // CUAS system - prefer backend-resolved name, fall back to local lookup
+    if (eng.cuas_name) return eng.cuas_name;
+    if (eng.cuas_placement_id) return getCuasName(eng.cuas_placement_id);
+    return 'CUAS';
   };
 
   // Sort: active first, then by created_at descending
@@ -93,6 +109,7 @@ export default function EngagementPanel({
               <span className="eng-card-name">
                 {eng.name || `${getCuasName(eng.cuas_placement_id)} → ${getTargetNames(eng)}`}
               </span>
+              <EmitterBadge emitterType={eng.emitter_type} label={getEmitterLabel(eng)} />
               <EngagementStatusBadge status={eng.status} />
             </div>
 
@@ -121,8 +138,8 @@ export default function EngagementPanel({
               </div>
             )}
 
-            {/* Complete engagement: compact metrics */}
-            {eng.status === 'complete' && eng.metrics && (
+            {/* Complete engagement: compact metrics or burst summary */}
+            {eng.status === 'complete' && eng.metrics && (eng.metrics.time_to_effect_s != null || eng.metrics.effective_range_m != null) && (
               <div className="eng-card-metrics">
                 <span className="eng-metric">
                   {formatMetricValue(eng.metrics.time_to_effect_s, 's')}
@@ -141,6 +158,42 @@ export default function EngagementPanel({
                   </Badge>
                 )}
               </div>
+            )}
+            {/* Burst summary fallback when telemetry metrics are null */}
+            {eng.status === 'complete' && (!eng.metrics || (eng.metrics.time_to_effect_s == null && eng.metrics.effective_range_m == null)) && (
+              <div className="eng-card-metrics">
+                {eng.bursts && eng.bursts.length > 0 ? (
+                  <>
+                    <span className="eng-metric">
+                      {eng.bursts.length} burst{eng.bursts.length !== 1 ? 's' : ''}
+                    </span>
+                    <span className="eng-metric-sep">|</span>
+                    <span className="eng-metric">
+                      {eng.bursts.reduce((sum, b) => sum + (b.duration_s || 0), 0).toFixed(1)}s jam
+                    </span>
+                    {eng.engage_timestamp && eng.disengage_timestamp && (
+                      <>
+                        <span className="eng-metric-sep">|</span>
+                        <span className="eng-metric">
+                          {((new Date(eng.disengage_timestamp).getTime() - new Date(eng.engage_timestamp).getTime()) / 1000).toFixed(0)}s total
+                        </span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <span className="eng-metric">No burst data</span>
+                )}
+              </div>
+            )}
+
+            {/* Active burst: pulsing timer for current burst */}
+            {eng.status === 'active' && activeBursts?.has(eng.id) && (
+              <ActiveBurstIndicator burst={activeBursts.get(eng.id)!} />
+            )}
+
+            {/* Completed engagement: burst timeline + per-burst metrics */}
+            {eng.status === 'complete' && eng.bursts && eng.bursts.length > 0 && (
+              <BurstTimeline bursts={eng.bursts} engageTimestamp={eng.engage_timestamp} disengageTimestamp={eng.disengage_timestamp} />
             )}
 
             {/* Aborted */}
@@ -184,6 +237,94 @@ function EngagementStatusBadge({ status }: { status: string }) {
     default:
       return <Badge color="gray" size="sm">{status.toUpperCase()}</Badge>;
   }
+}
+
+function EmitterBadge({ emitterType, label }: { emitterType: EmitterType; label: string }) {
+  const isActor = emitterType === 'actor';
+  return (
+    <span className={`eng-emitter-badge ${isActor ? 'eng-emitter-badge--actor' : 'eng-emitter-badge--cuas'}`}>
+      {isActor ? <User size={9} /> : <Radio size={9} />}
+      <span>{label}</span>
+    </span>
+  );
+}
+
+function ActiveBurstIndicator({ burst }: { burst: JamBurst }) {
+  return (
+    <div className="eng-burst-active">
+      <span className="eng-burst-pulse" />
+      <Zap size={9} style={{ color: '#f59e0b' }} />
+      <span className="eng-burst-seq">#{burst.burst_seq}</span>
+      <span className="eng-burst-timer">{formatElapsed(burst.jam_on_at)}</span>
+      {burst.gps_denial_detected && (
+        <span className="eng-burst-denial">GPS</span>
+      )}
+    </div>
+  );
+}
+
+function BurstTimeline({
+  bursts,
+  engageTimestamp,
+  disengageTimestamp,
+}: {
+  bursts: JamBurst[];
+  engageTimestamp?: string;
+  disengageTimestamp?: string;
+}) {
+  if (!bursts.length) return null;
+
+  // Compute total engagement span for the timeline bar
+  const engStart = engageTimestamp ? new Date(engageTimestamp).getTime() : new Date(bursts[0].jam_on_at).getTime();
+  const engEnd = disengageTimestamp
+    ? new Date(disengageTimestamp).getTime()
+    : Math.max(...bursts.map(b => b.jam_off_at ? new Date(b.jam_off_at).getTime() : Date.now()));
+  const totalMs = Math.max(engEnd - engStart, 1);
+
+  return (
+    <div className="eng-burst-section">
+      <div className="eng-burst-label">
+        <Zap size={9} />
+        <span>{bursts.length} burst{bursts.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {/* Compact horizontal timeline bar */}
+      <div className="eng-burst-timeline">
+        {bursts.map(b => {
+          const onMs = new Date(b.jam_on_at).getTime();
+          const offMs = b.jam_off_at ? new Date(b.jam_off_at).getTime() : engEnd;
+          const left = ((onMs - engStart) / totalMs) * 100;
+          const width = Math.max(((offMs - onMs) / totalMs) * 100, 2); // min 2% for visibility
+          return (
+            <span
+              key={b.id}
+              className={`eng-burst-bar ${b.gps_denial_detected ? 'eng-burst-bar--denial' : ''}`}
+              style={{ left: `${left}%`, width: `${width}%` }}
+              title={`#${b.burst_seq} ${b.duration_s != null ? b.duration_s.toFixed(1) + 's' : '?'}${b.gps_denial_detected ? ' GPS denial' : ''}`}
+            />
+          );
+        })}
+      </div>
+
+      {/* Per-burst compact metrics */}
+      <div className="eng-burst-metrics-list">
+        {bursts.map(b => (
+          <div key={b.id} className="eng-burst-metric-row">
+            <span className="eng-burst-seq-label">#{b.burst_seq}</span>
+            <span className="eng-burst-dur">
+              {b.duration_s != null ? `${b.duration_s.toFixed(1)}s` : '--'}
+            </span>
+            {b.time_to_effect_s != null && (
+              <span className="eng-burst-tte">TTE {b.time_to_effect_s.toFixed(1)}s</span>
+            )}
+            {b.gps_denial_detected && (
+              <span className="eng-burst-denial-dot" title="GPS denial detected" />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 const engagementStyles = `
@@ -340,5 +481,158 @@ const engagementStyles = `
     color: rgba(255, 255, 255, 0.7);
     border-color: rgba(255, 255, 255, 0.2);
     background: rgba(255, 255, 255, 0.03);
+  }
+
+  /* Emitter badge */
+  .eng-emitter-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 5px;
+    font-size: 9px;
+    font-weight: 500;
+    border-radius: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .eng-emitter-badge--actor {
+    background: rgba(168, 85, 247, 0.15);
+    color: #a855f7;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+  }
+
+  .eng-emitter-badge--cuas {
+    background: rgba(6, 182, 212, 0.12);
+    color: #06b6d4;
+    border: 1px solid rgba(6, 182, 212, 0.25);
+  }
+
+  /* Active burst indicator */
+  .eng-burst-active {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 5px;
+    padding: 3px 6px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 4px;
+  }
+
+  .eng-burst-pulse {
+    width: 5px;
+    height: 5px;
+    background: #f59e0b;
+    border-radius: 50%;
+    animation: pulse 1s ease-in-out infinite;
+    box-shadow: 0 0 5px rgba(245, 158, 11, 0.6);
+  }
+
+  .eng-burst-seq {
+    font-size: 10px;
+    font-family: monospace;
+    font-weight: 600;
+    color: #f59e0b;
+  }
+
+  .eng-burst-timer {
+    font-size: 10px;
+    font-family: monospace;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .eng-burst-denial {
+    font-size: 8px;
+    font-weight: 700;
+    padding: 0 3px;
+    border-radius: 2px;
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  /* Burst section for completed engagements */
+  .eng-burst-section {
+    margin-top: 5px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .eng-burst-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    margin-bottom: 4px;
+  }
+
+  /* Timeline bar container */
+  .eng-burst-timeline {
+    position: relative;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+
+  .eng-burst-bar {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background: rgba(6, 182, 212, 0.5);
+    border-radius: 1px;
+    min-width: 2px;
+  }
+
+  .eng-burst-bar--denial {
+    background: rgba(239, 68, 68, 0.55);
+  }
+
+  /* Per-burst metric rows */
+  .eng-burst-metrics-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .eng-burst-metric-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 0;
+  }
+
+  .eng-burst-seq-label {
+    font-size: 9px;
+    font-family: monospace;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.35);
+    width: 18px;
+    flex-shrink: 0;
+  }
+
+  .eng-burst-dur {
+    font-size: 9px;
+    font-family: monospace;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .eng-burst-tte {
+    font-size: 9px;
+    font-family: monospace;
+    color: rgba(6, 182, 212, 0.7);
+  }
+
+  .eng-burst-denial-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #ef4444;
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+    flex-shrink: 0;
   }
 `;

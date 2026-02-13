@@ -25,6 +25,76 @@ export default function DroneDetailPanel({ drone, onClose, onOpenCamera, onBackT
   const [sdFileInfo, setSDFileInfo] = useState<{ filename: string; points: number; duration_s: number } | null>(null);
   const [sdError, setSDError] = useState<string | null>(null);
 
+  // Handle SD card upload
+  const handleSDCardUpload = useCallback(async (file: File) => {
+    if (!drone || !activeSession) return;
+
+    setIsUploadingSD(true);
+    setSDError(null);
+
+    try {
+      // 1. Upload file
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('tracker_id', drone.tracker_id);
+      formData.append('session_id', activeSession.id);
+
+      const uploadRes = await fetch('/api/sd-merge/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json();
+        throw new Error(err.error || 'Upload failed');
+      }
+
+      const uploadData = await uploadRes.json();
+      setSDFileInfo({
+        filename: uploadData.filename,
+        points: uploadData.metadata.total_points,
+        duration_s: uploadData.metadata.duration_s,
+      });
+
+      // 2. Auto-preview
+      const previewRes = await fetch('/api/sd-merge/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: activeSession.id,
+          tracker_id: drone.tracker_id,
+        }),
+      });
+
+      if (!previewRes.ok) {
+        const err = await previewRes.json();
+        throw new Error(err.error || 'Preview failed');
+      }
+
+      const previewData = await previewRes.json();
+      setSDCardTrack(drone.tracker_id, previewData.sd_card_track);
+      setShowSDCardTracks(true);
+
+    } catch (err: any) {
+      setSDError(err.message || 'Failed to upload SD card');
+    } finally {
+      setIsUploadingSD(false);
+    }
+  }, [drone, activeSession, setSDCardTrack, setShowSDCardTracks]);
+
+  const handleSDFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleSDCardUpload(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [handleSDCardUpload]);
+
+  const handleRemoveSD = useCallback(() => {
+    if (!drone) return;
+    clearSDCardTrack(drone.tracker_id);
+    setSDFileInfo(null);
+    setSDError(null);
+  }, [drone, clearSDCardTrack]);
+
   // Fetch full drone details
   useEffect(() => {
     if (!drone) {
@@ -104,78 +174,8 @@ export default function DroneDetailPanel({ drone, onClose, onOpenCamera, onBackT
   };
 
   // SD Card - check if data exists for this tracker
-  const hasSDCardData = drone ? sdCardTracks.has(drone.tracker_id) : false;
-  const sdCardPoints = drone ? sdCardTracks.get(drone.tracker_id) : undefined;
-
-  // Handle SD card upload
-  const handleSDCardUpload = useCallback(async (file: File) => {
-    if (!drone || !activeSession) return;
-
-    setIsUploadingSD(true);
-    setSDError(null);
-
-    try {
-      // 1. Upload file
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('tracker_id', drone.tracker_id);
-      formData.append('session_id', activeSession.id);
-
-      const uploadRes = await fetch('/api/sd-merge/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!uploadRes.ok) {
-        const err = await uploadRes.json();
-        throw new Error(err.error || 'Upload failed');
-      }
-
-      const uploadData = await uploadRes.json();
-      setSDFileInfo({
-        filename: uploadData.filename,
-        points: uploadData.metadata.total_points,
-        duration_s: uploadData.metadata.duration_s,
-      });
-
-      // 2. Auto-preview
-      const previewRes = await fetch('/api/sd-merge/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: activeSession.id,
-          tracker_id: drone.tracker_id,
-        }),
-      });
-
-      if (!previewRes.ok) {
-        const err = await previewRes.json();
-        throw new Error(err.error || 'Preview failed');
-      }
-
-      const previewData = await previewRes.json();
-      setSDCardTrack(drone.tracker_id, previewData.sd_card_track);
-      setShowSDCardTracks(true);
-
-    } catch (err: any) {
-      setSDError(err.message || 'Failed to upload SD card');
-    } finally {
-      setIsUploadingSD(false);
-    }
-  }, [drone, activeSession, setSDCardTrack, setShowSDCardTracks]);
-
-  const handleSDFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleSDCardUpload(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [handleSDCardUpload]);
-
-  const handleRemoveSD = useCallback(() => {
-    if (!drone) return;
-    clearSDCardTrack(drone.tracker_id);
-    setSDFileInfo(null);
-    setSDError(null);
-  }, [drone, clearSDCardTrack]);
+  const hasSDCardData = sdCardTracks.has(drone.tracker_id);
+  const sdCardPoints = sdCardTracks.get(drone.tracker_id);
 
   const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
