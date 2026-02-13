@@ -128,7 +128,7 @@ export default function SessionAnalysisView() {
   useEffect(() => {
     if (!sessionId) return;
 
-    fetch(`/api/test-sessions/${sessionId}`)
+    fetch(`/api/v2/sessions/${sessionId}`)
       .then(res => res.json())
       .then(data => {
         if (data?.id) {
@@ -152,7 +152,7 @@ export default function SessionAnalysisView() {
   useEffect(() => {
     if (!sessionId) return;
 
-    fetch(`/api/test-sessions/${sessionId}/analysis`)
+    fetch(`/api/v2/sessions/${sessionId}/metrics`)
       .then(res => res.json())
       .then(data => {
         setAnalysisData(data);
@@ -173,7 +173,7 @@ export default function SessionAnalysisView() {
       await updateTestSession(session.id, { status: 'analyzing' });
 
       // Fetch the analysis results from the API
-      const response = await fetch(`/api/test-sessions/${session.id}/analysis`);
+      const response = await fetch(`/api/v2/sessions/${session.id}/compute-metrics`);
       const analysisResult = await response.json();
 
       setAnalysisData(analysisResult);

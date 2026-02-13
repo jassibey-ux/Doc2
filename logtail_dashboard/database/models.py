@@ -344,6 +344,9 @@ class TrackerAssignment(Base):
     tracker_id = Column(String(100), nullable=False)  # The tracker ID from the data
     drone_profile_id = Column(String(36), ForeignKey("drone_profiles.id"))
 
+    session_color = Column(String(20))  # Color assigned for this tracker in the session UI
+    target_altitude_m = Column(Float)  # Target altitude for this tracker
+
     assigned_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

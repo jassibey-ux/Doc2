@@ -107,6 +107,10 @@ class DashboardApp:
         self.replay_engine: Optional[ReplayEngine] = None
         self.replay_mode = False
 
+        # Active session telemetry ingestion
+        self._active_session_id: Optional[str] = None
+        self._active_session_tracker_ids: set[str] = set()
+
         # WebSocket connections
         self.ws_connections: set[WebSocket] = set()
 
@@ -1456,6 +1460,9 @@ class DashboardApp:
         for record in records:
             self.state_manager.update_tracker(record)
 
+        # Ingest telemetry to DB if an active session is running
+        self._maybe_ingest_telemetry(records)
+
     def _on_new_file(self, filepath: str) -> None:
         """
         Callback when a new log file is detected.
@@ -1523,6 +1530,63 @@ class DashboardApp:
         )
 
         asyncio.create_task(self._broadcast_message(msg))
+
+    def _maybe_ingest_telemetry(self, records: list[TrackerRecord]) -> None:
+        """Ingest telemetry records to DB if an active session is running."""
+        # Check module-level active session from api_v2
+        from .api_v2 import get_active_session_id
+        active_id = get_active_session_id()
+
+        if not active_id:
+            return
+
+        # Filter to records with valid position data
+        valid_records = [
+            r for r in records
+            if r.lat is not None and r.lon is not None
+        ]
+
+        if not valid_records:
+            return
+
+        # Build telemetry dicts for bulk insert
+        telemetry_rows = []
+        for r in valid_records:
+            telemetry_rows.append({
+                "session_id": active_id,
+                "tracker_id": r.tracker_id,
+                "time_local_received": r.timestamp,
+                "lat": r.lat,
+                "lon": r.lon,
+                "alt_m": r.alt_m,
+                "speed_mps": r.speed_mps,
+                "course_deg": r.course_deg,
+                "rssi_dbm": r.rssi_dbm,
+                "satellites": r.satellites,
+                "fix_valid": r.fix_valid,
+                "hdop": r.hdop,
+                "battery_mv": r.battery_mv,
+            })
+
+        # Run the bulk insert as an async task
+        asyncio.create_task(self._ingest_telemetry_batch(active_id, telemetry_rows))
+
+    async def _ingest_telemetry_batch(self, session_id: str, rows: list[dict]) -> None:
+        """Async bulk insert of telemetry records."""
+        try:
+            from .database import get_db_manager
+            db_manager = get_db_manager()
+            if not db_manager:
+                return
+
+            async with db_manager.get_async_session() as db:
+                from .database.repositories import TelemetryRepository
+                repo = TelemetryRepository(db)
+                await repo.bulk_insert(session_id, rows)
+                await db.commit()
+                logger.debug(f"Ingested {len(rows)} telemetry records for session {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to ingest telemetry batch: {e}")
 
     async def _broadcast_message(self, message: WebSocketMessage) -> None:
         """

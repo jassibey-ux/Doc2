@@ -110,10 +110,11 @@ export default function SessionComparison({ isOpen, onClose }: SessionComparison
   // Fetch available sessions
   useEffect(() => {
     if (!isOpen) return;
-    fetch('/api/test-sessions')
+    fetch('/api/v2/sessions?limit=200')
       .then(r => r.json())
       .then(data => {
-        const opts = (Array.isArray(data) ? data : []).map((s: any) => ({
+        const items = data.items ?? data;
+        const opts = (Array.isArray(items) ? items : []).map((s: any) => ({
           id: s.id,
           name: s.name,
           status: s.status,
