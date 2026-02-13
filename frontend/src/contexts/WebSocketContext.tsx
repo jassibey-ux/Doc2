@@ -186,6 +186,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const reconnectAttempts = useRef(0);
+  const isLiveRef = useRef(isLive);
 
   // Calculate timeline bounds based on history
   const getTimelineBounds = useCallback(() => {
@@ -216,6 +217,11 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       setCurrentTime(timelineEnd);
     }
   }, [isLive, timelineEnd]);
+
+  // Keep isLiveRef in sync so the WebSocket handler always has the current value
+  useEffect(() => {
+    isLiveRef.current = isLive;
+  }, [isLive]);
 
   // Add position to history
   const addPositionToHistory = useCallback((trackerId: string, lat: number, lon: number, altM: number | null, lastUpdate: string) => {
@@ -274,6 +280,9 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       setConnectionStatus('disconnected');
       wsRef.current = null;
 
+      // Don't auto-reconnect during replay
+      if (!isLiveRef.current) return;
+
       // Attempt to reconnect with exponential backoff
       const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
       reconnectAttempts.current++;
@@ -292,6 +301,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
 
         switch (message.type) {
           case 'tracker_updated': {
+            if (!isLiveRef.current) break;  // Skip live updates during replay
             const data = message.data as unknown as DroneSummary;
             setDrones(prev => {
               const next = new Map(prev);

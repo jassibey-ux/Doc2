@@ -1457,6 +1457,9 @@ class DashboardApp:
         Args:
             records: List of new records.
         """
+        if self.replay_mode:
+            return  # Don't process live data during replay
+
         for record in records:
             self.state_manager.update_tracker(record)
 
@@ -1533,6 +1536,8 @@ class DashboardApp:
 
     def _maybe_ingest_telemetry(self, records: list[TrackerRecord]) -> None:
         """Ingest telemetry records to DB if an active session is running."""
+        if self.replay_mode:
+            return
         # Check module-level active session from api_v2
         from .api_v2 import get_active_session_id
         active_id = get_active_session_id()
