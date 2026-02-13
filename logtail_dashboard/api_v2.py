@@ -29,6 +29,13 @@ from .database import (
     SessionMetrics,
     CSVImporter,
 )
+from .database.models import (
+    TrackerAssignment,
+    CUASPlacement,
+    TestEvent,
+    TrackerTelemetry,
+    generate_uuid,
+)
 from .database.repositories import (
     SessionRepository,
     SiteRepository,
@@ -50,6 +57,35 @@ router = APIRouter(prefix="/api/v2", tags=["CRM"])
 # =============================================================================
 
 # Session Models
+class TrackerAssignmentInput(BaseModel):
+    """Inline tracker assignment for session creation."""
+    tracker_id: str
+    drone_profile_id: Optional[str] = None
+    session_color: Optional[str] = None
+    target_altitude_m: Optional[float] = None
+
+
+class CUASPlacementInput(BaseModel):
+    """Inline CUAS placement for session creation."""
+    cuas_profile_id: Optional[str] = None
+    lat: float
+    lon: float
+    height_agl_m: Optional[float] = None
+    orientation_deg: Optional[float] = None
+    active: bool = False
+
+
+class EventInput(BaseModel):
+    """Input for creating a test event."""
+    type: str
+    timestamp: Optional[datetime] = None
+    source: str = "manual"
+    cuas_id: Optional[str] = None
+    tracker_id: Optional[str] = None
+    note: Optional[str] = None
+    metadata: Optional[Dict] = None
+
+
 class SessionCreateRequest(BaseModel):
     """Request to create a new session."""
     name: str
@@ -57,6 +93,8 @@ class SessionCreateRequest(BaseModel):
     operator_name: Optional[str] = None
     weather_notes: Optional[str] = None
     classification: str = "UNCLASSIFIED"
+    tracker_assignments: Optional[List[TrackerAssignmentInput]] = None
+    cuas_placements: Optional[List[CUASPlacementInput]] = None
 
 
 class SessionUpdateRequest(BaseModel):
@@ -240,6 +278,59 @@ def session_to_dict(session: TestSession) -> Dict[str, Any]:
     }
 
 
+def session_to_dict_full(session: TestSession) -> Dict[str, Any]:
+    """Convert a session model to a dictionary with all relations."""
+    result = session_to_dict(session)
+
+    # Add tracker assignments
+    result["tracker_assignments"] = [
+        {
+            "id": ta.id,
+            "tracker_id": ta.tracker_id,
+            "drone_profile_id": ta.drone_profile_id,
+            "session_color": ta.session_color,
+            "target_altitude_m": ta.target_altitude_m,
+            "assigned_at": ta.assigned_at.isoformat() if ta.assigned_at else None,
+        }
+        for ta in (session.tracker_assignments or [])
+    ]
+
+    # Add CUAS placements
+    result["cuas_placements"] = [
+        {
+            "id": cp.id,
+            "cuas_profile_id": cp.cuas_profile_id,
+            "position": {"lat": cp.lat, "lon": cp.lon},
+            "lat": cp.lat,
+            "lon": cp.lon,
+            "height_agl_m": cp.height_agl_m,
+            "orientation_deg": cp.orientation_deg,
+            "active": cp.active,
+        }
+        for cp in (session.cuas_placements or [])
+    ]
+
+    # Add events
+    result["events"] = [
+        {
+            "id": ev.id,
+            "type": ev.type,
+            "timestamp": ev.timestamp.isoformat() if ev.timestamp else None,
+            "source": ev.source,
+            "tracker_id": ev.tracker_id,
+            "note": ev.note,
+            "metadata": ev.event_metadata,
+        }
+        for ev in (session.events or [])
+    ]
+
+    # Frontend compat fields
+    result["sd_card_merged"] = False
+    result["analysis_completed"] = False
+
+    return result
+
+
 def site_to_dict(site: Site) -> Dict[str, Any]:
     """Convert a site model to a dictionary."""
     return {
@@ -317,7 +408,7 @@ def cuas_to_dict(profile: CUASProfile) -> Dict[str, Any]:
 @router.get("/sessions")
 async def list_sessions(
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=500),
     status: Optional[List[str]] = Query(None),
     site_id: Optional[str] = None,
     start_date: Optional[datetime] = None,
@@ -372,7 +463,7 @@ async def get_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    result = session_to_dict(session)
+    result = session_to_dict_full(session)
 
     # Add metrics if available
     if session.session_metrics:
@@ -406,7 +497,7 @@ async def create_session(
     request: SessionCreateRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new session."""
+    """Create a new session with optional inline relations."""
     repo = SessionRepository(db)
 
     session = await repo.create({
@@ -418,7 +509,39 @@ async def create_session(
         "status": "planning",
     })
 
-    return session_to_dict(session)
+    # Create inline tracker assignments
+    if request.tracker_assignments:
+        for ta_input in request.tracker_assignments:
+            ta = TrackerAssignment(
+                id=generate_uuid(),
+                session_id=session.id,
+                tracker_id=ta_input.tracker_id,
+                drone_profile_id=ta_input.drone_profile_id,
+                session_color=ta_input.session_color,
+                target_altitude_m=ta_input.target_altitude_m,
+            )
+            db.add(ta)
+
+    # Create inline CUAS placements
+    if request.cuas_placements:
+        for cp_input in request.cuas_placements:
+            cp = CUASPlacement(
+                id=generate_uuid(),
+                session_id=session.id,
+                cuas_profile_id=cp_input.cuas_profile_id,
+                lat=cp_input.lat,
+                lon=cp_input.lon,
+                height_agl_m=cp_input.height_agl_m,
+                orientation_deg=cp_input.orientation_deg,
+                active=cp_input.active,
+            )
+            db.add(cp)
+
+    await db.commit()
+
+    # Re-fetch with relations
+    session = await repo.get_with_relations(session.id)
+    return session_to_dict_full(session)
 
 
 @router.put("/sessions/{session_id}")
@@ -457,6 +580,201 @@ async def delete_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
     return {"success": True}
+
+
+# Session Lifecycle
+@router.post("/sessions/{session_id}/start")
+async def start_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Start a session — set status to active and record start time."""
+    repo = SessionRepository(db)
+    session = await repo.get_with_relations(session_id)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    now = datetime.utcnow()
+    session = await repo.update(session_id, {
+        "status": "active",
+        "start_time": now,
+    })
+
+    # Notify DashboardApp of active session for telemetry ingestion
+    # (set via module-level variable picked up by api.py)
+    _set_active_session_id(session_id)
+
+    session = await repo.get_with_relations(session_id)
+    return session_to_dict_full(session)
+
+
+@router.post("/sessions/{session_id}/stop")
+async def stop_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Stop a session — set status to completed, compute duration, export CSV."""
+    repo = SessionRepository(db)
+    session = await repo.get_with_relations(session_id)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    now = datetime.utcnow()
+    duration = (now - session.start_time).total_seconds() if session.start_time else 0
+
+    session = await repo.update(session_id, {
+        "status": "completed",
+        "end_time": now,
+        "duration_seconds": duration,
+    })
+
+    # Clear active session
+    _set_active_session_id(None)
+
+    # Export telemetry to CSV for replay compatibility
+    export_summary = await _export_session_telemetry_to_csv(db, session_id)
+
+    session = await repo.get_with_relations(session_id)
+    return {
+        "session": session_to_dict_full(session),
+        "export_summary": export_summary,
+    }
+
+
+@router.post("/sessions/{session_id}/events")
+async def add_session_event(
+    session_id: str,
+    request: EventInput,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a test event to a session."""
+    repo = SessionRepository(db)
+    session = await repo.get_by_id(session_id)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    event = TestEvent(
+        id=generate_uuid(),
+        session_id=session_id,
+        type=request.type,
+        timestamp=request.timestamp or datetime.utcnow(),
+        source=request.source,
+        cuas_id=request.cuas_id,
+        tracker_id=request.tracker_id,
+        note=request.note,
+        event_metadata=request.metadata,
+    )
+    db.add(event)
+    await db.commit()
+    await db.refresh(event)
+
+    return {
+        "id": event.id,
+        "type": event.type,
+        "timestamp": event.timestamp.isoformat() if event.timestamp else None,
+        "source": event.source,
+        "tracker_id": event.tracker_id,
+        "note": event.note,
+        "metadata": event.event_metadata,
+    }
+
+
+# Module-level active session tracking (shared with api.py via import)
+_active_session_id: Optional[str] = None
+
+
+def _set_active_session_id(session_id: Optional[str]):
+    """Set the active session ID for telemetry ingestion."""
+    global _active_session_id
+    _active_session_id = session_id
+    logger.info(f"Active session ID set to: {session_id}")
+
+
+def get_active_session_id() -> Optional[str]:
+    """Get the current active session ID."""
+    return _active_session_id
+
+
+async def _export_session_telemetry_to_csv(
+    db: AsyncSession,
+    session_id: str,
+) -> Dict[str, Any]:
+    """Export session telemetry from DB to CSV files for replay compatibility."""
+    import csv
+    import io
+
+    repo = SessionRepository(db)
+    session = await repo.get_with_relations(session_id)
+    if not session:
+        return {"files_created": [], "total_positions": 0}
+
+    telemetry_repo = TelemetryRepository(db)
+    telemetry = await telemetry_repo.get_by_session(session_id)
+
+    if not telemetry:
+        return {"files_created": [], "total_positions": 0}
+
+    # Determine output directory
+    if session.live_data_path:
+        output_dir = Path(session.live_data_path)
+    else:
+        # Use a default path based on session name
+        from .config import get_config_path
+        config_path = get_config_path()
+        log_root = config_path.parent / "data"
+        safe_name = session.name.replace(" ", "_")[:50]
+        output_dir = log_root / safe_name
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Group telemetry by tracker_id
+    by_tracker: Dict[str, list] = {}
+    for row in telemetry:
+        tid = row.tracker_id
+        if tid not in by_tracker:
+            by_tracker[tid] = []
+        by_tracker[tid].append(row)
+
+    files_created = []
+    total_positions = 0
+
+    for tracker_id, rows in by_tracker.items():
+        filename = f"tracker_{tracker_id}.csv"
+        filepath = output_dir / filename
+
+        with open(filepath, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "time_local_received", "tracker_id", "lat", "lon", "alt_m",
+                "hdop", "satellites", "fix_valid", "rssi_dbm",
+                "speed_mps", "course_deg", "battery_mv",
+            ])
+            for row in rows:
+                writer.writerow([
+                    row.time_local_received.isoformat() if row.time_local_received else "",
+                    row.tracker_id,
+                    row.lat, row.lon, row.alt_m,
+                    row.hdop, row.satellites, row.fix_valid, row.rssi_dbm,
+                    row.speed_mps, row.course_deg, row.battery_mv,
+                ])
+                total_positions += 1
+
+        files_created.append(str(filepath))
+
+    # Update session with the live_data_path
+    if not session.live_data_path:
+        await repo.update(session_id, {"live_data_path": str(output_dir)})
+
+    logger.info(f"Exported {total_positions} positions to {len(files_created)} CSV files for session {session_id}")
+
+    return {
+        "files_created": files_created,
+        "total_positions": total_positions,
+        "output_path": str(output_dir),
+    }
 
 
 # Session Tags
@@ -733,7 +1051,7 @@ async def export_session_csv(
 @router.get("/sites")
 async def list_sites(
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=500),
     search: Optional[str] = None,
     environment_type: Optional[str] = None,
     is_active: Optional[bool] = True,
@@ -826,7 +1144,7 @@ async def delete_site(
 async def get_site_sessions(
     site_id: str,
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
 ):
     """Get all sessions for a site."""
@@ -860,7 +1178,7 @@ async def get_site_statistics(
 @router.get("/drone-profiles")
 async def list_drone_profiles(
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=500),
     search: Optional[str] = None,
     make: Optional[str] = None,
     weight_class: Optional[str] = None,
@@ -954,7 +1272,7 @@ async def delete_drone_profile(
 async def get_drone_sessions(
     profile_id: str,
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
 ):
     """Get all sessions using a drone profile."""
@@ -988,7 +1306,7 @@ async def get_drone_statistics(
 @router.get("/cuas-profiles")
 async def list_cuas_profiles(
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=500),
     search: Optional[str] = None,
     vendor: Optional[str] = None,
     cuas_type: Optional[str] = None,
@@ -1082,7 +1400,7 @@ async def delete_cuas_profile(
 async def get_cuas_sessions(
     profile_id: str,
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
 ):
     """Get all sessions using a CUAS profile."""

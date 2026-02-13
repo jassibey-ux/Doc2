@@ -432,7 +432,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
 
     try {
       // Call analysis API endpoint
-      const response = await fetch(`/api/test-sessions/${activeSessionId}/analyze`, {
+      const response = await fetch(`/api/v2/sessions/${activeSessionId}/compute-metrics`, {
         method: 'POST',
       });
 

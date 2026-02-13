@@ -89,7 +89,7 @@ export default function TrackerMetricsDisplay({
     const fetchMetrics = async () => {
       try {
         const response = await fetch(
-          `/api/test-sessions/${sessionId}/tracker-metrics?tracker_id=${trackerId}`
+          `/api/v2/sessions/${sessionId}/metrics`
         );
         if (response.ok && !cancelled) {
           const data = await response.json();

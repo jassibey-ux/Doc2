@@ -216,50 +216,47 @@ export default function MapView() {
       // Create new site if needed
       let siteId = sessionData.siteId;
       if (!siteId && sessionData.newSiteName) {
+        // v2 SiteCreateRequest expects flat center_lat/center_lon
         const newSite = await createSite({
           name: sessionData.newSiteName,
           environment_type: 'open_field',
           boundary_polygon: [],
-          center: { lat: mapCenter.lat, lon: mapCenter.lon },
+          center_lat: mapCenter.lat,
+          center_lon: mapCenter.lon,
           markers: [],
           zones: [],
-        });
+        } as any);
         siteId = newSite.id;
       }
 
-      // Build tracker assignments matching TrackerAssignment type
+      // Build tracker assignments for v2 API (flat format)
       const trackerAssignments = sessionData.droneAssignments.map(a => ({
-        id: `ta-${Date.now()}-${a.trackerId}`,
         tracker_id: a.trackerId,
         drone_profile_id: a.droneProfileId,
         session_color: a.color,
         target_altitude_m: a.targetAltitude,
-        assigned_at: new Date().toISOString(),
       }));
 
-      // Build CUAS placements matching CUASPlacement type
+      // Build CUAS placements for v2 API (flat lat/lon)
       const cuasPlacements = sessionData.cuasPlacements.map(p => ({
-        id: p.id,
         cuas_profile_id: p.cuasProfileId,
-        position: { lat: p.position.lat, lon: p.position.lon },
+        lat: p.position.lat,
+        lon: p.position.lon,
         height_agl_m: p.heightAgl,
         orientation_deg: p.orientation,
         active: false,
       }));
 
-      // Create the test session (use siteId directly - null is valid if no site selected)
+      // Create the test session via v2 API with inline relations
       const testSession = await createTestSession({
         name: sessionData.name,
         site_id: siteId || null,
         status: 'planning',
         tracker_assignments: trackerAssignments,
         cuas_placements: cuasPlacements,
-        events: [],
-        sd_card_merged: false,
-        analysis_completed: false,
         operator_name: sessionData.operatorName,
         weather_notes: sessionData.weatherNotes,
-      });
+      } as any);
 
       // Start the test session
       await startTest(testSession.id);
