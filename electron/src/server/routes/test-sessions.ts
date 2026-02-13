@@ -21,6 +21,7 @@ import { sessionDataCollector } from '../../core/session-data-collector';
 import {
   analyzeSession,
   extractJammingWindows,
+  autoComputeOnSessionComplete,
   DroneTrackData,
 } from '../../core/metrics-engine';
 import { calculateTrackerMetrics } from '../../core/tracker-metrics-calculator';
@@ -229,9 +230,22 @@ export function testSessionRoutes(): Router {
         duration_seconds,
       });
 
+      // Auto-compute metrics on session completion
+      let computedMetrics = null;
+      try {
+        const config = loadConfig();
+        if (config.auto_compute_metrics !== false) {
+          log.info(`[AutoMetrics] Auto-computing metrics for session ${req.params.id}`);
+          computedMetrics = autoComputeOnSessionComplete(req.params.id);
+        }
+      } catch (metricsError) {
+        log.error('Error auto-computing metrics:', metricsError);
+      }
+
       res.json({
         ...updated,
         export_summary: exportSummary,
+        metrics: computedMetrics,
       });
     } catch (error) {
       log.error('Failed to stop session:', error);
@@ -252,14 +266,24 @@ export function testSessionRoutes(): Router {
       }
 
       // Update status to analyzing
-      const updated = updateTestSession(req.params.id, {
+      updateTestSession(req.params.id, {
         status: 'analyzing',
       });
 
-      // In a real implementation, this would trigger actual analysis
-      // For now, we just update the status and return
-      // The frontend will handle displaying analysis UI
-      res.json(updated);
+      // Auto-compute metrics
+      const computedMetrics = autoComputeOnSessionComplete(req.params.id);
+
+      // Update status to completed with metrics
+      const updated = updateTestSession(req.params.id, {
+        status: computedMetrics ? 'completed' : 'analyzing',
+        analysis_completed: computedMetrics !== null,
+        metrics: computedMetrics ?? undefined,
+      });
+
+      res.json({
+        ...updated,
+        metrics: computedMetrics,
+      });
     } catch (error) {
       res.status(500).json({ error: 'Failed to start analysis' });
     }

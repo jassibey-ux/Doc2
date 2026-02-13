@@ -290,13 +290,28 @@ export default function ReplayConsole() {
     setSelectedDroneId(droneId);
   }, []);
 
-  // Calculate current playback time
+  // Calculate current playback time (in seconds from session start)
   const currentPlaybackTime = useMemo(() => {
     if (!sessionInfo || !replayState?.current_time) return null;
     const startMs = new Date(sessionInfo.start_time).getTime();
     const currentMs = new Date(replayState.current_time).getTime();
     return (currentMs - startMs) / 1000;
   }, [sessionInfo, replayState?.current_time]);
+
+  // Calculate timeline values for Map components (in ms timestamps)
+  const mapCurrentTime = useMemo(() => {
+    if (replayState?.current_time) {
+      return new Date(replayState.current_time).getTime();
+    }
+    return Date.now();
+  }, [replayState?.current_time]);
+
+  const mapTimelineStart = useMemo(() => {
+    if (sessionInfo?.start_time) {
+      return new Date(sessionInfo.start_time).getTime();
+    }
+    return Date.now() - 3600000;
+  }, [sessionInfo?.start_time]);
 
   // Loading state
   if (isLoading) {
@@ -539,8 +554,8 @@ export default function ReplayConsole() {
               droneHistory={droneHistory}
               selectedDroneId={selectedDroneId}
               onDroneClick={handleDroneClick}
-              currentTime={Date.now()}
-              timelineStart={Date.now() - 3600000}
+              currentTime={mapCurrentTime}
+              timelineStart={mapTimelineStart}
               selectedSite={sessionSite}
               cuasPlacements={cuasPlacements}
               cuasProfiles={cuasProfiles}
@@ -553,8 +568,8 @@ export default function ReplayConsole() {
             {show3DView && (
               <Map3DViewer
                 droneHistory={droneHistory}
-                currentTime={Date.now()}
-                timelineStart={Date.now() - 3600000}
+                currentTime={mapCurrentTime}
+                timelineStart={mapTimelineStart}
                 onClose={() => setShow3DView(false)}
                 showQualityColors={false}
                 mapStyle={mapStyle}

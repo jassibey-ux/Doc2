@@ -34,6 +34,7 @@ import {
   X,
   Globe,
   Map as MapIcon,
+  History,
 } from 'lucide-react';
 import SDCardPanel from './SDCardPanel';
 import TrackerSDCardSection from './TrackerSDCardSection';
@@ -128,6 +129,9 @@ export default function SessionConsole() {
     }
   }, [sessionId, testSessions, activeSession, loadSessionById]);
 
+  // Determine if this is a completed session (not live)
+  const isCompletedSession = activeSession?.status === 'completed' || activeSession?.status === 'analyzing';
+
   // Filter drones and droneHistory by session's tracker_assignments
   // This ensures only assigned trackers appear in the session view
   const sessionTrackerIds = useMemo(() => {
@@ -136,7 +140,14 @@ export default function SessionConsole() {
   }, [activeSession?.tracker_assignments]);
 
   // Filtered drones - only show trackers assigned to this session
+  // For COMPLETED sessions, return empty map - don't show live positions
   const sessionDrones = useMemo(() => {
+    // For completed sessions, don't show live tracker data
+    // The session is over - live data would be misleading
+    if (isCompletedSession) {
+      return new Map<string, typeof drones extends Map<string, infer V> ? V : never>();
+    }
+
     // If no tracker assignments, show all drones (backward compatibility)
     if (sessionTrackerIds.size === 0) return drones;
 
@@ -147,10 +158,16 @@ export default function SessionConsole() {
       }
     }
     return filtered;
-  }, [drones, sessionTrackerIds]);
+  }, [drones, sessionTrackerIds, isCompletedSession]);
 
   // Filtered droneHistory - only show history for assigned trackers
+  // For COMPLETED sessions, return empty map - don't show live history
   const sessionDroneHistory = useMemo(() => {
+    // For completed sessions, don't show live track history
+    if (isCompletedSession) {
+      return new Map<string, typeof droneHistory extends Map<string, infer V> ? V : never>();
+    }
+
     // If no tracker assignments, show all history (backward compatibility)
     if (sessionTrackerIds.size === 0) return droneHistory;
 
@@ -161,7 +178,7 @@ export default function SessionConsole() {
       }
     }
     return filtered;
-  }, [droneHistory, sessionTrackerIds]);
+  }, [droneHistory, sessionTrackerIds, isCompletedSession]);
 
   // Local state
   const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
@@ -402,10 +419,10 @@ export default function SessionConsole() {
             <span>{formatDuration(phaseDuration)}</span>
           </div>
 
-          {/* Tracker count */}
+          {/* Tracker count - for completed sessions, show assigned count since live drones are empty */}
           <div className="sc-tracker-count">
             <Radio size={14} />
-            <span>{sessionDrones.size} trackers</span>
+            <span>{isCompletedSession ? sessionTrackerIds.size : sessionDrones.size} trackers</span>
           </div>
 
           {/* Connection status */}
@@ -421,6 +438,21 @@ export default function SessionConsole() {
           {currentPhase === 'completed' ? (
             /* Buttons when completed */
             <div style={{ display: 'flex', gap: '8px' }}>
+              {/* Replay Session button */}
+              <GlassButton
+                variant="secondary"
+                size="sm"
+                onClick={() => navigate(`/replay/${sessionId}`)}
+                style={{
+                  background: 'rgba(168, 85, 247, 0.2)',
+                  borderColor: 'rgba(168, 85, 247, 0.4)',
+                  color: '#a855f7',
+                }}
+              >
+                <History size={14} />
+                Replay
+              </GlassButton>
+
               {/* SD Card Merge button */}
               <GlassButton
                 variant="secondary"

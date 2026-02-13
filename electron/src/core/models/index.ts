@@ -3,3 +3,4 @@
  */
 
 export * from './workflow';
+export * from './iff';

@@ -120,6 +120,30 @@ export default function ReportPanel({ isOpen, onClose }: ReportPanelProps) {
     }
   }, [selectedSession]);
 
+  // Download PDF report
+  const handleDownloadPDFReport = useCallback(async () => {
+    if (!selectedSession) return;
+
+    try {
+      const response = await fetch(`/api/reports/download/${selectedSession.id}/pdf`);
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF report');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `CUAS_Report_${selectedSession.name.replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading PDF report:', error);
+    }
+  }, [selectedSession]);
+
   // Format date
   const formatDate = (isoString: string) => {
     return new Date(isoString).toLocaleDateString('en-US', {
@@ -322,6 +346,15 @@ export default function ReportPanel({ isOpen, onClose }: ReportPanelProps) {
                         >
                           <Download size={16} />
                           TXT
+                        </GlassButton>
+                        <GlassButton
+                          variant="primary"
+                          size="md"
+                          onClick={handleDownloadPDFReport}
+                          style={{ flex: 1 }}
+                        >
+                          <Download size={16} />
+                          PDF
                         </GlassButton>
                       </div>
                       <GlassButton

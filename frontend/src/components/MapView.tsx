@@ -22,7 +22,10 @@ import CUASControlPanel from './CUASControlPanel';
 import TrackLegend from './TrackLegend';
 import AnomalyAlertToast from './AnomalyAlertToast';
 import Map3DViewer from './Map3DViewer';
-import { FileText, X, Globe, Map as MapIcon, Signal, Box, Target, MapPin } from 'lucide-react';
+import CesiumMap from './CesiumMap';
+import TerrainProfileChart from './TerrainProfileChart';
+import LinkBudgetPanel from './LinkBudgetPanel';
+import { FileText, X, Globe, Map as MapIcon, Signal, Box, Target, MapPin, Globe2, Mountain } from 'lucide-react';
 import type { GeoPoint } from '../types/workflow';
 
 export default function MapView() {
@@ -93,8 +96,13 @@ export default function MapView() {
   // Track quality visualization toggle
   const [showQualityColors, setShowQualityColors] = useState(false);
 
-  // 3D view toggle
+  // 3D view toggle: 'none' | 'maplibre3d' | 'cesium'
   const [show3DView, setShow3DView] = useState(false);
+  const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
+
+  // Terrain/RF tools (use selected drone + first CUAS placement as endpoints)
+  const [showTerrainProfile, setShowTerrainProfile] = useState(false);
+  const [showLinkBudget, setShowLinkBudget] = useState(false);
 
 
   // CUAS placement mode state
@@ -382,8 +390,8 @@ export default function MapView() {
           showSDCardTracks={showSDCardTracks}
         />
 
-        {/* 3D View Overlay */}
-        {show3DView && (
+        {/* 3D View Overlay (MapLibre-based) */}
+        {show3DView && !showCesiumGlobe && (
           <Map3DViewer
             droneHistory={droneHistory}
             currentTime={currentTime}
@@ -397,6 +405,21 @@ export default function MapView() {
             sdCardTracks={sdCardTracks}
             showSDCardTracks={showSDCardTracks}
           />
+        )}
+
+        {/* CesiumJS Globe Overlay */}
+        {showCesiumGlobe && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
+            <CesiumMap
+              droneHistory={droneHistory}
+              currentTime={currentTime}
+              timelineStart={timelineStart}
+              site={selectedSite}
+              cuasPlacements={phaseActiveSession?.cuas_placements || []}
+              cuasProfiles={cuasProfiles}
+              onClose={() => setShowCesiumGlobe(false)}
+            />
+          </div>
         )}
 
         {/* Track Quality Legend (shown when quality colors enabled or SD card tracks present) */}
@@ -431,13 +454,22 @@ export default function MapView() {
             {mapStyle === 'dark' ? <Globe size={18} /> : <MapIcon size={18} />}
           </button>
 
-          {/* 3D View Toggle */}
+          {/* 3D View Toggle (MapLibre) */}
           <button
-            className={`map-control-btn ${show3DView ? 'active' : ''}`}
-            onClick={() => setShow3DView(prev => !prev)}
+            className={`map-control-btn ${show3DView && !showCesiumGlobe ? 'active' : ''}`}
+            onClick={() => { setShow3DView(prev => !prev); setShowCesiumGlobe(false); }}
             title={show3DView ? 'Switch to 2D Map' : 'Switch to 3D View'}
           >
             <Box size={18} />
+          </button>
+
+          {/* CesiumJS Globe Toggle */}
+          <button
+            className={`map-control-btn ${showCesiumGlobe ? 'active' : ''}`}
+            onClick={() => { setShowCesiumGlobe(prev => !prev); setShow3DView(false); }}
+            title={showCesiumGlobe ? 'Exit Globe View' : 'CesiumJS Globe (3D Tiles)'}
+          >
+            <Globe2 size={18} />
           </button>
 
           {/* Sites / Places Button */}
@@ -457,6 +489,23 @@ export default function MapView() {
           >
             <Signal size={18} />
           </button>
+
+          {/* Terrain Profile / Link Budget Tool */}
+          <button
+            className={`map-control-btn ${showTerrainProfile || showLinkBudget ? 'active' : ''}`}
+            onClick={() => {
+              if (showTerrainProfile) {
+                setShowTerrainProfile(false);
+                setShowLinkBudget(false);
+              } else {
+                setShowTerrainProfile(true);
+                setShowLinkBudget(true);
+              }
+            }}
+            title="Terrain Profile & Link Budget"
+          >
+            <Mountain size={18} />
+          </button>
         </div>
 
         {/* SD Card Panel */}
@@ -470,6 +519,42 @@ export default function MapView() {
           isOpen={activePanel === 'analysis'}
           onClose={() => setActivePanel(null)}
         />
+
+        {/* Terrain Profile & Link Budget Panels */}
+        {showTerrainProfile && (() => {
+          // Use first CUAS placement and selected drone (or site center) as endpoints
+          const placements = phaseActiveSession?.cuas_placements ?? [];
+          const drone = selectedDrone;
+          const cuas = placements[0];
+          if (!cuas) return null;
+          const pt2Lat = drone?.lat ?? selectedSite?.center_lat ?? cuas.lat + 0.005;
+          const pt2Lon = drone?.lon ?? selectedSite?.center_lon ?? cuas.lon + 0.005;
+          return (
+            <div style={{
+              position: 'absolute', bottom: '80px', left: '280px', right: '20px',
+              zIndex: 100, display: 'flex', gap: '8px',
+            }}>
+              <div style={{ flex: 2 }}>
+                <TerrainProfileChart
+                  lat1={cuas.lat} lon1={cuas.lon} height1_m={cuas.alt_m ?? 5}
+                  lat2={pt2Lat} lon2={pt2Lon} height2_m={drone?.alt_m ?? 50}
+                  onClose={() => setShowTerrainProfile(false)}
+                />
+              </div>
+              {showLinkBudget && (
+                <div style={{ flex: 1 }}>
+                  <LinkBudgetPanel
+                    cuasLat={cuas.lat} cuasLon={cuas.lon}
+                    cuasHeightM={cuas.alt_m ?? 5}
+                    targetLat={pt2Lat} targetLon={pt2Lon}
+                    targetHeightM={drone?.alt_m ?? 50}
+                    onClose={() => setShowLinkBudget(false)}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Layers Panel */}
         <LayersPanel

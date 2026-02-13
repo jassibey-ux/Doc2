@@ -1,0 +1,1932 @@
+"""
+API v2 Routes - Database-backed CRM Endpoints
+
+This module provides the v2 API endpoints that use SQLite database
+for data persistence. These endpoints complement the existing v1
+endpoints and provide CRM functionality.
+"""
+
+import hashlib
+import logging
+from concurrent.futures import ProcessPoolExecutor
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from .database import (
+    get_db,
+    get_db_manager,
+    init_database,
+    TestSession,
+    Site,
+    DroneProfile,
+    CUASProfile,
+    SessionMetrics,
+    CSVImporter,
+)
+from .database.repositories import (
+    SessionRepository,
+    SiteRepository,
+    DroneProfileRepository,
+    CUASProfileRepository,
+    TelemetryRepository,
+    AuditRepository,
+)
+from .database.repositories.sessions import SessionFilters
+
+logger = logging.getLogger(__name__)
+
+# Create the v2 router
+router = APIRouter(prefix="/api/v2", tags=["CRM"])
+
+
+# =============================================================================
+# Pydantic Request/Response Models
+# =============================================================================
+
+# Session Models
+class SessionCreateRequest(BaseModel):
+    """Request to create a new session."""
+    name: str
+    site_id: Optional[str] = None
+    operator_name: Optional[str] = None
+    weather_notes: Optional[str] = None
+    classification: str = "UNCLASSIFIED"
+
+
+class SessionUpdateRequest(BaseModel):
+    """Request to update a session."""
+    name: Optional[str] = None
+    status: Optional[str] = None
+    operator_name: Optional[str] = None
+    weather_notes: Optional[str] = None
+    post_test_notes: Optional[str] = None
+    classification: Optional[str] = None
+
+
+class TagRequest(BaseModel):
+    """Request to add/remove a tag."""
+    tag: str
+
+
+class AnnotationRequest(BaseModel):
+    """Request to create an annotation."""
+    content: str
+    annotation_type: str = "note"
+    timestamp_ref: Optional[datetime] = None
+    author: Optional[str] = None
+
+
+class MetricsRequest(BaseModel):
+    """Request to set session metrics."""
+    time_to_effect_s: Optional[float] = None
+    time_to_full_denial_s: Optional[float] = None
+    effective_range_m: Optional[float] = None
+    max_lateral_drift_m: Optional[float] = None
+    max_vertical_drift_m: Optional[float] = None
+    total_flight_time_s: Optional[float] = None
+    time_under_jamming_s: Optional[float] = None
+    recovery_time_s: Optional[float] = None
+    overall_score: Optional[float] = None
+    pass_fail: Optional[str] = None
+    met_expectations: Optional[bool] = None
+    deviation_notes: Optional[str] = None
+
+
+# Site Models
+class SiteCreateRequest(BaseModel):
+    """Request to create a site."""
+    name: str
+    center_lat: float
+    center_lon: float
+    description: Optional[str] = None
+    boundary_polygon: Optional[Dict] = None
+    environment_type: Optional[str] = None
+    elevation_min_m: Optional[float] = None
+    elevation_max_m: Optional[float] = None
+    rf_notes: Optional[str] = None
+    access_notes: Optional[str] = None
+    markers: Optional[List[Dict]] = None
+    zones: Optional[List[Dict]] = None
+    classification: str = "UNCLASSIFIED"
+
+
+class SiteUpdateRequest(BaseModel):
+    """Request to update a site."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    boundary_polygon: Optional[Dict] = None
+    environment_type: Optional[str] = None
+    elevation_min_m: Optional[float] = None
+    elevation_max_m: Optional[float] = None
+    rf_notes: Optional[str] = None
+    access_notes: Optional[str] = None
+    markers: Optional[List[Dict]] = None
+    zones: Optional[List[Dict]] = None
+    classification: Optional[str] = None
+
+
+# Drone Profile Models
+class DroneProfileCreateRequest(BaseModel):
+    """Request to create a drone profile."""
+    name: str
+    make: str
+    model: str
+    serial: Optional[str] = None
+    weight_class: Optional[str] = None
+    frequency_bands: Optional[List[str]] = None
+    expected_failsafe: Optional[str] = None
+    max_speed_mps: Optional[float] = None
+    max_altitude_m: Optional[float] = None
+    endurance_minutes: Optional[float] = None
+    notes: Optional[str] = None
+    image_path: Optional[str] = None
+
+
+class DroneProfileUpdateRequest(BaseModel):
+    """Request to update a drone profile."""
+    name: Optional[str] = None
+    make: Optional[str] = None
+    model: Optional[str] = None
+    serial: Optional[str] = None
+    weight_class: Optional[str] = None
+    frequency_bands: Optional[List[str]] = None
+    expected_failsafe: Optional[str] = None
+    max_speed_mps: Optional[float] = None
+    max_altitude_m: Optional[float] = None
+    endurance_minutes: Optional[float] = None
+    notes: Optional[str] = None
+    image_path: Optional[str] = None
+
+
+# CUAS Profile Models
+class CUASProfileCreateRequest(BaseModel):
+    """Request to create a CUAS profile."""
+    name: str
+    vendor: str
+    model: Optional[str] = None
+    type: Optional[str] = None
+    capabilities: Optional[List[str]] = None
+    effective_range_m: Optional[float] = None
+    beam_width_deg: Optional[float] = None
+    vertical_coverage_deg: Optional[float] = None
+    antenna_pattern: Optional[str] = None
+    power_output_w: Optional[float] = None
+    antenna_gain_dbi: Optional[float] = None
+    frequency_ranges: Optional[List[Dict]] = None
+    notes: Optional[str] = None
+    classification: str = "UNCLASSIFIED"
+
+
+class CUASProfileUpdateRequest(BaseModel):
+    """Request to update a CUAS profile."""
+    name: Optional[str] = None
+    vendor: Optional[str] = None
+    model: Optional[str] = None
+    type: Optional[str] = None
+    capabilities: Optional[List[str]] = None
+    effective_range_m: Optional[float] = None
+    measured_range_m: Optional[float] = None
+    beam_width_deg: Optional[float] = None
+    vertical_coverage_deg: Optional[float] = None
+    antenna_pattern: Optional[str] = None
+    power_output_w: Optional[float] = None
+    antenna_gain_dbi: Optional[float] = None
+    frequency_ranges: Optional[List[Dict]] = None
+    notes: Optional[str] = None
+    classification: Optional[str] = None
+
+
+# Pagination response
+class PaginatedResponse(BaseModel):
+    """Standard paginated response."""
+    items: List[Any]
+    total: int
+    skip: int
+    limit: int
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+def session_to_dict(session: TestSession) -> Dict[str, Any]:
+    """Convert a session model to a dictionary."""
+    return {
+        "id": session.id,
+        "name": session.name,
+        "site_id": session.site_id,
+        "status": session.status,
+        "start_time": session.start_time.isoformat() if session.start_time else None,
+        "end_time": session.end_time.isoformat() if session.end_time else None,
+        "duration_seconds": session.duration_seconds,
+        "operator_name": session.operator_name,
+        "weather_notes": session.weather_notes,
+        "post_test_notes": session.post_test_notes,
+        "classification": session.classification,
+        "live_data_path": session.live_data_path,
+        "created_at": session.created_at.isoformat() if session.created_at else None,
+        "updated_at": session.updated_at.isoformat() if session.updated_at else None,
+        "tags": [t.tag for t in session.tags] if hasattr(session, 'tags') and session.tags else [],
+        "site": {
+            "id": session.site.id,
+            "name": session.site.name,
+        } if hasattr(session, 'site') and session.site else None,
+    }
+
+
+def site_to_dict(site: Site) -> Dict[str, Any]:
+    """Convert a site model to a dictionary."""
+    return {
+        "id": site.id,
+        "name": site.name,
+        "description": site.description,
+        "boundary_polygon": site.boundary_polygon,
+        "center_lat": site.center_lat,
+        "center_lon": site.center_lon,
+        "environment_type": site.environment_type,
+        "elevation_min_m": site.elevation_min_m,
+        "elevation_max_m": site.elevation_max_m,
+        "rf_notes": site.rf_notes,
+        "access_notes": site.access_notes,
+        "markers": site.markers,
+        "zones": site.zones,
+        "classification": site.classification,
+        "is_active": site.is_active,
+        "created_at": site.created_at.isoformat() if site.created_at else None,
+        "updated_at": site.updated_at.isoformat() if site.updated_at else None,
+    }
+
+
+def drone_to_dict(profile: DroneProfile) -> Dict[str, Any]:
+    """Convert a drone profile model to a dictionary."""
+    return {
+        "id": profile.id,
+        "name": profile.name,
+        "make": profile.make,
+        "model": profile.model,
+        "serial": profile.serial,
+        "weight_class": profile.weight_class,
+        "frequency_bands": profile.frequency_bands,
+        "expected_failsafe": profile.expected_failsafe,
+        "max_speed_mps": profile.max_speed_mps,
+        "max_altitude_m": profile.max_altitude_m,
+        "endurance_minutes": profile.endurance_minutes,
+        "notes": profile.notes,
+        "image_path": profile.image_path,
+        "is_active": profile.is_active,
+        "created_at": profile.created_at.isoformat() if profile.created_at else None,
+        "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+    }
+
+
+def cuas_to_dict(profile: CUASProfile) -> Dict[str, Any]:
+    """Convert a CUAS profile model to a dictionary."""
+    return {
+        "id": profile.id,
+        "name": profile.name,
+        "vendor": profile.vendor,
+        "model": profile.model,
+        "type": profile.type,
+        "capabilities": profile.capabilities,
+        "effective_range_m": profile.effective_range_m,
+        "measured_range_m": profile.measured_range_m,
+        "beam_width_deg": profile.beam_width_deg,
+        "vertical_coverage_deg": profile.vertical_coverage_deg,
+        "antenna_pattern": profile.antenna_pattern,
+        "power_output_w": profile.power_output_w,
+        "antenna_gain_dbi": profile.antenna_gain_dbi,
+        "frequency_ranges": profile.frequency_ranges,
+        "notes": profile.notes,
+        "classification": profile.classification,
+        "is_active": profile.is_active,
+        "created_at": profile.created_at.isoformat() if profile.created_at else None,
+        "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+    }
+
+
+# =============================================================================
+# Session Endpoints
+# =============================================================================
+
+@router.get("/sessions")
+async def list_sessions(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    status: Optional[List[str]] = Query(None),
+    site_id: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    tags: Optional[List[str]] = Query(None),
+    search: Optional[str] = None,
+    classification: Optional[str] = None,
+    pass_fail: Optional[str] = None,
+    order_by: str = "created_at",
+    descending: bool = True,
+    db: AsyncSession = Depends(get_db),
+):
+    """List sessions with filters and pagination."""
+    repo = SessionRepository(db)
+
+    filters = SessionFilters(
+        status=status,
+        site_id=site_id,
+        start_date=start_date,
+        end_date=end_date,
+        tags=tags,
+        search=search,
+        classification=classification,
+        pass_fail=pass_fail,
+    )
+
+    sessions, total = await repo.list_sessions(
+        filters=filters,
+        skip=skip,
+        limit=limit,
+        order_by=order_by,
+        descending=descending,
+    )
+
+    return {
+        "items": [session_to_dict(s) for s in sessions],
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
+
+
+@router.get("/sessions/{session_id}")
+async def get_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a session by ID with full details."""
+    repo = SessionRepository(db)
+    session = await repo.get_with_relations(session_id)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    result = session_to_dict(session)
+
+    # Add metrics if available
+    if session.session_metrics:
+        result["metrics"] = {
+            "time_to_effect_s": session.session_metrics.time_to_effect_s,
+            "time_to_full_denial_s": session.session_metrics.time_to_full_denial_s,
+            "effective_range_m": session.session_metrics.effective_range_m,
+            "max_lateral_drift_m": session.session_metrics.max_lateral_drift_m,
+            "max_vertical_drift_m": session.session_metrics.max_vertical_drift_m,
+            "pass_fail": session.session_metrics.pass_fail,
+            "overall_score": session.session_metrics.overall_score,
+        }
+
+    # Add annotations
+    result["annotations"] = [
+        {
+            "id": a.id,
+            "content": a.content,
+            "annotation_type": a.annotation_type,
+            "author": a.author,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in session.annotations
+    ] if session.annotations else []
+
+    return result
+
+
+@router.post("/sessions")
+async def create_session(
+    request: SessionCreateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new session."""
+    repo = SessionRepository(db)
+
+    session = await repo.create({
+        "name": request.name,
+        "site_id": request.site_id,
+        "operator_name": request.operator_name,
+        "weather_notes": request.weather_notes,
+        "classification": request.classification,
+        "status": "planning",
+    })
+
+    return session_to_dict(session)
+
+
+@router.put("/sessions/{session_id}")
+async def update_session(
+    session_id: str,
+    request: SessionUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a session."""
+    repo = SessionRepository(db)
+
+    # Build update dict from non-None fields
+    update_data = {k: v for k, v in request.model_dump().items() if v is not None}
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    session = await repo.update(session_id, update_data)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return session_to_dict(session)
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a session."""
+    repo = SessionRepository(db)
+    deleted = await repo.delete(session_id)
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {"success": True}
+
+
+# Session Tags
+@router.post("/sessions/{session_id}/tags")
+async def add_session_tag(
+    session_id: str,
+    request: TagRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a tag to a session."""
+    repo = SessionRepository(db)
+
+    try:
+        tag = await repo.add_tag(session_id, request.tag)
+        return {"tag": tag.tag, "session_id": session_id}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/sessions/{session_id}/tags/{tag}")
+async def remove_session_tag(
+    session_id: str,
+    tag: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a tag from a session."""
+    repo = SessionRepository(db)
+    removed = await repo.remove_tag(session_id, tag)
+
+    if not removed:
+        raise HTTPException(status_code=404, detail="Tag not found")
+
+    return {"success": True}
+
+
+@router.get("/sessions/{session_id}/tags")
+async def get_session_tags(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all tags for a session."""
+    repo = SessionRepository(db)
+    tags = await repo.get_tags(session_id)
+    return {"tags": tags}
+
+
+# Session Annotations
+@router.post("/sessions/{session_id}/annotations")
+async def add_annotation(
+    session_id: str,
+    request: AnnotationRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add an annotation to a session."""
+    repo = SessionRepository(db)
+
+    annotation = await repo.add_annotation(
+        session_id=session_id,
+        content=request.content,
+        annotation_type=request.annotation_type,
+        timestamp_ref=request.timestamp_ref,
+        author=request.author,
+    )
+
+    return {
+        "id": annotation.id,
+        "content": annotation.content,
+        "annotation_type": annotation.annotation_type,
+        "created_at": annotation.created_at.isoformat(),
+    }
+
+
+@router.get("/sessions/{session_id}/annotations")
+async def get_annotations(
+    session_id: str,
+    annotation_type: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all annotations for a session."""
+    repo = SessionRepository(db)
+    annotations = await repo.get_annotations(session_id, annotation_type)
+
+    return {
+        "annotations": [
+            {
+                "id": a.id,
+                "content": a.content,
+                "annotation_type": a.annotation_type,
+                "timestamp_ref": a.timestamp_ref.isoformat() if a.timestamp_ref else None,
+                "author": a.author,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in annotations
+        ]
+    }
+
+
+# Session Metrics
+@router.put("/sessions/{session_id}/metrics")
+async def set_session_metrics(
+    session_id: str,
+    request: MetricsRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Set or update metrics for a session."""
+    repo = SessionRepository(db)
+
+    metrics_data = {k: v for k, v in request.model_dump().items() if v is not None}
+    metrics = await repo.set_metrics(session_id, metrics_data)
+
+    return {
+        "session_id": session_id,
+        "metrics_set": True,
+    }
+
+
+@router.get("/sessions/{session_id}/metrics")
+async def get_session_metrics(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get metrics for a session."""
+    repo = SessionRepository(db)
+    metrics = await repo.get_metrics(session_id)
+
+    if not metrics:
+        return {"metrics": None}
+
+    return {
+        "metrics": {
+            "time_to_effect_s": metrics.time_to_effect_s,
+            "time_to_full_denial_s": metrics.time_to_full_denial_s,
+            "effective_range_m": metrics.effective_range_m,
+            "max_lateral_drift_m": metrics.max_lateral_drift_m,
+            "max_vertical_drift_m": metrics.max_vertical_drift_m,
+            "total_flight_time_s": metrics.total_flight_time_s,
+            "time_under_jamming_s": metrics.time_under_jamming_s,
+            "recovery_time_s": metrics.recovery_time_s,
+            "overall_score": metrics.overall_score,
+            "pass_fail": metrics.pass_fail,
+            "met_expectations": metrics.met_expectations,
+            "deviation_notes": metrics.deviation_notes,
+            "analyzed_at": metrics.analyzed_at.isoformat() if metrics.analyzed_at else None,
+        }
+    }
+
+
+@router.post("/sessions/{session_id}/compute-metrics")
+async def compute_metrics(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Auto-compute session metrics from telemetry data.
+    Triggers the full analysis pipeline: per-tracker metrics → aggregation → storage.
+    """
+    from .analysis import compute_session_metrics
+
+    result = await compute_session_metrics(db, session_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Session not found or no telemetry data")
+
+    return {"metrics": result, "status": "computed"}
+
+
+# =============================================================================
+# Session Comparison Endpoint
+# =============================================================================
+
+@router.get("/sessions/compare")
+async def compare_sessions(
+    session_ids: str = Query(..., description="Comma-separated session IDs to compare"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Compare metrics between two or more sessions."""
+    ids = [s.strip() for s in session_ids.split(",") if s.strip()]
+    if len(ids) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 session IDs required")
+
+    repo = SessionRepository(db)
+    comparison = []
+
+    for sid in ids:
+        session = await repo.get_by_id(sid)
+        if not session:
+            raise HTTPException(status_code=404, detail=f"Session {sid} not found")
+
+        metrics = await repo.get_metrics(sid)
+        comparison.append({
+            "session_id": sid,
+            "name": session.name,
+            "status": session.status,
+            "start_time": session.start_time.isoformat() if session.start_time else None,
+            "duration_seconds": session.duration_seconds,
+            "metrics": {
+                "time_to_effect_s": metrics.time_to_effect_s if metrics else None,
+                "time_to_full_denial_s": metrics.time_to_full_denial_s if metrics else None,
+                "effective_range_m": metrics.effective_range_m if metrics else None,
+                "max_lateral_drift_m": metrics.max_lateral_drift_m if metrics else None,
+                "max_vertical_drift_m": metrics.max_vertical_drift_m if metrics else None,
+                "total_flight_time_s": metrics.total_flight_time_s if metrics else None,
+                "time_under_jamming_s": metrics.time_under_jamming_s if metrics else None,
+                "recovery_time_s": metrics.recovery_time_s if metrics else None,
+                "pass_fail": metrics.pass_fail if metrics else None,
+            } if metrics else None,
+        })
+
+    return {"sessions": comparison}
+
+
+# =============================================================================
+# CSV Telemetry Export Endpoint
+# =============================================================================
+
+@router.get("/sessions/{session_id}/export/csv")
+async def export_session_csv(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Export session telemetry as CSV download."""
+    import csv
+    import io
+
+    repo = SessionRepository(db)
+    session = await repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    telemetry_repo = TelemetryRepository(db)
+    telemetry = await telemetry_repo.get_by_session(session_id)
+
+    if not telemetry:
+        raise HTTPException(status_code=404, detail="No telemetry data for session")
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "timestamp", "tracker_id", "lat", "lon", "alt_m",
+        "hdop", "satellites", "fix_valid", "rssi_dbm",
+        "speed_mps", "course_deg", "battery_mv",
+    ])
+
+    for row in telemetry:
+        writer.writerow([
+            row.time_local_received.isoformat() if row.time_local_received else "",
+            row.tracker_id,
+            row.lat,
+            row.lon,
+            row.alt_m,
+            row.hdop,
+            row.satellites,
+            row.fix_valid,
+            row.rssi_dbm,
+            row.speed_mps,
+            row.course_deg,
+            row.battery_mv,
+        ])
+
+    csv_content = output.getvalue()
+    safe_name = session.name.replace(" ", "_")[:50]
+    filename = f"{safe_name}_telemetry.csv"
+
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# =============================================================================
+# Site Endpoints
+# =============================================================================
+
+@router.get("/sites")
+async def list_sites(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    search: Optional[str] = None,
+    environment_type: Optional[str] = None,
+    is_active: Optional[bool] = True,
+    db: AsyncSession = Depends(get_db),
+):
+    """List sites with filters and pagination."""
+    repo = SiteRepository(db)
+
+    sites, total = await repo.list_sites(
+        search=search,
+        environment_type=environment_type,
+        is_active=is_active,
+        skip=skip,
+        limit=limit,
+    )
+
+    return {
+        "items": [site_to_dict(s) for s in sites],
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
+
+
+@router.get("/sites/{site_id}")
+async def get_site(
+    site_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a site by ID."""
+    repo = SiteRepository(db)
+    site = await repo.get_by_id(site_id)
+
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    return site_to_dict(site)
+
+
+@router.post("/sites")
+async def create_site(
+    request: SiteCreateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new site."""
+    repo = SiteRepository(db)
+
+    site = await repo.create(request.model_dump())
+    return site_to_dict(site)
+
+
+@router.put("/sites/{site_id}")
+async def update_site(
+    site_id: str,
+    request: SiteUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a site."""
+    repo = SiteRepository(db)
+
+    update_data = {k: v for k, v in request.model_dump().items() if v is not None}
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    site = await repo.update(site_id, update_data)
+
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    return site_to_dict(site)
+
+
+@router.delete("/sites/{site_id}")
+async def delete_site(
+    site_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Archive a site (soft delete)."""
+    repo = SiteRepository(db)
+    site = await repo.soft_delete(site_id)
+
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+
+    return {"success": True}
+
+
+@router.get("/sites/{site_id}/sessions")
+async def get_site_sessions(
+    site_id: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all sessions for a site."""
+    repo = SiteRepository(db)
+
+    sessions, total = await repo.get_sessions_for_site(site_id, skip, limit)
+
+    return {
+        "items": [session_to_dict(s) for s in sessions],
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
+
+
+@router.get("/sites/{site_id}/statistics")
+async def get_site_statistics(
+    site_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get statistics for a site."""
+    repo = SiteRepository(db)
+    stats = await repo.get_site_statistics(site_id)
+    return stats
+
+
+# =============================================================================
+# Drone Profile Endpoints
+# =============================================================================
+
+@router.get("/drone-profiles")
+async def list_drone_profiles(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    search: Optional[str] = None,
+    make: Optional[str] = None,
+    weight_class: Optional[str] = None,
+    is_active: Optional[bool] = True,
+    db: AsyncSession = Depends(get_db),
+):
+    """List drone profiles with filters and pagination."""
+    repo = DroneProfileRepository(db)
+
+    profiles, total = await repo.list_profiles(
+        search=search,
+        make=make,
+        weight_class=weight_class,
+        is_active=is_active,
+        skip=skip,
+        limit=limit,
+    )
+
+    return {
+        "items": [drone_to_dict(p) for p in profiles],
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
+
+
+@router.get("/drone-profiles/{profile_id}")
+async def get_drone_profile(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a drone profile by ID."""
+    repo = DroneProfileRepository(db)
+    profile = await repo.get_by_id(profile_id)
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="Drone profile not found")
+
+    return drone_to_dict(profile)
+
+
+@router.post("/drone-profiles")
+async def create_drone_profile(
+    request: DroneProfileCreateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new drone profile."""
+    repo = DroneProfileRepository(db)
+    profile = await repo.create(request.model_dump())
+    return drone_to_dict(profile)
+
+
+@router.put("/drone-profiles/{profile_id}")
+async def update_drone_profile(
+    profile_id: str,
+    request: DroneProfileUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a drone profile."""
+    repo = DroneProfileRepository(db)
+
+    update_data = {k: v for k, v in request.model_dump().items() if v is not None}
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    profile = await repo.update(profile_id, update_data)
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="Drone profile not found")
+
+    return drone_to_dict(profile)
+
+
+@router.delete("/drone-profiles/{profile_id}")
+async def delete_drone_profile(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Archive a drone profile (soft delete)."""
+    repo = DroneProfileRepository(db)
+    profile = await repo.soft_delete(profile_id)
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="Drone profile not found")
+
+    return {"success": True}
+
+
+@router.get("/drone-profiles/{profile_id}/sessions")
+async def get_drone_sessions(
+    profile_id: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all sessions using a drone profile."""
+    repo = DroneProfileRepository(db)
+
+    sessions, total = await repo.get_sessions_for_drone(profile_id, skip, limit)
+
+    return {
+        "items": [session_to_dict(s) for s in sessions],
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
+
+
+@router.get("/drone-profiles/{profile_id}/statistics")
+async def get_drone_statistics(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get statistics for a drone profile."""
+    repo = DroneProfileRepository(db)
+    stats = await repo.get_drone_statistics(profile_id)
+    return stats
+
+
+# =============================================================================
+# CUAS Profile Endpoints
+# =============================================================================
+
+@router.get("/cuas-profiles")
+async def list_cuas_profiles(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    search: Optional[str] = None,
+    vendor: Optional[str] = None,
+    cuas_type: Optional[str] = None,
+    is_active: Optional[bool] = True,
+    db: AsyncSession = Depends(get_db),
+):
+    """List CUAS profiles with filters and pagination."""
+    repo = CUASProfileRepository(db)
+
+    profiles, total = await repo.list_profiles(
+        search=search,
+        vendor=vendor,
+        cuas_type=cuas_type,
+        is_active=is_active,
+        skip=skip,
+        limit=limit,
+    )
+
+    return {
+        "items": [cuas_to_dict(p) for p in profiles],
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
+
+
+@router.get("/cuas-profiles/{profile_id}")
+async def get_cuas_profile(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a CUAS profile by ID."""
+    repo = CUASProfileRepository(db)
+    profile = await repo.get_by_id(profile_id)
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="CUAS profile not found")
+
+    return cuas_to_dict(profile)
+
+
+@router.post("/cuas-profiles")
+async def create_cuas_profile(
+    request: CUASProfileCreateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new CUAS profile."""
+    repo = CUASProfileRepository(db)
+    profile = await repo.create(request.model_dump())
+    return cuas_to_dict(profile)
+
+
+@router.put("/cuas-profiles/{profile_id}")
+async def update_cuas_profile(
+    profile_id: str,
+    request: CUASProfileUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a CUAS profile."""
+    repo = CUASProfileRepository(db)
+
+    update_data = {k: v for k, v in request.model_dump().items() if v is not None}
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    profile = await repo.update(profile_id, update_data)
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="CUAS profile not found")
+
+    return cuas_to_dict(profile)
+
+
+@router.delete("/cuas-profiles/{profile_id}")
+async def delete_cuas_profile(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Archive a CUAS profile (soft delete)."""
+    repo = CUASProfileRepository(db)
+    profile = await repo.soft_delete(profile_id)
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="CUAS profile not found")
+
+    return {"success": True}
+
+
+@router.get("/cuas-profiles/{profile_id}/sessions")
+async def get_cuas_sessions(
+    profile_id: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all sessions using a CUAS profile."""
+    repo = CUASProfileRepository(db)
+
+    sessions, total = await repo.get_sessions_for_cuas(profile_id, skip, limit)
+
+    return {
+        "items": [session_to_dict(s) for s in sessions],
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
+
+
+@router.get("/cuas-profiles/{profile_id}/effectiveness")
+async def get_cuas_effectiveness(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get effectiveness metrics for a CUAS profile."""
+    repo = CUASProfileRepository(db)
+    stats = await repo.get_cuas_statistics(profile_id)
+    return stats
+
+
+# =============================================================================
+# Dashboard / Analytics Endpoints
+# =============================================================================
+
+@router.get("/dashboard/summary")
+async def get_dashboard_summary(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get dashboard summary metrics."""
+    session_repo = SessionRepository(db)
+    site_repo = SiteRepository(db)
+    drone_repo = DroneProfileRepository(db)
+    cuas_repo = CUASProfileRepository(db)
+
+    # Get counts
+    status_counts = await session_repo.get_status_counts()
+    total_sessions = sum(status_counts.values())
+
+    sites, site_count = await site_repo.list_sites(limit=1)
+    drones, drone_count = await drone_repo.list_profiles(limit=1)
+    cuas, cuas_count = await cuas_repo.list_profiles(limit=1)
+
+    # Get recent sessions
+    recent = await session_repo.get_recent_sessions(limit=5)
+
+    return {
+        "sessions": {
+            "total": total_sessions,
+            "by_status": status_counts,
+        },
+        "sites": {
+            "total": site_count,
+        },
+        "drone_profiles": {
+            "total": drone_count,
+        },
+        "cuas_profiles": {
+            "total": cuas_count,
+        },
+        "recent_sessions": [session_to_dict(s) for s in recent],
+    }
+
+
+@router.get("/tags")
+async def get_all_tags(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all unique tags with usage counts."""
+    repo = SessionRepository(db)
+    tags = await repo.get_all_tags()
+    return {"tags": tags}
+
+
+@router.get("/lookup/makes")
+async def get_drone_makes(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all drone manufacturers."""
+    repo = DroneProfileRepository(db)
+    makes = await repo.get_makes()
+    return {"makes": makes}
+
+
+@router.get("/lookup/weight-classes")
+async def get_weight_classes(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all weight classes."""
+    repo = DroneProfileRepository(db)
+    classes = await repo.get_weight_classes()
+    return {"weight_classes": classes}
+
+
+@router.get("/lookup/vendors")
+async def get_cuas_vendors(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all CUAS vendors."""
+    repo = CUASProfileRepository(db)
+    vendors = await repo.get_vendors()
+    return {"vendors": vendors}
+
+
+@router.get("/lookup/cuas-types")
+async def get_cuas_types(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all CUAS types."""
+    repo = CUASProfileRepository(db)
+    types = await repo.get_types()
+    return {"types": types}
+
+
+@router.get("/lookup/environment-types")
+async def get_environment_types(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all site environment types."""
+    repo = SiteRepository(db)
+    types = await repo.get_environment_types()
+    return {"environment_types": types}
+
+
+# =============================================================================
+# Import / Migration Endpoints
+# =============================================================================
+
+class ImportRequest(BaseModel):
+    """Request to import sessions from CSV."""
+    log_root: str
+    import_telemetry: bool = True
+    force: bool = False
+
+
+@router.get("/import/preview")
+async def preview_import(
+    log_root: str,
+):
+    """
+    Preview what sessions would be imported from a log root.
+
+    Args:
+        log_root: Path to the log root directory.
+
+    Returns:
+        Preview of sessions that would be imported.
+    """
+    path = Path(log_root)
+    if not path.exists():
+        raise HTTPException(status_code=400, detail=f"Path does not exist: {log_root}")
+
+    db_manager = get_db_manager()
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    importer = CSVImporter(db_manager, path)
+    preview = importer.get_import_preview()
+
+    return preview
+
+
+@router.post("/import/sessions")
+async def import_sessions(
+    request: ImportRequest,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Import sessions from CSV files into the database.
+
+    This runs as a background task for large imports.
+
+    Args:
+        request: Import configuration.
+
+    Returns:
+        Import job status.
+    """
+    path = Path(request.log_root)
+    if not path.exists():
+        raise HTTPException(status_code=400, detail=f"Path does not exist: {request.log_root}")
+
+    db_manager = get_db_manager()
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    importer = CSVImporter(db_manager, path)
+
+    # For small imports, run synchronously
+    preview = importer.get_import_preview()
+    if preview["pending_import"] <= 5:
+        # Small import - run directly
+        result = importer.import_all_sessions(
+            import_telemetry=request.import_telemetry,
+            force=request.force,
+        )
+        return {
+            "status": "completed",
+            "result": result,
+        }
+    else:
+        # Large import - run in background
+        def run_import():
+            importer.import_all_sessions(
+                import_telemetry=request.import_telemetry,
+                force=request.force,
+            )
+
+        background_tasks.add_task(run_import)
+        return {
+            "status": "started",
+            "message": f"Importing {preview['pending_import']} sessions in background",
+        }
+
+
+@router.post("/import/session")
+async def import_single_session(
+    session_path: str,
+    import_telemetry: bool = True,
+    force: bool = False,
+):
+    """
+    Import a single session from a folder.
+
+    Args:
+        session_path: Path to the session folder.
+        import_telemetry: Whether to import telemetry data.
+        force: Force re-import if already exists.
+
+    Returns:
+        The imported session ID.
+    """
+    path = Path(session_path)
+    if not path.exists():
+        raise HTTPException(status_code=400, detail=f"Path does not exist: {session_path}")
+
+    db_manager = get_db_manager()
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    # Determine log root (parent of session folder)
+    log_root = path.parent
+
+    importer = CSVImporter(db_manager, log_root)
+
+    # Get session info
+    sessions = importer.scan_sessions()
+    session_info = next(
+        (s for s in sessions if s["path"] == str(path)),
+        None,
+    )
+
+    if not session_info:
+        raise HTTPException(status_code=400, detail="No valid session found at path")
+
+    session_id = importer.import_session(
+        session_info,
+        import_telemetry=import_telemetry,
+        force=force,
+    )
+
+    if not session_id:
+        raise HTTPException(status_code=500, detail="Failed to import session")
+
+    return {
+        "success": True,
+        "session_id": session_id,
+    }
+
+
+# =============================================================================
+# Database Status Endpoints
+# =============================================================================
+
+@router.get("/database/status")
+async def get_database_status():
+    """Get database status and migration info."""
+    db_manager = get_db_manager()
+
+    if not db_manager:
+        return {
+            "initialized": False,
+            "message": "Database not initialized",
+        }
+
+    from .database.migrations import MigrationManager
+
+    try:
+        migration_manager = MigrationManager(db_manager._sync_engine)
+        status = migration_manager.get_status()
+
+        return {
+            "initialized": True,
+            "database_path": db_manager.config.db_path,
+            "schema_version": status["current_version"],
+            "latest_version": status["latest_version"],
+            "pending_migrations": status["pending_migrations"],
+            "is_current": status["is_current"],
+        }
+    except Exception as e:
+        logger.error(f"Error getting database status: {e}")
+        return {
+            "initialized": True,
+            "database_path": db_manager.config.db_path,
+            "error": str(e),
+        }
+
+
+@router.post("/database/migrate")
+async def run_migrations():
+    """Run pending database migrations."""
+    db_manager = get_db_manager()
+
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    from .database.migrations import MigrationManager
+
+    try:
+        migration_manager = MigrationManager(db_manager._sync_engine)
+        applied = migration_manager.migrate_to_latest()
+
+        return {
+            "success": True,
+            "migrations_applied": applied,
+            "current_version": migration_manager.get_current_version(),
+        }
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {e}")
+
+
+# =============================================================================
+# Terrain & Viewshed Endpoints
+# =============================================================================
+
+class ElevationRequest(BaseModel):
+    """Request elevation at a point."""
+    lat: float = Field(..., ge=-90, le=90)
+    lon: float = Field(..., ge=-180, le=180)
+
+
+class TerrainProfileRequest(BaseModel):
+    """Request terrain profile between two points."""
+    lat1: float = Field(..., ge=-90, le=90)
+    lon1: float = Field(..., ge=-180, le=180)
+    lat2: float = Field(..., ge=-90, le=90)
+    lon2: float = Field(..., ge=-180, le=180)
+    num_points: int = Field(100, ge=10, le=1000)
+
+
+class LOSCheckRequest(BaseModel):
+    """Request line-of-sight check between two points."""
+    lat1: float = Field(..., ge=-90, le=90)
+    lon1: float = Field(..., ge=-180, le=180)
+    height1_m: float = Field(..., ge=0, le=1000)
+    lat2: float = Field(..., ge=-90, le=90)
+    lon2: float = Field(..., ge=-180, le=180)
+    height2_m: float = Field(..., ge=0, le=1000)
+    num_points: int = Field(200, ge=10, le=1000)
+
+
+class ViewshedRequest(BaseModel):
+    """Request viewshed computation."""
+    center_lat: float = Field(..., ge=-90, le=90)
+    center_lon: float = Field(..., ge=-180, le=180)
+    observer_height_m: float = Field(5.0, ge=0, le=100)
+    radius_m: float = Field(3000, ge=100, le=20000)
+    target_height_m: float = Field(50.0, ge=0, le=500)
+    num_radials: int = Field(360, ge=36, le=720)
+    distance_step_m: float = Field(50.0, ge=10, le=500)
+
+
+class PreDownloadRequest(BaseModel):
+    """Request to pre-download terrain data for a site."""
+    boundary: List[Dict[str, float]]
+    buffer_m: float = Field(1000.0, ge=0, le=10000)
+
+
+def _get_terrain_manager():
+    """Get the terrain manager singleton."""
+    from .terrain import get_terrain_manager
+    return get_terrain_manager()
+
+
+def _viewshed_cache_key(req: ViewshedRequest) -> str:
+    """Generate a cache key for a viewshed request."""
+    key = (
+        f"{req.center_lat:.6f}_{req.center_lon:.6f}_"
+        f"{req.observer_height_m}_{req.radius_m}_"
+        f"{req.target_height_m}_{req.num_radials}_{req.distance_step_m}"
+    )
+    return hashlib.md5(key.encode()).hexdigest()
+
+
+# In-memory cache for viewshed results (PNG bytes + geo bounds)
+_viewshed_cache: Dict[str, Dict] = {}
+
+
+@router.get("/terrain/elevation")
+async def get_elevation(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+):
+    """
+    Get terrain elevation at a single point.
+
+    Returns elevation in meters above sea level from SRTM 30m data.
+    """
+    tm = _get_terrain_manager()
+    elevation = tm.get_elevation(lat, lon)
+
+    if elevation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Elevation data not available for this location",
+        )
+
+    return {
+        "lat": lat,
+        "lon": lon,
+        "elevation_m": round(elevation, 1),
+    }
+
+
+@router.post("/terrain/profile")
+async def get_terrain_profile(request: TerrainProfileRequest):
+    """
+    Get terrain elevation profile between two points.
+
+    Returns distances, elevations, and lat/lon arrays for plotting.
+    """
+    tm = _get_terrain_manager()
+    profile = tm.get_terrain_profile(
+        request.lat1, request.lon1,
+        request.lat2, request.lon2,
+        num_points=request.num_points,
+    )
+
+    return profile
+
+
+@router.post("/terrain/los-check")
+async def check_line_of_sight(request: LOSCheckRequest):
+    """
+    Check line-of-sight between two points at given heights AGL.
+
+    Returns visibility status, obstruction info, and clearance profile.
+    """
+    tm = _get_terrain_manager()
+    result = tm.check_line_of_sight(
+        request.lat1, request.lon1, request.height1_m,
+        request.lat2, request.lon2, request.height2_m,
+        num_points=request.num_points,
+    )
+
+    return {
+        "is_visible": result["is_visible"],
+        "obstruction_distance_m": result["obstruction_distance_m"],
+        "obstruction_elevation_m": result["obstruction_elevation_m"],
+        "profile": result["profile"],
+        "los_clearance_m": result["los_clearance_m"],
+    }
+
+
+@router.post("/terrain/viewshed")
+async def compute_viewshed(request: ViewshedRequest):
+    """
+    Compute viewshed (LOS/NLOS) from an observer position.
+
+    This is a CPU-intensive operation that may take 1-5 seconds depending
+    on radius and resolution. Results are cached.
+
+    Returns viewshed statistics and a cache key for retrieving the
+    PNG overlay image.
+    """
+    cache_key = _viewshed_cache_key(request)
+
+    # Check cache
+    if cache_key in _viewshed_cache:
+        cached = _viewshed_cache[cache_key]
+        return {
+            "cache_key": cache_key,
+            "cached": True,
+            "stats": cached["stats"],
+            "bounds": cached["bounds"],
+            "center": cached["center"],
+            "observer_ground_elevation_m": cached["observer_ground_elevation_m"],
+            "image_url": f"/api/v2/terrain/viewshed/{cache_key}/image",
+            "geojson_url": f"/api/v2/terrain/viewshed/{cache_key}/geojson",
+        }
+
+    tm = _get_terrain_manager()
+
+    # Compute viewshed
+    result = tm.compute_viewshed(
+        center_lat=request.center_lat,
+        center_lon=request.center_lon,
+        observer_height_m=request.observer_height_m,
+        radius_m=request.radius_m,
+        target_height_m=request.target_height_m,
+        num_radials=request.num_radials,
+        distance_step_m=request.distance_step_m,
+    )
+
+    # Generate PNG
+    png_bytes, geo_bounds = tm.viewshed_to_png(result)
+
+    # Generate GeoJSON
+    geojson = tm.viewshed_to_geojson(result)
+
+    # Cache the results
+    _viewshed_cache[cache_key] = {
+        "png_bytes": png_bytes,
+        "geo_bounds": geo_bounds,
+        "geojson": geojson,
+        "stats": result["stats"],
+        "bounds": result["bounds"],
+        "center": result["center"],
+        "observer_ground_elevation_m": result["observer_ground_elevation_m"],
+    }
+
+    # Limit cache size (evict oldest)
+    if len(_viewshed_cache) > 20:
+        oldest_key = next(iter(_viewshed_cache))
+        del _viewshed_cache[oldest_key]
+
+    return {
+        "cache_key": cache_key,
+        "cached": False,
+        "stats": result["stats"],
+        "bounds": result["bounds"],
+        "center": result["center"],
+        "observer_ground_elevation_m": result["observer_ground_elevation_m"],
+        "image_url": f"/api/v2/terrain/viewshed/{cache_key}/image",
+        "geojson_url": f"/api/v2/terrain/viewshed/{cache_key}/geojson",
+    }
+
+
+@router.get("/terrain/viewshed/{cache_key}/image")
+async def get_viewshed_image(cache_key: str):
+    """
+    Get the viewshed PNG overlay image.
+
+    Returns a transparent PNG that can be used as a MapLibre GL image source.
+    The image shows blocked (NLOS) areas in semi-transparent red.
+    """
+    if cache_key not in _viewshed_cache:
+        raise HTTPException(status_code=404, detail="Viewshed not found. Compute it first.")
+
+    cached = _viewshed_cache[cache_key]
+
+    return Response(
+        content=cached["png_bytes"],
+        media_type="image/png",
+        headers={
+            "Cache-Control": "public, max-age=3600",
+            "X-Geo-Bounds": str(cached["geo_bounds"]),
+        },
+    )
+
+
+@router.get("/terrain/viewshed/{cache_key}/geojson")
+async def get_viewshed_geojson(cache_key: str):
+    """
+    Get the viewshed as GeoJSON.
+
+    Returns a FeatureCollection with polygonal sectors for blocked areas.
+    Useful for interactive styling and click events on the map.
+    """
+    if cache_key not in _viewshed_cache:
+        raise HTTPException(status_code=404, detail="Viewshed not found. Compute it first.")
+
+    return _viewshed_cache[cache_key]["geojson"]
+
+
+@router.get("/terrain/viewshed/{cache_key}/bounds")
+async def get_viewshed_bounds(cache_key: str):
+    """
+    Get the geographic bounds for a viewshed image.
+
+    Returns coordinates in MapLibre GL image source format:
+    [[NW_lon, NW_lat], [NE_lon, NE_lat], [SE_lon, SE_lat], [SW_lon, SW_lat]]
+    """
+    if cache_key not in _viewshed_cache:
+        raise HTTPException(status_code=404, detail="Viewshed not found. Compute it first.")
+
+    return _viewshed_cache[cache_key]["geo_bounds"]
+
+
+@router.post("/terrain/pre-download")
+async def pre_download_terrain(request: PreDownloadRequest):
+    """
+    Pre-download terrain tiles for a site boundary.
+
+    Use this to prepare for offline field use. Downloads all SRTM
+    tiles covering the site boundary plus a buffer.
+    """
+    if not request.boundary or len(request.boundary) < 3:
+        raise HTTPException(
+            status_code=400,
+            detail="Boundary must have at least 3 points",
+        )
+
+    tm = _get_terrain_manager()
+    result = tm.pre_download_site(
+        boundary_polygon=request.boundary,
+        buffer_m=request.buffer_m,
+    )
+
+    return result
+
+
+@router.get("/terrain/cache-status")
+async def get_terrain_cache_status():
+    """
+    Get terrain data cache status.
+
+    Returns info about cached DEM tiles and viewshed results.
+    """
+    tm = _get_terrain_manager()
+    srtm_cache = tm.srtm.cache_dir
+
+    # Count cached tiles
+    cached_tiles = list(srtm_cache.glob("*.hgt"))
+    total_size = sum(f.stat().st_size for f in cached_tiles)
+
+    return {
+        "cache_dir": str(tm.cache_dir),
+        "srtm_tiles_cached": len(cached_tiles),
+        "srtm_cache_size_mb": round(total_size / (1024 * 1024), 1),
+        "viewshed_results_cached": len(_viewshed_cache),
+        "tile_names": [f.stem for f in cached_tiles],
+    }
+
+
+# ============================================================================
+# RF PROPAGATION ENDPOINTS
+# ============================================================================
+
+class RFCoverageRequest(BaseModel):
+    """Request RF coverage computation."""
+    center_lat: float = Field(..., ge=-90, le=90)
+    center_lon: float = Field(..., ge=-180, le=180)
+    radius_m: float = Field(5000, ge=100, le=30000)
+    resolution_m: float = Field(100, ge=25, le=500)
+    target_height_m: float = Field(50.0, ge=0, le=500)
+    environment: str = Field("open_field")
+    cuas_placements: List[Dict[str, Any]] = Field(
+        ...,
+        description="List of CUAS params: lat, lon, height_agl_m, eirp_dbm, frequency_mhz, antenna_pattern, beam_width_deg, orientation_deg",
+    )
+    drone_params: Optional[Dict[str, Any]] = Field(None, description="Drone RF params for J/S threshold adjustment")
+
+
+class LinkBudgetRequest(BaseModel):
+    """Request point-to-point link budget."""
+    cuas_lat: float = Field(..., ge=-90, le=90)
+    cuas_lon: float = Field(..., ge=-180, le=180)
+    cuas_height_m: float = Field(5.0, ge=0, le=100)
+    cuas_eirp_dbm: float = Field(40.0)
+    cuas_frequency_mhz: float = Field(1575.42)
+    cuas_antenna_pattern: str = Field("omni")
+    cuas_beam_width_deg: float = Field(360.0)
+    cuas_orientation_deg: float = Field(0.0)
+    cuas_min_js_ratio_db: float = Field(20.0)
+    target_lat: float = Field(..., ge=-90, le=90)
+    target_lon: float = Field(..., ge=-180, le=180)
+    target_height_m: float = Field(50.0, ge=0, le=500)
+    environment: str = Field("open_field")
+
+
+def _get_propagation_engine():
+    """Get the propagation engine singleton."""
+    from .propagation import get_propagation_engine
+    return get_propagation_engine()
+
+
+# In-memory cache for RF coverage results
+_rf_coverage_cache: Dict[str, Dict] = {}
+
+
+@router.post("/terrain/rf-coverage")
+async def compute_rf_coverage(request: RFCoverageRequest):
+    """
+    Compute RF coverage heatmap for CUAS placements.
+
+    Returns image URL and statistics. Supports multi-CUAS composite coverage.
+    """
+    from .propagation import CUASParams, DroneRFParams
+
+    # Build CUAS params list
+    cuas_list = []
+    for cp in request.cuas_placements:
+        cuas_list.append(CUASParams(
+            lat=cp["lat"],
+            lon=cp["lon"],
+            height_agl_m=cp.get("height_agl_m", 5.0),
+            eirp_dbm=cp.get("eirp_dbm", 40.0),
+            frequency_mhz=cp.get("frequency_mhz", 1575.42),
+            antenna_gain_dbi=cp.get("antenna_gain_dbi", 6.0),
+            antenna_pattern=cp.get("antenna_pattern", "omni"),
+            beam_width_deg=cp.get("beam_width_deg", 360.0),
+            orientation_deg=cp.get("orientation_deg", 0.0),
+            min_js_ratio_db=cp.get("min_js_ratio_db", 20.0),
+            name=cp.get("name"),
+        ))
+
+    # Build drone params
+    drone = None
+    if request.drone_params:
+        dp = request.drone_params
+        drone = DroneRFParams(
+            c2_frequency_mhz=dp.get("c2_frequency_mhz", 2400.0),
+            c2_receiver_sensitivity_dbm=dp.get("c2_receiver_sensitivity_dbm", -90.0),
+            gps_receiver_type=dp.get("gps_receiver_type", "standard"),
+            jam_resistance_category=dp.get("jam_resistance_category", "none"),
+        )
+
+    # Cache key
+    cache_key = hashlib.md5(request.model_dump_json().encode()).hexdigest()
+
+    engine = _get_propagation_engine()
+    result = engine.compute_rf_coverage(
+        cuas_list=cuas_list,
+        center_lat=request.center_lat,
+        center_lon=request.center_lon,
+        radius_m=request.radius_m,
+        resolution_m=request.resolution_m,
+        target_height_m=request.target_height_m,
+        drone=drone,
+        environment=request.environment,
+    )
+
+    # Render PNG
+    png_bytes, geo_bounds = engine.coverage_to_png(result)
+
+    _rf_coverage_cache[cache_key] = {
+        "png_bytes": png_bytes,
+        "geo_bounds": geo_bounds,
+        "stats": result.stats,
+        "bounds": result.bounds,
+    }
+
+    return {
+        "cache_key": cache_key,
+        "image_url": f"/api/v2/terrain/rf-coverage/{cache_key}/image",
+        "bounds": result.bounds,
+        "geo_bounds": geo_bounds,
+        "stats": result.stats,
+    }
+
+
+@router.get("/terrain/rf-coverage/{cache_key}/image")
+async def get_rf_coverage_image(cache_key: str):
+    """Get RF coverage heatmap PNG image."""
+    if cache_key not in _rf_coverage_cache:
+        raise HTTPException(status_code=404, detail="RF coverage result not found")
+
+    png_bytes = _rf_coverage_cache[cache_key]["png_bytes"]
+    return Response(content=png_bytes, media_type="image/png")
+
+
+@router.post("/terrain/link-budget")
+async def compute_link_budget(request: LinkBudgetRequest):
+    """
+    Compute point-to-point link budget from CUAS to target.
+
+    Returns path loss, J/S ratio, LOS status, and Fresnel clearance.
+    """
+    from .propagation import CUASParams
+
+    cuas = CUASParams(
+        lat=request.cuas_lat,
+        lon=request.cuas_lon,
+        height_agl_m=request.cuas_height_m,
+        eirp_dbm=request.cuas_eirp_dbm,
+        frequency_mhz=request.cuas_frequency_mhz,
+        antenna_pattern=request.cuas_antenna_pattern,
+        beam_width_deg=request.cuas_beam_width_deg,
+        orientation_deg=request.cuas_orientation_deg,
+        min_js_ratio_db=request.cuas_min_js_ratio_db,
+    )
+
+    engine = _get_propagation_engine()
+    result = engine.compute_link_budget(
+        cuas=cuas,
+        target_lat=request.target_lat,
+        target_lon=request.target_lon,
+        target_height_m=request.target_height_m,
+        environment=request.environment,
+    )
+
+    return {
+        "distance_m": round(result.distance_m, 1),
+        "path_loss_db": round(result.path_loss_db, 1),
+        "eirp_dbm": round(result.eirp_dbm, 1),
+        "rx_power_dbm": round(result.rx_power_dbm, 1),
+        "js_ratio_db": round(result.js_ratio_db, 1),
+        "gps_denial_effective": result.gps_denial_effective,
+        "terrain_los": result.terrain_los,
+        "fresnel_clearance_pct": round(result.fresnel_clearance_pct, 1),
+        "clutter_loss_db": result.clutter_loss_db,
+        "gps_received_power_dbm": -130.0,
+    }
+
+
+# ============================================================================
+# PREDICTED VS ACTUAL COMPARISON
+# ============================================================================
+
+@router.get("/sessions/{session_id}/predicted-vs-actual")
+async def get_predicted_vs_actual(
+    session_id: str,
+    resolution_m: float = Query(100.0, ge=25, le=500),
+    target_height_m: float = Query(50.0, ge=0, le=500),
+    hdop_threshold: float = Query(10.0, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Compare predicted RF coverage vs actual GPS denial from session telemetry.
+
+    Returns confusion matrix, accuracy metrics, and overlay grid.
+    Requires: CUAS placements on the session + telemetry data.
+    """
+    from .analysis import compute_predicted_vs_actual
+
+    result = await compute_predicted_vs_actual(
+        db=db,
+        session_id=session_id,
+        resolution_m=resolution_m,
+        target_height_m=target_height_m,
+        hdop_denied_threshold=hdop_threshold,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Cannot compute comparison: missing placements or telemetry data",
+        )
+
+    return result

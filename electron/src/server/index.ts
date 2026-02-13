@@ -26,6 +26,20 @@ import { reportsRoutes } from './routes/reports';
 import { systemRoutes } from './routes/system';
 import { crmRoutes } from './routes/crm';
 import { trackerAliasRoutes } from './routes/tracker-aliases';
+import { comparisonRoutes } from './routes/comparison';
+import { cloudSyncRoutes } from './routes/cloud-sync';
+// Ops Mode routes
+import { iffRoutes } from './routes/iff';
+import { detectionRoutes } from './routes/detections';
+import { loadConfig } from '../core/config';
+// Backend convergence: Python proxy + subprocess
+import { simplePythonProxy } from './proxy';
+import { getPythonBackend } from '../core/python-backend';
+// CoT listener + deconfliction (Ops Mode)
+import { CotListener } from '../core/cot-listener';
+import { deconflictionEngine } from '../core/deconfliction';
+
+let cotListener: CotListener | null = null;
 
 let dashboardApp: DashboardApp | null = null;
 let httpServer: HTTPServer | null = null;
@@ -53,7 +67,11 @@ export async function startServer(port: number): Promise<void> {
   // Setup WebSocket
   setupWebSocket(server, dashboardApp);
 
-  // Register API routes
+  // Backend convergence: proxy /api/v2/* to Python backend
+  // This must come before the Express API routes so /api/v2 paths hit Python first
+  app.use(simplePythonProxy());
+
+  // Register API routes (v1 — served by Express)
   app.use('/api', healthRoutes(dashboardApp));
   app.use('/api', configRoutes(dashboardApp));
   app.use('/api', trackerRoutes(dashboardApp));
@@ -75,13 +93,70 @@ export async function startServer(port: number): Promise<void> {
   // CRM routes (tagging, annotations, search, analytics)
   app.use('/api', crmRoutes());
 
+  // Session comparison
+  app.use('/api', comparisonRoutes());
+
+  // Cloud sync
+  app.use('/api', cloudSyncRoutes());
+
+  // Ops Mode routes (IFF registry and detections)
+  app.use('/api', iffRoutes());
+  app.use('/api', detectionRoutes());
+
   // Static files (React build) - must be last
   app.use('/', staticRoutes());
 
+  // Determine bind host: if ops_mode is enabled, use ops_bind_host for network access
+  const config = loadConfig();
+  const bindHost = config.ops_mode ? (config.ops_bind_host || '0.0.0.0') : '127.0.0.1';
+
+  // When in ops mode, allow CORS from any origin for network clients
+  if (config.ops_mode) {
+    app.use(cors({ origin: true }));
+    log.info(`[Ops Mode] Enabled - binding to ${bindHost}, CORS opened for network access`);
+  }
+
   // Start server with port conflict handling (Fix 2)
   return new Promise((resolve, reject) => {
-    server.listen(port, '127.0.0.1', () => {
-      log.info(`Server listening on http://127.0.0.1:${port}`);
+    server.listen(port, bindHost, () => {
+      log.info(`Server listening on http://${bindHost}:${port}`);
+
+      // Start Python backend subprocess (terrain, RF, SQLAlchemy endpoints)
+      const pythonBackend = getPythonBackend({
+        logRootFolder: config.log_root_folder,
+      });
+      pythonBackend.start().then((ready) => {
+        if (ready) {
+          log.info('[server] Python backend ready — /api/v2/* proxied');
+        } else {
+          log.warn('[server] Python backend not available — /api/v2/* will fall through to Express');
+        }
+      }).catch((err) => {
+        log.warn(`[server] Python backend start failed: ${err}`);
+      });
+
+      // Start CoT listener in ops mode
+      if (config.ops_mode && config.cot_enabled) {
+        cotListener = new CotListener(
+          {
+            port: config.cot_listen_port,
+            multicastGroup: config.cot_multicast_group,
+          },
+          (events) => {
+            for (const event of events) {
+              deconflictionEngine.processCotEvent(event);
+            }
+          },
+        );
+        deconflictionEngine.updateConfig({
+          proximity_threshold_m: config.iff_proximity_threshold_m,
+        });
+        cotListener.start().then(() => {
+          log.info(`[Ops Mode] CoT listener started on UDP port ${config.cot_listen_port}`);
+        }).catch((err) => {
+          log.warn(`[Ops Mode] CoT listener failed to start: ${err}`);
+        });
+      }
 
       // Start monitoring
       dashboardApp!.startup().then(resolve).catch(reject);
@@ -101,6 +176,22 @@ export async function startServer(port: number): Promise<void> {
 }
 
 export async function stopServer(): Promise<void> {
+  // Stop CoT listener
+  if (cotListener) {
+    await cotListener.stop();
+    cotListener = null;
+  }
+
+  // Stop Python backend subprocess
+  try {
+    const pythonBackend = getPythonBackend();
+    if (pythonBackend.isRunning) {
+      pythonBackend.stop();
+    }
+  } catch {
+    // Ignore if not initialized
+  }
+
   if (httpServer) {
     await new Promise<void>((resolve) => {
       httpServer!.close(() => resolve());

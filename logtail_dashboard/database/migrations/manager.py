@@ -1,0 +1,299 @@
+"""
+Migration Manager
+
+Handles database schema versioning and migrations.
+Designed for SQLite with a simple version table approach.
+"""
+
+import logging
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Callable, List, Optional
+
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class Migration:
+    """Represents a single database migration."""
+
+    version: int
+    name: str
+    description: str
+    up_sql: str  # SQL to apply migration
+    down_sql: str  # SQL to rollback migration
+
+
+# Initial schema is created by SQLAlchemy models
+# These migrations are for incremental changes after initial deployment
+MIGRATIONS: List[Migration] = [
+    # Migration 1: Initial schema (handled by SQLAlchemy create_all)
+    Migration(
+        version=1,
+        name="initial_schema",
+        description="Initial CRM database schema created by SQLAlchemy",
+        up_sql="-- Schema created by SQLAlchemy ORM",
+        down_sql="-- Cannot rollback initial schema without data loss",
+    ),
+    # Future migrations will be added here
+    # Example:
+    # Migration(
+    #     version=2,
+    #     name="add_user_preferences",
+    #     description="Add user preferences table",
+    #     up_sql='''
+    #         CREATE TABLE user_preferences (
+    #             id TEXT PRIMARY KEY,
+    #             user_id TEXT REFERENCES users(id),
+    #             preference_key TEXT NOT NULL,
+    #             preference_value TEXT,
+    #             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    #         );
+    #     ''',
+    #     down_sql="DROP TABLE IF EXISTS user_preferences;",
+    # ),
+]
+
+
+class MigrationManager:
+    """
+    Manages database schema migrations.
+
+    Uses a simple version table to track applied migrations.
+    """
+
+    VERSION_TABLE = "schema_version"
+
+    def __init__(self, engine: Engine):
+        """
+        Initialize the migration manager.
+
+        Args:
+            engine: SQLAlchemy engine instance.
+        """
+        self.engine = engine
+        self._ensure_version_table()
+
+    def _ensure_version_table(self):
+        """Create the schema version table if it doesn't exist."""
+        create_sql = f"""
+            CREATE TABLE IF NOT EXISTS {self.VERSION_TABLE} (
+                version INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """
+        with self.engine.connect() as conn:
+            conn.execute(text(create_sql))
+            conn.commit()
+
+    def get_current_version(self) -> int:
+        """
+        Get the current schema version.
+
+        Returns:
+            The current version number, or 0 if no migrations applied.
+        """
+        query = f"SELECT MAX(version) FROM {self.VERSION_TABLE}"
+        with self.engine.connect() as conn:
+            result = conn.execute(text(query))
+            row = result.fetchone()
+            return row[0] if row and row[0] else 0
+
+    def get_applied_migrations(self) -> List[dict]:
+        """
+        Get list of applied migrations.
+
+        Returns:
+            List of dicts with version, name, and applied_at.
+        """
+        query = f"""
+            SELECT version, name, applied_at
+            FROM {self.VERSION_TABLE}
+            ORDER BY version
+        """
+        with self.engine.connect() as conn:
+            result = conn.execute(text(query))
+            return [
+                {
+                    "version": row[0],
+                    "name": row[1],
+                    "applied_at": row[2],
+                }
+                for row in result.fetchall()
+            ]
+
+    def get_pending_migrations(self) -> List[Migration]:
+        """
+        Get list of migrations that haven't been applied.
+
+        Returns:
+            List of pending Migration objects.
+        """
+        current = self.get_current_version()
+        return [m for m in MIGRATIONS if m.version > current]
+
+    def apply_migration(self, migration: Migration) -> bool:
+        """
+        Apply a single migration.
+
+        Args:
+            migration: The migration to apply.
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        logger.info(f"Applying migration {migration.version}: {migration.name}")
+
+        try:
+            with self.engine.connect() as conn:
+                # Skip comment-only migrations (like initial schema)
+                if migration.up_sql.strip() and not migration.up_sql.strip().startswith("--"):
+                    # Execute migration SQL
+                    for statement in migration.up_sql.split(";"):
+                        statement = statement.strip()
+                        if statement:
+                            conn.execute(text(statement))
+
+                # Record migration
+                insert_sql = f"""
+                    INSERT INTO {self.VERSION_TABLE} (version, name)
+                    VALUES (:version, :name)
+                """
+                conn.execute(
+                    text(insert_sql),
+                    {"version": migration.version, "name": migration.name},
+                )
+                conn.commit()
+
+            logger.info(f"Migration {migration.version} applied successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to apply migration {migration.version}: {e}")
+            return False
+
+    def rollback_migration(self, migration: Migration) -> bool:
+        """
+        Rollback a single migration.
+
+        Args:
+            migration: The migration to rollback.
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        logger.info(f"Rolling back migration {migration.version}: {migration.name}")
+
+        try:
+            with self.engine.connect() as conn:
+                # Execute rollback SQL
+                if migration.down_sql.strip() and not migration.down_sql.strip().startswith("--"):
+                    for statement in migration.down_sql.split(";"):
+                        statement = statement.strip()
+                        if statement:
+                            conn.execute(text(statement))
+
+                # Remove migration record
+                delete_sql = f"""
+                    DELETE FROM {self.VERSION_TABLE}
+                    WHERE version = :version
+                """
+                conn.execute(text(delete_sql), {"version": migration.version})
+                conn.commit()
+
+            logger.info(f"Migration {migration.version} rolled back successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to rollback migration {migration.version}: {e}")
+            return False
+
+    def migrate_to_latest(self) -> int:
+        """
+        Apply all pending migrations.
+
+        Returns:
+            Number of migrations applied.
+        """
+        pending = self.get_pending_migrations()
+
+        if not pending:
+            logger.info("Database is already at latest version")
+            return 0
+
+        applied_count = 0
+        for migration in pending:
+            if self.apply_migration(migration):
+                applied_count += 1
+            else:
+                logger.error(f"Migration stopped at version {migration.version}")
+                break
+
+        return applied_count
+
+    def migrate_to_version(self, target_version: int) -> int:
+        """
+        Migrate to a specific version (up or down).
+
+        Args:
+            target_version: The target schema version.
+
+        Returns:
+            Number of migrations applied/rolled back.
+        """
+        current = self.get_current_version()
+
+        if target_version == current:
+            logger.info(f"Already at version {target_version}")
+            return 0
+
+        if target_version > current:
+            # Migrate up
+            to_apply = [
+                m for m in MIGRATIONS
+                if current < m.version <= target_version
+            ]
+            count = 0
+            for migration in sorted(to_apply, key=lambda m: m.version):
+                if self.apply_migration(migration):
+                    count += 1
+                else:
+                    break
+            return count
+
+        else:
+            # Migrate down
+            to_rollback = [
+                m for m in MIGRATIONS
+                if target_version < m.version <= current
+            ]
+            count = 0
+            for migration in sorted(to_rollback, key=lambda m: m.version, reverse=True):
+                if self.rollback_migration(migration):
+                    count += 1
+                else:
+                    break
+            return count
+
+    def get_status(self) -> dict:
+        """
+        Get migration status.
+
+        Returns:
+            Dict with current version, latest version, and pending count.
+        """
+        current = self.get_current_version()
+        latest = max((m.version for m in MIGRATIONS), default=0)
+        pending = len(self.get_pending_migrations())
+
+        return {
+            "current_version": current,
+            "latest_version": latest,
+            "pending_migrations": pending,
+            "is_current": current == latest,
+        }

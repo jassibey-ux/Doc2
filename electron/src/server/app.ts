@@ -7,13 +7,14 @@ import * as path from 'path';
 import * as fs from 'fs';
 import log from 'electron-log';
 import { TrackerRecord, TrackerState, TrackerSummary, WebSocketMessage, GPSHealthStatus, GPSFixLossEvent } from '../core/models';
-import { getTrackerAliasByTrackerId } from '../core/library-store';
+import { getTrackerAliasByTrackerId, addEventToSession } from '../core/library-store';
 import { StateManager } from '../core/state';
 import { LogWatcher } from '../core/watcher';
 import { SessionScanner } from '../core/session-scanner';
 import { SessionLoader, ReplayEngine, FrameGroup } from '../core/replay';
 import { AppConfig, loadConfig, saveConfigAtomic, getConfigPath } from '../core/config';
 import { AnomalyDetector, AnomalyAlert } from '../core/anomaly-detector';
+import { GPSAutoEvent } from '../core/gps-health-tracker';
 import { sessionDataCollector } from '../core/session-data-collector';
 import WebSocket from 'ws';
 
@@ -68,6 +69,16 @@ export class DashboardApp {
 
     this.scanner = new SessionScanner(this.config.log_root_folder);
     this.sessionLoader = new SessionLoader(this.config.log_root_folder);
+
+    // Set up GPS auto-event emission to record events into active sessions
+    const gpsHealthTracker = this.stateManager.getGPSHealthTracker();
+    if (this.config.gps_denial_thresholds) {
+      gpsHealthTracker.updateThresholds({
+        fixLossDurationMs: (this.config.gps_denial_thresholds.fix_loss_duration_s ?? 3) * 1000,
+        degradedDurationMs: (this.config.gps_denial_thresholds.degraded_duration_s ?? 5) * 1000,
+      });
+    }
+    gpsHealthTracker.setAutoEventCallback((event) => this.onGPSAutoEvent(event));
   }
 
   get version(): string {
@@ -485,6 +496,47 @@ export class DashboardApp {
         new_status: newStatus,
         fix_loss_event: event,
         timestamp: new Date().toISOString(),
+      },
+    });
+  }
+
+  /**
+   * Handle auto-detected GPS events and inject them into active sessions
+   */
+  private onGPSAutoEvent(event: GPSAutoEvent): void {
+    log.info(`[GPSAutoEvent] ${event.type} for tracker ${event.trackerId}`);
+
+    // Inject event into all active recording sessions that include this tracker
+    for (const sessionId of sessionDataCollector.getActiveSessionIds()) {
+      if (sessionDataCollector.isTrackerAssignedToSession(sessionId, event.trackerId)) {
+        // Add event to the session's event timeline
+        addEventToSession(sessionId, {
+          type: event.type as any,
+          timestamp: event.timestamp,
+          source: 'auto_detected',
+          tracker_id: event.trackerId,
+          metadata: event.metadata,
+        });
+
+        // Also record in session data collector's event stream
+        sessionDataCollector.recordEvent(sessionId, {
+          type: event.type,
+          trackerId: event.trackerId,
+          data: event.metadata as Record<string, unknown>,
+        });
+
+        log.info(`[GPSAutoEvent] Injected ${event.type} into session ${sessionId}`);
+      }
+    }
+
+    // Broadcast to WebSocket clients
+    this.broadcastMessage({
+      type: 'gps_auto_event' as any,
+      data: {
+        event_type: event.type,
+        tracker_id: event.trackerId,
+        timestamp: event.timestamp,
+        metadata: event.metadata,
       },
     });
   }

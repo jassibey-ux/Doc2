@@ -13,6 +13,7 @@ import MapComponent from './Map';
 import Map3DViewer from './Map3DViewer';
 import DroneDetailPanel from './DroneDetailPanel';
 import ReplaySessionBrowserPanel from './ReplaySessionBrowserPanel';
+import PredictedVsActualView from './PredictedVsActualView';
 import type { CUASProfile, SiteDefinition } from '../types/workflow';
 import {
   ArrowLeft,
@@ -32,6 +33,7 @@ import {
   X,
   Loader2,
   History,
+  BarChart3,
 } from 'lucide-react';
 
 // State machine for replay page
@@ -101,6 +103,7 @@ export default function ReplayPage() {
   // UI state
   const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
   const [show3DView, setShow3DView] = useState(true);
+  const [showPredictedVsActual, setShowPredictedVsActual] = useState(false);
   const [mapStyle, setMapStyle] = useState<'dark' | 'satellite' | 'street'>('satellite');
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -335,13 +338,29 @@ export default function ReplayPage() {
     setSelectedDroneId(droneId);
   }, []);
 
-  // Calculate current playback time
+  // Calculate current playback time (in seconds from session start)
   const currentPlaybackTime = useMemo(() => {
     if (pageState.status !== 'ready' || !replayState?.current_time) return null;
     const startMs = new Date(pageState.metadata.start_time).getTime();
     const currentMs = new Date(replayState.current_time).getTime();
     return (currentMs - startMs) / 1000;
   }, [pageState, replayState?.current_time]);
+
+  // Calculate timeline values for Map components (in ms timestamps)
+  const mapCurrentTime = useMemo(() => {
+    if (replayState?.current_time) {
+      return new Date(replayState.current_time).getTime();
+    }
+    return Date.now();
+  }, [replayState?.current_time]);
+
+  const mapTimelineStart = useMemo(() => {
+    if (pageState.status === 'building_frames' || pageState.status === 'ready') {
+      const startTime = pageState.metadata.start_time;
+      if (startTime) return new Date(startTime).getTime();
+    }
+    return Date.now() - 3600000;
+  }, [pageState]);
 
   // Get current metadata
   const metadata = (pageState.status === 'building_frames' || pageState.status === 'ready')
@@ -500,8 +519,8 @@ export default function ReplayPage() {
                   droneHistory={droneHistory}
                   selectedDroneId={selectedDroneId}
                   onDroneClick={handleDroneClick}
-                  currentTime={Date.now()}
-                  timelineStart={Date.now() - 3600000}
+                  currentTime={mapCurrentTime}
+                  timelineStart={mapTimelineStart}
                   selectedSite={sessionSite}
                   cuasPlacements={cuasPlacements}
                   cuasProfiles={cuasProfiles}
@@ -513,8 +532,8 @@ export default function ReplayPage() {
                 {show3DView && (
                   <Map3DViewer
                     droneHistory={droneHistory}
-                    currentTime={Date.now()}
-                    timelineStart={Date.now() - 3600000}
+                    currentTime={mapCurrentTime}
+                    timelineStart={mapTimelineStart}
                     onClose={() => setShow3DView(false)}
                     showQualityColors={false}
                     site={sessionSite}
@@ -649,6 +668,17 @@ export default function ReplayPage() {
               </div>
             </div>
 
+            {/* Predicted vs Actual Analysis */}
+            <div className="rp-section">
+              <button
+                className="rp-analysis-btn"
+                onClick={() => setShowPredictedVsActual(true)}
+              >
+                <BarChart3 size={14} />
+                <span>Predicted vs Actual</span>
+              </button>
+            </div>
+
             <div className="rp-section rp-section-grow">
               <div className="rp-section-header">
                 <Users size={14} />
@@ -690,6 +720,16 @@ export default function ReplayPage() {
             drone={selectedDrone}
             onClose={() => setSelectedDroneId(null)}
             onOpenCamera={() => {}}
+          />
+        </div>
+      )}
+
+      {/* Predicted vs Actual Overlay */}
+      {showPredictedVsActual && pageState.status === 'ready' && (
+        <div className="rp-analysis-overlay">
+          <PredictedVsActualView
+            sessionId={pageState.sessionId}
+            onClose={() => setShowPredictedVsActual(false)}
           />
         </div>
       )}
@@ -1172,6 +1212,41 @@ const styles = `
     text-align: center;
     font-size: 12px;
     color: rgba(255, 255, 255, 0.3);
+  }
+
+  /* Analysis Button */
+  .rp-analysis-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(168, 85, 247, 0.1);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 6px;
+    color: #a855f7;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .rp-analysis-btn:hover {
+    background: rgba(168, 85, 247, 0.2);
+  }
+
+  /* Predicted vs Actual Overlay */
+  .rp-analysis-overlay {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    max-height: calc(100vh - 120px);
+    z-index: 600;
+    overflow-y: auto;
+    border-radius: 12px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
   }
 
   /* Drone Modal */

@@ -40,6 +40,10 @@ interface Map3DViewerProps {
   // SD Card track visualization props (dual-track display)
   sdCardTracks?: Map<string, EnhancedPositionPoint[]>;
   showSDCardTracks?: boolean;
+  // Viewshed overlay props (terrain-aware LOS/NLOS)
+  viewshedImageUrl?: string | null;
+  viewshedBounds?: [[number, number], [number, number], [number, number], [number, number]] | null;
+  showViewshed?: boolean;
 }
 
 // Track colors
@@ -385,11 +389,15 @@ export default function Map3DViewer({
   onDroneClick,
   sdCardTracks,
   showSDCardTracks = true,
+  viewshedImageUrl = null,
+  viewshedBounds = null,
+  showViewshed = true,
 }: Map3DViewerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const sourceAddedRef = useRef(false);
   const sdCardSourceAddedRef = useRef(false);
+  const viewshedSourceAddedRef = useRef(false);
   const mapLoadedRef = useRef(false);
   const cuasMarkersRef = useRef<maplibregl.Marker[]>([]);
   const droneMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
@@ -558,6 +566,36 @@ export default function Map3DViewer({
       map.setLayoutProperty('sd-position-markers', 'visibility', visibility);
     }
   }, [showSDCardTracks]);
+
+  // Update viewshed overlay when image URL or bounds change
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !viewshedSourceAddedRef.current) return;
+
+    const source = map.getSource('viewshed-overlay') as maplibregl.ImageSource;
+    if (!source) return;
+
+    if (viewshedImageUrl && viewshedBounds) {
+      source.updateImage({
+        url: viewshedImageUrl,
+        coordinates: viewshedBounds,
+      });
+    }
+  }, [viewshedImageUrl, viewshedBounds]);
+
+  // Toggle viewshed visibility
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !viewshedSourceAddedRef.current) return;
+
+    if (map.getLayer('viewshed-layer')) {
+      map.setLayoutProperty(
+        'viewshed-layer',
+        'visibility',
+        showViewshed && viewshedImageUrl ? 'visible' : 'none',
+      );
+    }
+  }, [showViewshed, viewshedImageUrl]);
 
   // Update live drone markers with current position and telemetry
   useEffect(() => {
@@ -1057,6 +1095,30 @@ export default function Map3DViewer({
           cuasMarkersRef.current.push(marker);
         });
       }
+
+      // Add viewshed overlay source (terrain-aware LOS/NLOS)
+      map.addSource('viewshed-overlay', {
+        type: 'image',
+        url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        coordinates: [
+          [-180, 85],
+          [180, 85],
+          [180, -85],
+          [-180, -85],
+        ],
+      });
+
+      map.addLayer({
+        id: 'viewshed-layer',
+        type: 'raster',
+        source: 'viewshed-overlay',
+        paint: {
+          'raster-opacity': 0.6,
+          'raster-fade-duration': 300,
+        },
+      });
+
+      viewshedSourceAddedRef.current = true;
 
       // Add 3D tracks source
       map.addSource('tracks-3d', {

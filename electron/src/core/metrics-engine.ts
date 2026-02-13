@@ -11,6 +11,12 @@ import {
   FailsafeType,
 } from './models/workflow';
 import { EnhancedPositionPoint, TrackSegment } from './sd-card-merge';
+import { sessionDataCollector } from './session-data-collector';
+import { TrackerPosition } from './mock-tracker-provider';
+import {
+  getTestSessionById,
+  updateTestSession,
+} from './library-store';
 
 export interface DroneTrackData {
   tracker_id: string;
@@ -464,4 +470,166 @@ export function analyzeSession(
   }
 
   return results;
+}
+
+/**
+ * Aggregate per-tracker analysis results into session-level metrics
+ */
+export function aggregateSessionMetrics(
+  trackerResults: Map<string, AnalysisResult>
+): SessionMetrics {
+  const allMetrics: SessionMetrics[] = [];
+  for (const result of trackerResults.values()) {
+    allMetrics.push(result.metrics);
+  }
+
+  if (allMetrics.length === 0) {
+    return {
+      total_flight_time_s: 0,
+      time_under_jamming_s: 0,
+      failsafe_triggered: false,
+      pass_fail: 'fail',
+    };
+  }
+
+  // Aggregate: max flight time, total jamming, min time-to-effect, max drift, etc.
+  const totalFlightTime = Math.max(...allMetrics.map(m => m.total_flight_time_s));
+  const totalJammingTime = Math.max(...allMetrics.map(m => m.time_under_jamming_s));
+
+  const timesToEffect = allMetrics
+    .map(m => m.time_to_effect_s)
+    .filter((t): t is number => t !== undefined);
+  const timesToFullDenial = allMetrics
+    .map(m => m.time_to_full_denial_s)
+    .filter((t): t is number => t !== undefined);
+  const recoveryTimes = allMetrics
+    .map(m => m.recovery_time_s)
+    .filter((t): t is number => t !== undefined);
+  const effectiveRanges = allMetrics
+    .map(m => m.effective_range_m)
+    .filter((r): r is number => r !== undefined);
+  const lateralDrifts = allMetrics
+    .map(m => m.max_lateral_drift_m)
+    .filter((d): d is number => d !== undefined);
+  const altitudeDeltas = allMetrics
+    .map(m => m.altitude_delta_m)
+    .filter((d): d is number => d !== undefined);
+
+  const anyFailsafe = allMetrics.some(m => m.failsafe_triggered);
+  const failsafeTypes = allMetrics
+    .map(m => m.failsafe_type)
+    .filter((t): t is FailsafeType => t !== undefined);
+
+  // Determine overall pass/fail: pass if any tracker passed, partial if any partial
+  const passFails = allMetrics.map(m => m.pass_fail).filter(Boolean);
+  let overallPassFail: 'pass' | 'fail' | 'partial' = 'fail';
+  if (passFails.includes('pass')) overallPassFail = 'pass';
+  else if (passFails.includes('partial')) overallPassFail = 'partial';
+
+  return {
+    total_flight_time_s: totalFlightTime,
+    time_under_jamming_s: totalJammingTime,
+    time_to_effect_s: timesToEffect.length > 0 ? Math.min(...timesToEffect) : undefined,
+    time_to_full_denial_s: timesToFullDenial.length > 0 ? Math.min(...timesToFullDenial) : undefined,
+    recovery_time_s: recoveryTimes.length > 0 ? Math.max(...recoveryTimes) : undefined,
+    effective_range_m: effectiveRanges.length > 0 ? Math.min(...effectiveRanges) : undefined,
+    altitude_delta_m: altitudeDeltas.length > 0 ? Math.max(...altitudeDeltas) : undefined,
+    max_lateral_drift_m: lateralDrifts.length > 0 ? Math.max(...lateralDrifts) : undefined,
+    failsafe_triggered: anyFailsafe,
+    failsafe_type: failsafeTypes[0],
+    pass_fail: overallPassFail,
+  };
+}
+
+/**
+ * Convert TrackerPosition[] to DroneTrackData format for analysis
+ */
+function positionsToTrackData(
+  trackerId: string,
+  positions: TrackerPosition[]
+): DroneTrackData {
+  const sorted = [...positions].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+
+  const points: EnhancedPositionPoint[] = sorted.map(p => ({
+    lat: p.latitude,
+    lon: p.longitude,
+    alt_m: p.altitude_m,
+    baro_alt_m: null,
+    timestamp_ms: new Date(p.timestamp).getTime(),
+    hdop: p.hdop ?? null,
+    satellites: p.satellites ?? null,
+    speed_mps: p.speed_ms,
+    course_deg: p.heading_deg,
+    fix_valid: p.gps_quality !== 'poor',
+    rssi_dbm: p.rssi_dbm ?? null,
+    quality: (p.gps_quality === 'good' ? 'good' : p.gps_quality === 'degraded' ? 'degraded' : 'lost') as 'good' | 'degraded' | 'lost',
+    source: 'live' as 'live' | 'sd_card' | 'interpolated',
+  }));
+
+  return {
+    tracker_id: trackerId,
+    points,
+    start_time_ms: points.length > 0 ? points[0].timestamp_ms : 0,
+    end_time_ms: points.length > 0 ? points[points.length - 1].timestamp_ms : 0,
+  };
+}
+
+/**
+ * Auto-compute metrics when a session transitions to completed/analyzing.
+ * Called from the session status change handler.
+ * @returns The computed session metrics, or null if computation failed
+ */
+export function autoComputeOnSessionComplete(sessionId: string): SessionMetrics | null {
+  try {
+    const session = getTestSessionById(sessionId);
+    if (!session) {
+      log.warn(`[MetricsEngine] Cannot auto-compute: session ${sessionId} not found`);
+      return null;
+    }
+
+    // Get recorded positions from session data collector
+    const positionsByTracker = sessionDataCollector.getPositionsByTracker(sessionId);
+    if (positionsByTracker.size === 0) {
+      log.warn(`[MetricsEngine] No track data for session ${sessionId}, skipping auto-compute`);
+      return null;
+    }
+
+    // Convert to DroneTrackData
+    const trackData = new Map<string, DroneTrackData>();
+    for (const [trackerId, positions] of positionsByTracker) {
+      if (positions.length === 0) continue;
+      trackData.set(trackerId, positionsToTrackData(trackerId, positions));
+    }
+
+    // Build CUAS positions map
+    const cuasPositions = new Map<string, { lat: number; lon: number }>();
+    for (const placement of session.cuas_placements || []) {
+      if (placement.position) {
+        cuasPositions.set(placement.cuas_profile_id, {
+          lat: placement.position.lat,
+          lon: placement.position.lon,
+        });
+      }
+    }
+
+    // Run per-tracker analysis
+    const trackerResults = analyzeSession(session, trackData, cuasPositions);
+
+    // Aggregate into session-level metrics
+    const sessionMetrics = aggregateSessionMetrics(trackerResults);
+
+    // Save metrics to session
+    updateTestSession(sessionId, {
+      metrics: sessionMetrics,
+      analysis_completed: true,
+    });
+
+    log.info(`[MetricsEngine] Auto-computed metrics for session ${sessionId}: pass_fail=${sessionMetrics.pass_fail}`);
+    return sessionMetrics;
+  } catch (error) {
+    log.error(`[MetricsEngine] Auto-compute failed for session ${sessionId}:`, error);
+    return null;
+  }
 }

@@ -47,6 +47,10 @@ interface MapProps {
   // SD Card track visualization props (dual-track display)
   sdCardTracks?: Map<string, EnhancedPositionPoint[]>;
   showSDCardTracks?: boolean;
+  // Viewshed overlay props (terrain-aware LOS/NLOS)
+  viewshedImageUrl?: string | null;
+  viewshedBounds?: [[number, number], [number, number], [number, number], [number, number]] | null;
+  showViewshed?: boolean;
 }
 
 // Color palette for drone tracks (cycle through for different drones)
@@ -188,6 +192,9 @@ export default function MapComponent({
   onFlyToComplete,
   sdCardTracks,
   showSDCardTracks = true,
+  viewshedImageUrl = null,
+  viewshedBounds = null,
+  showViewshed = true,
 }: MapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -197,6 +204,7 @@ export default function MapComponent({
   const cuasSourceAddedRef = useRef<boolean>(false);
   const siteSourceAddedRef = useRef<boolean>(false);
   const sdCardSourceAddedRef = useRef<boolean>(false);
+  const viewshedSourceAddedRef = useRef<boolean>(false);
 
   // Create a stable mapping of tracker_id to color index
   const droneColorMap = useMemo(() => {
@@ -367,6 +375,36 @@ export default function MapComponent({
       map.setLayoutProperty('cuas-markers-inner', 'visibility', visibility);
     }
   }, [showCuasCoverage]);
+
+  // Update viewshed overlay when image URL or bounds change
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !viewshedSourceAddedRef.current) return;
+
+    const source = map.getSource('viewshed-overlay') as maplibregl.ImageSource;
+    if (!source) return;
+
+    if (viewshedImageUrl && viewshedBounds) {
+      source.updateImage({
+        url: viewshedImageUrl,
+        coordinates: viewshedBounds,
+      });
+    }
+  }, [viewshedImageUrl, viewshedBounds]);
+
+  // Toggle viewshed visibility
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !viewshedSourceAddedRef.current) return;
+
+    if (map.getLayer('viewshed-layer')) {
+      map.setLayoutProperty(
+        'viewshed-layer',
+        'visibility',
+        showViewshed && viewshedImageUrl ? 'visible' : 'none',
+      );
+    }
+  }, [showViewshed, viewshedImageUrl]);
 
   // Update SD Card track source when data changes
   useEffect(() => {
@@ -658,6 +696,31 @@ export default function MapComponent({
       });
 
       cuasSourceAddedRef.current = true;
+
+      // Add viewshed overlay source (image source for terrain-aware LOS/NLOS)
+      // Starts with a transparent 1x1 pixel - updated when viewshed is computed
+      map.addSource('viewshed-overlay', {
+        type: 'image',
+        url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        coordinates: [
+          [-180, 85], // NW
+          [180, 85],  // NE
+          [180, -85], // SE
+          [-180, -85], // SW
+        ],
+      });
+
+      map.addLayer({
+        id: 'viewshed-layer',
+        type: 'raster',
+        source: 'viewshed-overlay',
+        paint: {
+          'raster-opacity': 0.7,
+          'raster-fade-duration': 300,
+        },
+      }, 'cuas-coverage-fill'); // Place viewshed under CUAS geometric coverage
+
+      viewshedSourceAddedRef.current = true;
 
       // Add site boundary source and layers
       map.addSource('site-boundary', {
