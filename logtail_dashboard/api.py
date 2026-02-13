@@ -1197,6 +1197,10 @@ class DashboardApp:
         @self.app.get("/{filename:path}")
         async def static_files(filename: str) -> FileResponse:
             """Serve static files."""
+            # Don't intercept API routes — let the v2 router handle them
+            if filename.startswith("api/"):
+                raise HTTPException(status_code=404, detail="Not found")
+
             static_dir = get_static_dir()
             file_path = static_dir / filename
 

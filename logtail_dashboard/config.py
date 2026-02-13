@@ -221,6 +221,12 @@ def parse_args() -> argparse.Namespace:
         help="Path to config.json file",
     )
 
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Don't auto-open browser (used in embedded mode)",
+    )
+
     return parser.parse_args()
 
 
