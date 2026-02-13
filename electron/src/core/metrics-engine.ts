@@ -9,6 +9,8 @@ import {
   TestEvent,
   SessionMetrics,
   FailsafeType,
+  Engagement,
+  EngagementMetrics,
 } from './models/workflow';
 import { EnhancedPositionPoint, TrackSegment } from './sd-card-merge';
 import { sessionDataCollector } from './session-data-collector';
@@ -632,4 +634,213 @@ export function autoComputeOnSessionComplete(sessionId: string): SessionMetrics 
     log.error(`[MetricsEngine] Auto-compute failed for session ${sessionId}:`, error);
     return null;
   }
+}
+
+
+// =============================================================================
+// Engagement-Scoped Analysis
+// =============================================================================
+
+/**
+ * Calculate initial bearing from point 1 to point 2 in degrees (0-360)
+ */
+export function bearing(
+  lat1: number, lon1: number,
+  lat2: number, lon2: number
+): number {
+  const phi1 = (lat1 * Math.PI) / 180;
+  const phi2 = (lat2 * Math.PI) / 180;
+  const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+
+  const x = Math.sin(deltaLambda) * Math.cos(phi2);
+  const y = Math.cos(phi1) * Math.sin(phi2) -
+            Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
+
+  const theta = Math.atan2(x, y);
+  return ((theta * 180) / Math.PI + 360) % 360;
+}
+
+/**
+ * Calculate angle off boresight (0-180) given CUAS heading and bearing to target
+ */
+export function angleOffBoresight(
+  cuasOrientationDeg: number,
+  bearingToTargetDeg: number
+): number {
+  let diff = Math.abs(bearingToTargetDeg - cuasOrientationDeg);
+  if (diff > 180) diff = 360 - diff;
+  return Math.round(diff * 10) / 10;
+}
+
+/**
+ * Analyze an engagement — scoped to the engagement time window.
+ * Wraps existing per-tracker analysis functions.
+ */
+export function analyzeEngagement(
+  engagement: Engagement,
+  trackData: Map<string, DroneTrackData>,
+  events: TestEvent[],
+  cuasPosition?: { lat: number; lon: number; orientation_deg?: number },
+): EngagementMetrics | null {
+  if (!engagement.engage_timestamp) return null;
+
+  const engageTime = new Date(engagement.engage_timestamp).getTime();
+  const disengageTime = engagement.disengage_timestamp
+    ? new Date(engagement.disengage_timestamp).getTime()
+    : Date.now();
+
+  // Filter events to engagement window
+  const windowEvents = events.filter(e => {
+    const t = new Date(e.timestamp).getTime();
+    return t >= engageTime && t <= disengageTime;
+  });
+
+  // Synthesize jam_on/jam_off from engage/disengage events for compatibility
+  const syntheticEvents: TestEvent[] = [
+    {
+      id: 'synthetic_jam_on',
+      type: 'jam_on',
+      timestamp: engagement.engage_timestamp!,
+      source: 'manual',
+      cuas_id: engagement.cuas_placement_id,
+    },
+    ...(engagement.disengage_timestamp ? [{
+      id: 'synthetic_jam_off',
+      type: 'jam_off' as const,
+      timestamp: engagement.disengage_timestamp,
+      source: 'manual' as const,
+      cuas_id: engagement.cuas_placement_id,
+    }] : []),
+    ...windowEvents,
+  ];
+
+  // Analyze each target
+  const perTargetResults: Array<{
+    tracker_id: string;
+    time_to_effect_s?: number;
+    time_to_full_denial_s?: number;
+    recovery_time_s?: number;
+    effective_range_m?: number;
+    max_lateral_drift_m: number;
+    altitude_delta_m: number;
+    failsafe_triggered: boolean;
+    failsafe_type?: FailsafeType;
+    pass_fail: 'pass' | 'fail' | 'partial';
+  }> = [];
+
+  for (const target of engagement.targets || []) {
+    const td = trackData.get(target.tracker_id);
+    if (!td) continue;
+
+    // Scope track data to engagement window
+    const scopedPoints = td.points.filter(
+      p => p.timestamp_ms >= engageTime && p.timestamp_ms <= disengageTime
+    );
+
+    if (scopedPoints.length === 0) continue;
+
+    const scopedTrackData: DroneTrackData = {
+      tracker_id: target.tracker_id,
+      points: scopedPoints,
+      start_time_ms: scopedPoints[0].timestamp_ms,
+      end_time_ms: scopedPoints[scopedPoints.length - 1].timestamp_ms,
+    };
+
+    const jammingWindows = extractJammingWindows(syntheticEvents);
+    const timeToEffect = calculateTimeToEffect(syntheticEvents, scopedTrackData);
+    const timeToFullDenial = calculateTimeToFullDenial(syntheticEvents, scopedTrackData);
+    const recoveryTime = calculateRecoveryTime(syntheticEvents, scopedTrackData);
+    const maxDrift = calculateMaxLateralDrift(scopedTrackData, jammingWindows);
+    const altDelta = calculateAltitudeDelta(scopedTrackData, jammingWindows);
+    const failsafe = detectFailsafe(syntheticEvents, scopedTrackData);
+
+    let effectiveRange: number | undefined;
+    if (cuasPosition) {
+      effectiveRange = calculateEffectiveRange(cuasPosition, syntheticEvents, scopedTrackData);
+    }
+
+    const passFail = determinePassFail(undefined, failsafe, timeToEffect, maxDrift);
+
+    perTargetResults.push({
+      tracker_id: target.tracker_id,
+      time_to_effect_s: timeToEffect,
+      time_to_full_denial_s: timeToFullDenial,
+      recovery_time_s: recoveryTime,
+      effective_range_m: effectiveRange,
+      max_lateral_drift_m: maxDrift,
+      altitude_delta_m: altDelta,
+      failsafe_triggered: failsafe.triggered,
+      failsafe_type: failsafe.type,
+      pass_fail: passFail,
+    });
+  }
+
+  if (perTargetResults.length === 0) return null;
+
+  // Aggregate
+  const timesToEffect = perTargetResults.map(r => r.time_to_effect_s).filter((t): t is number => t !== undefined);
+  const timesToDenial = perTargetResults.map(r => r.time_to_full_denial_s).filter((t): t is number => t !== undefined);
+  const recoveryTimes = perTargetResults.map(r => r.recovery_time_s).filter((t): t is number => t !== undefined);
+  const ranges = perTargetResults.map(r => r.effective_range_m).filter((r): r is number => r !== undefined);
+  const drifts = perTargetResults.map(r => r.max_lateral_drift_m);
+  const altDeltas = perTargetResults.map(r => r.altitude_delta_m);
+
+  // Compute denial consistency (fraction of points that are denied/degraded)
+  let totalDenied = 0;
+  let totalPoints = 0;
+  for (const target of engagement.targets || []) {
+    const td = trackData.get(target.tracker_id);
+    if (!td) continue;
+    const scopedPoints = td.points.filter(
+      p => p.timestamp_ms >= engageTime && p.timestamp_ms <= disengageTime
+    );
+    for (const p of scopedPoints) {
+      totalPoints++;
+      if (p.quality === 'degraded' || p.quality === 'lost') totalDenied++;
+    }
+  }
+  const denialConsistency = totalPoints > 0
+    ? Math.round((totalDenied / totalPoints) * 1000) / 10
+    : undefined;
+
+  // Bearing and angle off boresight
+  let denialBearing: number | undefined;
+  let denialAOB: number | undefined;
+  if (cuasPosition && engagement.targets?.[0]) {
+    const firstTarget = engagement.targets[0];
+    if (firstTarget.initial_bearing_deg !== undefined) {
+      denialBearing = firstTarget.initial_bearing_deg;
+      if (cuasPosition.orientation_deg !== undefined) {
+        denialAOB = angleOffBoresight(cuasPosition.orientation_deg, firstTarget.initial_bearing_deg);
+      }
+    }
+  }
+
+  const durationS = (disengageTime - engageTime) / 1000;
+  const anyFailsafe = perTargetResults.some(r => r.failsafe_triggered);
+  const passFails = perTargetResults.map(r => r.pass_fail);
+  let overallPassFail: 'pass' | 'fail' | 'inconclusive' = 'fail';
+  if (passFails.includes('pass')) overallPassFail = 'pass';
+  else if (passFails.includes('partial')) overallPassFail = 'inconclusive';
+
+  return {
+    time_to_effect_s: timesToEffect.length > 0 ? Math.min(...timesToEffect) : undefined,
+    time_to_full_denial_s: timesToDenial.length > 0 ? Math.min(...timesToDenial) : undefined,
+    denial_duration_s: Math.round(durationS * 10) / 10,
+    denial_consistency_pct: denialConsistency,
+    recovery_time_s: recoveryTimes.length > 0 ? Math.max(...recoveryTimes) : undefined,
+    effective_range_m: ranges.length > 0 ? Math.min(...ranges) : undefined,
+    denial_bearing_deg: denialBearing,
+    denial_angle_off_boresight_deg: denialAOB,
+    max_drift_m: drifts.length > 0 ? Math.max(...drifts) : undefined,
+    max_lateral_drift_m: drifts.length > 0 ? Math.max(...drifts) : undefined,
+    max_vertical_drift_m: altDeltas.length > 0 ? Math.max(...altDeltas) : undefined,
+    altitude_change_m: altDeltas.length > 0 ? Math.max(...altDeltas) : undefined,
+    failsafe_triggered: anyFailsafe,
+    failsafe_type: perTargetResults.find(r => r.failsafe_type)?.failsafe_type,
+    pass_fail: overallPassFail,
+    metrics_json: {
+      per_target: perTargetResults,
+    },
+  };
 }

@@ -177,14 +177,15 @@ export function parseSDCardFile(filePath: string, trackerId: string): ParsedSDCa
  * Determine GPS quality based on HDOP and satellite count
  */
 export function determineGPSQuality(hdop: number | null, satellites: number | null): GPSQuality {
-  // If we have HDOP
+  // If we have HDOP — harmonized thresholds matching analysis.py classify_quality()
   if (hdop !== null) {
     if (hdop <= 2) return 'good';
-    if (hdop <= 5) return 'degraded';
-    return 'lost';
+    if (hdop <= 5) return 'good';     // HDOP 2-5 is still acceptable
+    if (hdop <= 20) return 'degraded'; // HDOP 5-20 is degraded (was: >5 = lost)
+    return 'lost';                     // HDOP > 20 is denied
   }
 
-  // Fall back to satellite count
+  // Fall back to satellite count — harmonized thresholds
   if (satellites !== null) {
     if (satellites >= 6) return 'good';
     if (satellites >= 4) return 'degraded';

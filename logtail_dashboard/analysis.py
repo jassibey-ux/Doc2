@@ -20,6 +20,9 @@ from .database.models import (
     TestEvent,
     SessionMetrics,
     CUASPlacement,
+    Engagement,
+    EngagementTarget,
+    EngagementMetrics,
 )
 
 logger = logging.getLogger(__name__)
@@ -121,6 +124,309 @@ def classify_quality(
     if satellites is not None and satellites < sats_degraded:
         return "degraded"
     return "good"
+
+
+# =============================================================================
+# Geometry Functions
+# =============================================================================
+
+def bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate initial bearing from point 1 to point 2 in degrees (0-360)."""
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_lambda = math.radians(lon2 - lon1)
+
+    x = math.sin(delta_lambda) * math.cos(phi2)
+    y = (math.cos(phi1) * math.sin(phi2) -
+         math.sin(phi1) * math.cos(phi2) * math.cos(delta_lambda))
+
+    theta = math.atan2(x, y)
+    return (math.degrees(theta) + 360) % 360
+
+
+def angle_off_boresight(cuas_orientation_deg: float, bearing_to_target_deg: float) -> float:
+    """Calculate angle off boresight (0-180) given CUAS heading and bearing to target."""
+    diff = abs(bearing_to_target_deg - cuas_orientation_deg)
+    if diff > 180:
+        diff = 360 - diff
+    return round(diff, 1)
+
+
+# =============================================================================
+# Engagement Geometry & Metrics
+# =============================================================================
+
+async def compute_engagement_geometry(
+    db: AsyncSession,
+    engagement: Engagement,
+) -> None:
+    """Compute and store initial geometry for all targets in an engagement.
+
+    Called when an engagement transitions to ACTIVE.
+    Snapshots CUAS position and computes range/bearing/angle for each target.
+    """
+    placement = engagement.cuas_placement
+    if not placement:
+        return
+
+    # Snapshot CUAS position
+    engagement.cuas_lat = placement.lat
+    engagement.cuas_lon = placement.lon
+    engagement.cuas_alt_m = placement.alt_m
+    engagement.cuas_orientation_deg = placement.orientation_deg
+
+    cuas_lat = placement.lat
+    cuas_lon = placement.lon
+    cuas_heading = placement.orientation_deg or 0.0
+
+    for target in engagement.targets:
+        # Get latest telemetry for this tracker
+        telem_result = await db.execute(
+            select(TrackerTelemetry)
+            .where(TrackerTelemetry.session_id == engagement.session_id)
+            .where(TrackerTelemetry.tracker_id == target.tracker_id)
+            .order_by(TrackerTelemetry.time_local_received.desc())
+            .limit(1)
+        )
+        latest = telem_result.scalar_one_or_none()
+
+        if latest and latest.lat and latest.lon:
+            target.drone_lat = latest.lat
+            target.drone_lon = latest.lon
+            target.initial_altitude_m = latest.alt_m
+            target.initial_range_m = round(
+                haversine_distance(cuas_lat, cuas_lon, latest.lat, latest.lon), 1
+            )
+            target.initial_bearing_deg = round(
+                bearing(cuas_lat, cuas_lon, latest.lat, latest.lon), 1
+            )
+            target.angle_off_boresight_deg = angle_off_boresight(
+                cuas_heading, target.initial_bearing_deg
+            )
+
+    await db.flush()
+
+
+async def compute_engagement_final_geometry(
+    db: AsyncSession,
+    engagement: Engagement,
+) -> None:
+    """Compute final geometry for all targets at DISENGAGE time."""
+    cuas_lat = engagement.cuas_lat
+    cuas_lon = engagement.cuas_lon
+
+    if not cuas_lat or not cuas_lon:
+        return
+
+    for target in engagement.targets:
+        telem_result = await db.execute(
+            select(TrackerTelemetry)
+            .where(TrackerTelemetry.session_id == engagement.session_id)
+            .where(TrackerTelemetry.tracker_id == target.tracker_id)
+            .order_by(TrackerTelemetry.time_local_received.desc())
+            .limit(1)
+        )
+        latest = telem_result.scalar_one_or_none()
+
+        if latest and latest.lat and latest.lon:
+            target.final_range_m = round(
+                haversine_distance(cuas_lat, cuas_lon, latest.lat, latest.lon), 1
+            )
+            target.final_bearing_deg = round(
+                bearing(cuas_lat, cuas_lon, latest.lat, latest.lon), 1
+            )
+
+    await db.flush()
+
+
+async def compute_engagement_metrics(
+    db: AsyncSession,
+    engagement: Engagement,
+) -> Optional[dict]:
+    """Compute all metrics for an engagement from telemetry data.
+
+    Called on DISENGAGE or on-demand re-computation.
+    Queries telemetry between engage_timestamp and disengage_timestamp
+    for each target, computes metrics, and stores them.
+    """
+    if not engagement.engage_timestamp:
+        return None
+
+    end_time = engagement.disengage_timestamp or datetime.utcnow()
+    cuas_lat = engagement.cuas_lat
+    cuas_lon = engagement.cuas_lon
+    cuas_heading = engagement.cuas_orientation_deg or 0.0
+
+    # Fetch events during engagement window
+    events_result = await db.execute(
+        select(TestEvent)
+        .where(TestEvent.session_id == engagement.session_id)
+        .where(TestEvent.timestamp >= engagement.engage_timestamp)
+        .where(TestEvent.timestamp <= end_time)
+        .order_by(TestEvent.timestamp)
+    )
+    events = events_result.scalars().all()
+    event_dicts = [
+        {
+            "type": e.type,
+            "timestamp": e.timestamp.isoformat() if e.timestamp else "",
+            "cuas_id": e.cuas_id,
+            "metadata": e.event_metadata or {},
+        }
+        for e in events
+    ]
+
+    # Per-target analysis
+    per_target_results = []
+    cuas_positions = {}
+    if cuas_lat and cuas_lon:
+        cuas_positions["engagement_cuas"] = (cuas_lat, cuas_lon)
+
+    for target in engagement.targets:
+        # Fetch telemetry for this tracker during engagement window
+        telem_result = await db.execute(
+            select(TrackerTelemetry)
+            .where(TrackerTelemetry.session_id == engagement.session_id)
+            .where(TrackerTelemetry.tracker_id == target.tracker_id)
+            .where(TrackerTelemetry.time_local_received >= engagement.engage_timestamp)
+            .where(TrackerTelemetry.time_local_received <= end_time)
+            .order_by(TrackerTelemetry.time_local_received)
+        )
+        telem_rows = telem_result.scalars().all()
+
+        if not telem_rows:
+            continue
+
+        points = []
+        for row in telem_rows:
+            quality = classify_quality(
+                fix_valid=bool(row.fix_valid),
+                hdop=row.hdop,
+                satellites=row.satellites,
+            )
+            points.append(PositionPoint(
+                lat=row.lat or 0.0,
+                lon=row.lon or 0.0,
+                alt_m=row.alt_m,
+                timestamp_ms=int(row.time_local_received.timestamp() * 1000),
+                hdop=row.hdop,
+                satellites=row.satellites,
+                speed_mps=row.speed_mps,
+                fix_valid=bool(row.fix_valid),
+                quality=quality,
+            ))
+
+        track_data = DroneTrackData(
+            tracker_id=target.tracker_id,
+            points=points,
+            start_time_ms=points[0].timestamp_ms,
+            end_time_ms=points[-1].timestamp_ms,
+        )
+
+        tracker_result = analyze_tracker(
+            session_id=engagement.session_id,
+            tracker_id=target.tracker_id,
+            track_data=track_data,
+            events=event_dicts,
+            cuas_positions=cuas_positions,
+        )
+        per_target_results.append(tracker_result)
+
+    # Aggregate
+    aggregated = aggregate_session_metrics(per_target_results)
+
+    # Compute denial consistency
+    denial_consistency = None
+    if per_target_results:
+        for target_result in per_target_results:
+            denied_count = sum(1 for p in [] if True)  # placeholder
+        # Compute from telemetry: fraction of points that are denied during jamming
+        total_denied = 0
+        total_points = 0
+        for target in engagement.targets:
+            telem_result = await db.execute(
+                select(TrackerTelemetry)
+                .where(TrackerTelemetry.session_id == engagement.session_id)
+                .where(TrackerTelemetry.tracker_id == target.tracker_id)
+                .where(TrackerTelemetry.time_local_received >= engagement.engage_timestamp)
+                .where(TrackerTelemetry.time_local_received <= end_time)
+            )
+            rows = telem_result.scalars().all()
+            for row in rows:
+                total_points += 1
+                q = classify_quality(bool(row.fix_valid), row.hdop, row.satellites)
+                if q in ("degraded", "lost"):
+                    total_denied += 1
+        if total_points > 0:
+            denial_consistency = round((total_denied / total_points) * 100, 1)
+
+    # Compute engagement duration
+    duration_s = (end_time - engagement.engage_timestamp).total_seconds()
+
+    # Build metrics dict
+    # Bearing at first denial
+    denial_bearing = None
+    denial_aob = None
+    if cuas_lat and cuas_lon:
+        for tr in per_target_results:
+            if tr.effective_range_m is not None:
+                # Find the target
+                matching_target = next(
+                    (t for t in engagement.targets if t.tracker_id == tr.tracker_id),
+                    None,
+                )
+                if matching_target and matching_target.initial_bearing_deg is not None:
+                    denial_bearing = matching_target.initial_bearing_deg
+                    denial_aob = matching_target.angle_off_boresight_deg
+                    break
+
+    metrics_data = {
+        "time_to_effect_s": aggregated.get("time_to_effect_s"),
+        "time_to_full_denial_s": aggregated.get("time_to_full_denial_s"),
+        "denial_duration_s": round(duration_s, 1),
+        "denial_consistency_pct": denial_consistency,
+        "recovery_time_s": aggregated.get("recovery_time_s"),
+        "effective_range_m": aggregated.get("effective_range_m"),
+        "denial_bearing_deg": denial_bearing,
+        "denial_angle_off_boresight_deg": denial_aob,
+        "min_range_m": aggregated.get("effective_range_m"),
+        "max_drift_m": aggregated.get("max_lateral_drift_m"),
+        "max_lateral_drift_m": aggregated.get("max_lateral_drift_m"),
+        "max_vertical_drift_m": aggregated.get("altitude_delta_m"),
+        "altitude_change_m": aggregated.get("altitude_delta_m"),
+        "failsafe_triggered": aggregated.get("failsafe_triggered", False),
+        "failsafe_type": aggregated.get("failsafe_type"),
+        "pass_fail": aggregated.get("pass_fail"),
+        "data_source": "live_only",
+        "metrics_json": {
+            "per_target": [
+                {
+                    "tracker_id": r.tracker_id,
+                    "time_to_effect_s": r.time_to_effect_s,
+                    "time_to_full_denial_s": r.time_to_full_denial_s,
+                    "effective_range_m": r.effective_range_m,
+                    "max_lateral_drift_m": r.max_lateral_drift_m,
+                    "altitude_delta_m": r.altitude_delta_m,
+                    "failsafe_triggered": r.failsafe_triggered,
+                    "pass_fail": r.pass_fail,
+                }
+                for r in per_target_results
+            ],
+        },
+    }
+
+    # Upsert metrics
+    from .database.repositories.engagements import EngagementRepository
+    repo = EngagementRepository(db)
+    await repo.set_metrics(engagement.id, metrics_data)
+
+    await db.flush()
+
+    logger.info(
+        f"Computed engagement metrics for {engagement.id}: "
+        f"pass_fail={metrics_data.get('pass_fail')}"
+    )
+    return metrics_data
 
 
 # =============================================================================

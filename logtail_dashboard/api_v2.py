@@ -28,6 +28,9 @@ from .database import (
     CUASProfile,
     SessionMetrics,
     CSVImporter,
+    Engagement,
+    EngagementTarget,
+    EngagementMetrics,
 )
 from .database.models import (
     TrackerAssignment,
@@ -35,6 +38,7 @@ from .database.models import (
     TestEvent,
     TrackerTelemetry,
     generate_uuid,
+    EngagementStatus,
 )
 from .database.repositories import (
     SessionRepository,
@@ -43,6 +47,7 @@ from .database.repositories import (
     CUASProfileRepository,
     TelemetryRepository,
     AuditRepository,
+    EngagementRepository,
 )
 from .database.repositories.sessions import SessionFilters
 
@@ -136,6 +141,37 @@ class MetricsRequest(BaseModel):
     deviation_notes: Optional[str] = None
 
 
+# Engagement Models
+class EngagementTargetInput(BaseModel):
+    """Input for an engagement target."""
+    tracker_id: str
+    drone_profile_id: Optional[str] = None
+    role: str = "primary_target"
+
+
+class EngagementCreateRequest(BaseModel):
+    """Request to create an engagement."""
+    cuas_placement_id: str
+    name: Optional[str] = None
+    engagement_type: str = "test"
+    targets: List[EngagementTargetInput]
+    notes: Optional[str] = None
+
+
+class EngagementQuickRequest(BaseModel):
+    """Request for quick-engage (auto-select CUAS + all drones)."""
+    cuas_placement_id: Optional[str] = None
+    name: Optional[str] = None
+    engagement_type: str = "test"
+
+
+class EngagementUpdateRequest(BaseModel):
+    """Request to update an engagement (only when planned)."""
+    name: Optional[str] = None
+    notes: Optional[str] = None
+    targets: Optional[List[EngagementTargetInput]] = None
+
+
 # Site Models
 class SiteCreateRequest(BaseModel):
     """Request to create a site."""
@@ -143,7 +179,7 @@ class SiteCreateRequest(BaseModel):
     center_lat: float
     center_lon: float
     description: Optional[str] = None
-    boundary_polygon: Optional[Dict] = None
+    boundary_polygon: Optional[Any] = None
     environment_type: Optional[str] = None
     elevation_min_m: Optional[float] = None
     elevation_max_m: Optional[float] = None
@@ -158,7 +194,7 @@ class SiteUpdateRequest(BaseModel):
     """Request to update a site."""
     name: Optional[str] = None
     description: Optional[str] = None
-    boundary_polygon: Optional[Dict] = None
+    boundary_polygon: Optional[Any] = None
     environment_type: Optional[str] = None
     elevation_min_m: Optional[float] = None
     elevation_max_m: Optional[float] = None
@@ -324,11 +360,83 @@ def session_to_dict_full(session: TestSession) -> Dict[str, Any]:
         for ev in (session.events or [])
     ]
 
+    # Add engagements
+    result["engagements"] = [
+        engagement_to_dict(eng)
+        for eng in (session.engagements or [])
+    ] if hasattr(session, 'engagements') and session.engagements else []
+
     # Frontend compat fields
     result["sd_card_merged"] = False
     result["analysis_completed"] = False
 
     return result
+
+
+def engagement_to_dict(eng: Engagement) -> Dict[str, Any]:
+    """Convert an engagement model to a dictionary."""
+    return {
+        "id": eng.id,
+        "session_id": eng.session_id,
+        "cuas_placement_id": eng.cuas_placement_id,
+        "name": eng.name,
+        "engagement_type": eng.engagement_type,
+        "status": eng.status,
+        "engage_timestamp": eng.engage_timestamp.isoformat() if eng.engage_timestamp else None,
+        "disengage_timestamp": eng.disengage_timestamp.isoformat() if eng.disengage_timestamp else None,
+        "cuas_lat": eng.cuas_lat,
+        "cuas_lon": eng.cuas_lon,
+        "cuas_alt_m": eng.cuas_alt_m,
+        "cuas_orientation_deg": eng.cuas_orientation_deg,
+        "notes": eng.notes,
+        "created_at": eng.created_at.isoformat() if eng.created_at else None,
+        "updated_at": eng.updated_at.isoformat() if eng.updated_at else None,
+        "targets": [
+            {
+                "id": t.id,
+                "tracker_id": t.tracker_id,
+                "drone_profile_id": t.drone_profile_id,
+                "role": t.role,
+                "initial_range_m": t.initial_range_m,
+                "initial_bearing_deg": t.initial_bearing_deg,
+                "angle_off_boresight_deg": t.angle_off_boresight_deg,
+                "initial_altitude_m": t.initial_altitude_m,
+                "drone_lat": t.drone_lat,
+                "drone_lon": t.drone_lon,
+                "final_range_m": t.final_range_m,
+                "final_bearing_deg": t.final_bearing_deg,
+            }
+            for t in (eng.targets or [])
+        ],
+        "metrics": engagement_metrics_to_dict(eng.metrics) if eng.metrics else None,
+    }
+
+
+def engagement_metrics_to_dict(m: EngagementMetrics) -> Dict[str, Any]:
+    """Convert engagement metrics to a dictionary."""
+    return {
+        "time_to_effect_s": m.time_to_effect_s,
+        "time_to_full_denial_s": m.time_to_full_denial_s,
+        "denial_duration_s": m.denial_duration_s,
+        "denial_consistency_pct": m.denial_consistency_pct,
+        "recovery_time_s": m.recovery_time_s,
+        "effective_range_m": m.effective_range_m,
+        "denial_bearing_deg": m.denial_bearing_deg,
+        "denial_angle_off_boresight_deg": m.denial_angle_off_boresight_deg,
+        "min_range_m": m.min_range_m,
+        "recovery_range_m": m.recovery_range_m,
+        "max_drift_m": m.max_drift_m,
+        "max_lateral_drift_m": m.max_lateral_drift_m,
+        "max_vertical_drift_m": m.max_vertical_drift_m,
+        "altitude_change_m": m.altitude_change_m,
+        "failsafe_triggered": m.failsafe_triggered,
+        "failsafe_type": m.failsafe_type,
+        "pass_fail": m.pass_fail,
+        "overall_score": m.overall_score,
+        "data_source": m.data_source,
+        "metrics_json": m.metrics_json,
+        "analyzed_at": m.analyzed_at.isoformat() if m.analyzed_at else None,
+    }
 
 
 def site_to_dict(site: Site) -> Dict[str, Any]:
@@ -938,6 +1046,442 @@ async def compute_metrics(
         raise HTTPException(status_code=404, detail="Session not found or no telemetry data")
 
     return {"metrics": result, "status": "computed"}
+
+
+# =============================================================================
+# Engagement Endpoints
+# =============================================================================
+
+@router.post("/sessions/{session_id}/engagements")
+async def create_engagement(
+    session_id: str,
+    request: EngagementCreateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new engagement (status=planned)."""
+    session_repo = SessionRepository(db)
+    session = await session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Validate CUAS placement belongs to session
+    from sqlalchemy import select as sa_select
+    placement_result = await db.execute(
+        sa_select(CUASPlacement).where(
+            CUASPlacement.id == request.cuas_placement_id,
+            CUASPlacement.session_id == session_id,
+        )
+    )
+    placement = placement_result.scalar_one_or_none()
+    if not placement:
+        raise HTTPException(status_code=400, detail="CUAS placement not found in this session")
+
+    # Auto-generate name if not provided
+    count_result = await db.execute(
+        sa_select(Engagement).where(Engagement.session_id == session_id)
+    )
+    existing_count = len(count_result.scalars().all())
+    name = request.name or f"Run {existing_count + 1}"
+
+    engagement = Engagement(
+        id=generate_uuid(),
+        session_id=session_id,
+        cuas_placement_id=request.cuas_placement_id,
+        name=name,
+        engagement_type=request.engagement_type,
+        status=EngagementStatus.PLANNED.value,
+        notes=request.notes,
+    )
+    db.add(engagement)
+    await db.flush()
+
+    # Add targets
+    for t in request.targets:
+        target = EngagementTarget(
+            id=generate_uuid(),
+            engagement_id=engagement.id,
+            tracker_id=t.tracker_id,
+            drone_profile_id=t.drone_profile_id,
+            role=t.role,
+        )
+        db.add(target)
+
+    await db.commit()
+
+    # Re-fetch with relations
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement.id)
+    return engagement_to_dict(engagement)
+
+
+@router.post("/sessions/{session_id}/engagements/quick")
+async def quick_engage(
+    session_id: str,
+    request: EngagementQuickRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Quick-engage: auto-select CUAS + all drones, create and immediately activate."""
+    from sqlalchemy import select as sa_select
+
+    session_repo = SessionRepository(db)
+    session = await session_repo.get_with_relations(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Select CUAS placement
+    placements = session.cuas_placements or []
+    if not placements:
+        raise HTTPException(status_code=400, detail="No CUAS placements in session")
+
+    if request.cuas_placement_id:
+        placement = next((p for p in placements if p.id == request.cuas_placement_id), None)
+        if not placement:
+            raise HTTPException(status_code=400, detail="CUAS placement not found")
+    else:
+        placement = placements[0]
+
+    # Get all tracker assignments
+    assignments = session.tracker_assignments or []
+    if not assignments:
+        raise HTTPException(status_code=400, detail="No tracker assignments in session")
+
+    # Auto-generate name
+    existing = await db.execute(
+        sa_select(Engagement).where(Engagement.session_id == session_id)
+    )
+    existing_count = len(existing.scalars().all())
+    name = request.name or f"Run {existing_count + 1}"
+
+    # Create engagement
+    engagement = Engagement(
+        id=generate_uuid(),
+        session_id=session_id,
+        cuas_placement_id=placement.id,
+        name=name,
+        engagement_type=request.engagement_type,
+        status=EngagementStatus.PLANNED.value,
+    )
+    db.add(engagement)
+    await db.flush()
+
+    # Add all drones as targets
+    for ta in assignments:
+        target = EngagementTarget(
+            id=generate_uuid(),
+            engagement_id=engagement.id,
+            tracker_id=ta.tracker_id,
+            drone_profile_id=ta.drone_profile_id,
+            role="primary_target",
+        )
+        db.add(target)
+
+    await db.flush()
+
+    # Immediately transition to active
+    now = datetime.utcnow()
+    engagement.status = EngagementStatus.ACTIVE.value
+    engagement.engage_timestamp = now
+
+    # Compute initial geometry
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement.id)
+
+    from .analysis import compute_engagement_geometry
+    await compute_engagement_geometry(db, engagement)
+
+    await db.commit()
+
+    engagement = await eng_repo.get_with_relations(engagement.id)
+    return engagement_to_dict(engagement)
+
+
+@router.get("/sessions/{session_id}/engagements")
+async def list_engagements(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """List all engagements for a session."""
+    eng_repo = EngagementRepository(db)
+    engagements = await eng_repo.get_by_session(session_id)
+    return {"engagements": [engagement_to_dict(e) for e in engagements]}
+
+
+@router.get("/engagements/{engagement_id}")
+async def get_engagement(
+    engagement_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get an engagement with targets, metrics, and events."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+    return engagement_to_dict(engagement)
+
+
+@router.put("/engagements/{engagement_id}")
+async def update_engagement(
+    engagement_id: str,
+    request: EngagementUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an engagement (only when planned)."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    if engagement.status != EngagementStatus.PLANNED.value:
+        raise HTTPException(status_code=400, detail="Can only update planned engagements")
+
+    update_data = {}
+    if request.name is not None:
+        update_data["name"] = request.name
+    if request.notes is not None:
+        update_data["notes"] = request.notes
+
+    if update_data:
+        await eng_repo.update(engagement_id, update_data)
+
+    # Update targets if provided
+    if request.targets is not None:
+        # Remove existing targets
+        for t in engagement.targets:
+            await db.delete(t)
+        await db.flush()
+
+        # Add new targets
+        for t in request.targets:
+            target = EngagementTarget(
+                id=generate_uuid(),
+                engagement_id=engagement_id,
+                tracker_id=t.tracker_id,
+                drone_profile_id=t.drone_profile_id,
+                role=t.role,
+            )
+            db.add(target)
+
+    await db.commit()
+
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    return engagement_to_dict(engagement)
+
+
+@router.delete("/engagements/{engagement_id}")
+async def delete_engagement(
+    engagement_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an engagement (only when planned)."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_by_id(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    if engagement.status != EngagementStatus.PLANNED.value:
+        raise HTTPException(status_code=400, detail="Can only delete planned engagements")
+
+    await eng_repo.delete(engagement_id)
+    await db.commit()
+    return {"success": True}
+
+
+@router.post("/engagements/{engagement_id}/engage")
+async def engage(
+    engagement_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Transition planned→active, compute initial geometry."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    if engagement.status != EngagementStatus.PLANNED.value:
+        raise HTTPException(status_code=400, detail="Can only engage from planned status")
+
+    now = datetime.utcnow()
+    engagement.status = EngagementStatus.ACTIVE.value
+    engagement.engage_timestamp = now
+
+    # Compute initial geometry
+    from .analysis import compute_engagement_geometry
+    await compute_engagement_geometry(db, engagement)
+
+    # Create engage event
+    event = TestEvent(
+        id=generate_uuid(),
+        session_id=engagement.session_id,
+        type="engage",
+        timestamp=now,
+        source="manual",
+        cuas_id=engagement.cuas_placement.cuas_profile_id if engagement.cuas_placement else None,
+        engagement_id=engagement.id,
+        note=f"Engagement started: {engagement.name}",
+    )
+    db.add(event)
+
+    await db.commit()
+
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    return engagement_to_dict(engagement)
+
+
+@router.post("/engagements/{engagement_id}/disengage")
+async def disengage(
+    engagement_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Transition active→complete, compute final geometry + metrics."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    if engagement.status != EngagementStatus.ACTIVE.value:
+        raise HTTPException(status_code=400, detail="Can only disengage from active status")
+
+    now = datetime.utcnow()
+    engagement.status = EngagementStatus.COMPLETE.value
+    engagement.disengage_timestamp = now
+
+    # Compute final geometry
+    from .analysis import compute_engagement_final_geometry, compute_engagement_metrics
+    await compute_engagement_final_geometry(db, engagement)
+
+    # Compute metrics
+    metrics = await compute_engagement_metrics(db, engagement)
+
+    # Create disengage event
+    event = TestEvent(
+        id=generate_uuid(),
+        session_id=engagement.session_id,
+        type="disengage",
+        timestamp=now,
+        source="manual",
+        cuas_id=engagement.cuas_placement.cuas_profile_id if engagement.cuas_placement else None,
+        engagement_id=engagement.id,
+        note=f"Engagement complete: {engagement.name}",
+        event_metadata={"metrics_summary": metrics} if metrics else None,
+    )
+    db.add(event)
+
+    await db.commit()
+
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    return engagement_to_dict(engagement)
+
+
+@router.post("/engagements/{engagement_id}/abort")
+async def abort_engagement(
+    engagement_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Transition active→aborted."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    if engagement.status != EngagementStatus.ACTIVE.value:
+        raise HTTPException(status_code=400, detail="Can only abort active engagements")
+
+    now = datetime.utcnow()
+    engagement.status = EngagementStatus.ABORTED.value
+    engagement.disengage_timestamp = now
+
+    # Create abort event
+    event = TestEvent(
+        id=generate_uuid(),
+        session_id=engagement.session_id,
+        type="engagement_aborted",
+        timestamp=now,
+        source="manual",
+        engagement_id=engagement.id,
+        note=f"Engagement aborted: {engagement.name}",
+    )
+    db.add(event)
+
+    await db.commit()
+
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    return engagement_to_dict(engagement)
+
+
+@router.post("/engagements/{engagement_id}/compute-metrics")
+async def recompute_engagement_metrics(
+    engagement_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-compute metrics for an engagement."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    if engagement.status not in (EngagementStatus.COMPLETE.value, EngagementStatus.ACTIVE.value):
+        raise HTTPException(status_code=400, detail="Can only compute metrics for active or complete engagements")
+
+    from .analysis import compute_engagement_metrics
+    metrics = await compute_engagement_metrics(db, engagement)
+    if metrics is None:
+        raise HTTPException(status_code=400, detail="No telemetry data for metrics computation")
+
+    await db.commit()
+
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    return engagement_to_dict(engagement)
+
+
+@router.get("/engagements/{engagement_id}/summary")
+async def get_engagement_summary(
+    engagement_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Full engagement summary for reports."""
+    eng_repo = EngagementRepository(db)
+    engagement = await eng_repo.get_with_relations(engagement_id)
+    if not engagement:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+
+    result = engagement_to_dict(engagement)
+
+    # Add CUAS profile info
+    if engagement.cuas_placement and engagement.cuas_placement.cuas_profile_id:
+        from .database.models import CUASProfile
+        profile = await db.get(CUASProfile, engagement.cuas_placement.cuas_profile_id)
+        if profile:
+            result["cuas_profile"] = {
+                "id": profile.id,
+                "name": profile.name,
+                "vendor": profile.vendor,
+                "type": profile.type,
+            }
+
+    # Add events during engagement
+    if engagement.engage_timestamp:
+        end_time = engagement.disengage_timestamp or datetime.utcnow()
+        from sqlalchemy import select as sa_select
+        events_result = await db.execute(
+            sa_select(TestEvent)
+            .where(TestEvent.session_id == engagement.session_id)
+            .where(TestEvent.timestamp >= engagement.engage_timestamp)
+            .where(TestEvent.timestamp <= end_time)
+            .order_by(TestEvent.timestamp)
+        )
+        events = events_result.scalars().all()
+        result["events"] = [
+            {
+                "id": e.id,
+                "type": e.type,
+                "timestamp": e.timestamp.isoformat() if e.timestamp else None,
+                "source": e.source,
+                "note": e.note,
+            }
+            for e in events
+        ]
+
+    return result
 
 
 # =============================================================================

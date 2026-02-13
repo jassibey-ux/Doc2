@@ -177,6 +177,9 @@ export type SessionStatus = 'planning' | 'active' | 'capturing' | 'analyzing' | 
 export type EventType =
   | 'jam_on'
   | 'jam_off'
+  | 'engage'
+  | 'disengage'
+  | 'engagement_aborted'
   | 'launch'
   | 'recover'
   | 'failsafe'
@@ -199,6 +202,7 @@ export interface TestEvent {
   source: EventSource;
   cuas_id?: string;
   tracker_id?: string;
+  engagement_id?: string;
   note?: string;
   metadata?: Record<string, unknown>;
 }
@@ -281,6 +285,75 @@ export interface SessionAnnotation {
   updated_at: string;
 }
 
+// =============================================================================
+// Engagement Types
+// =============================================================================
+
+export type EngagementStatus = 'planned' | 'active' | 'complete' | 'aborted';
+
+export type EngagementType = 'test' | 'control' | 'operational';
+
+export type EngagementTargetRole = 'primary_target' | 'observer';
+
+export interface EngagementTarget {
+  id: string;
+  tracker_id: string;
+  drone_profile_id?: string;
+  role: EngagementTargetRole;
+  initial_range_m?: number;
+  initial_bearing_deg?: number;
+  angle_off_boresight_deg?: number;
+  initial_altitude_m?: number;
+  drone_lat?: number;
+  drone_lon?: number;
+  final_range_m?: number;
+  final_bearing_deg?: number;
+}
+
+export interface EngagementMetrics {
+  time_to_effect_s?: number;
+  time_to_full_denial_s?: number;
+  denial_duration_s?: number;
+  denial_consistency_pct?: number;
+  recovery_time_s?: number;
+  effective_range_m?: number;
+  denial_bearing_deg?: number;
+  denial_angle_off_boresight_deg?: number;
+  min_range_m?: number;
+  recovery_range_m?: number;
+  max_drift_m?: number;
+  max_lateral_drift_m?: number;
+  max_vertical_drift_m?: number;
+  altitude_change_m?: number;
+  failsafe_triggered: boolean;
+  failsafe_type?: string;
+  pass_fail?: 'pass' | 'fail' | 'inconclusive';
+  overall_score?: number;
+  data_source?: 'live_only' | 'sd_merged';
+  metrics_json?: Record<string, unknown>;
+  analyzed_at?: string;
+}
+
+export interface Engagement {
+  id: string;
+  session_id: string;
+  cuas_placement_id: string;
+  name?: string;
+  engagement_type: EngagementType;
+  status: EngagementStatus;
+  engage_timestamp?: string;
+  disengage_timestamp?: string;
+  cuas_lat?: number;
+  cuas_lon?: number;
+  cuas_alt_m?: number;
+  cuas_orientation_deg?: number;
+  notes?: string;
+  targets: EngagementTarget[];
+  metrics?: EngagementMetrics;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TestSession {
   id: string;
   name: string;
@@ -292,6 +365,7 @@ export interface TestSession {
   end_time?: string;
   duration_seconds?: number;
   events: TestEvent[];
+  engagements?: Engagement[];
   live_data_path?: string;
   sd_card_merged: boolean;
   sd_card_paths?: string[];
@@ -388,6 +462,9 @@ export type WorkflowMode = 'define' | 'configure' | 'execute' | 'analyze';
 export const EVENT_COLORS: Record<EventType, string> = {
   jam_on: '#ef4444',      // Red
   jam_off: '#f97316',     // Orange
+  engage: '#06b6d4',      // Cyan
+  disengage: '#8b5cf6',   // Violet
+  engagement_aborted: '#f97316', // Orange
   launch: '#22c55e',      // Green
   recover: '#3b82f6',     // Blue
   failsafe: '#eab308',    // Yellow
@@ -407,6 +484,8 @@ export const EVENT_COLORS: Record<EventType, string> = {
 // =============================================================================
 
 export const EVENT_SHORTCUTS: Partial<Record<EventType, string>> = {
+  engage: 'e',
+  disengage: 'd',
   jam_on: 'j',
   launch: 'l',
   recover: 'r',

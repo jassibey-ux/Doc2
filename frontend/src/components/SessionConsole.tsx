@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import SDCardPanel from './SDCardPanel';
 import TrackerSDCardSection from './TrackerSDCardSection';
+import EngagementPanel from './EngagementPanel';
 
 // Event colors matching RecordingBar
 const EVENT_COLORS: Record<string, string> = {
@@ -54,6 +55,9 @@ const EVENT_COLORS: Record<string, string> = {
   geofence_breach: '#ef4444',
   link_lost: '#ef4444',
   link_restored: '#22c55e',
+  engage: '#06b6d4',
+  disengage: '#8b5cf6',
+  engagement_aborted: '#f97316',
   custom: '#6b7280',
 };
 
@@ -104,6 +108,10 @@ export default function SessionConsole() {
     cuasJamStates,
     toggleJamState,
     loadSessionById,
+    engagements,
+    activeEngagements,
+    quickEngage,
+    disengage,
   } = useTestSessionPhase();
 
   // Debug: Log session state for diagnosing JAM button and event log issues
@@ -191,7 +199,9 @@ export default function SessionConsole() {
   const [selectedCuasId, setSelectedCuasId] = useState<string | null>(null);
   const [showSDCardPanel, setShowSDCardPanel] = useState(false);
   const [expandedSDTrackerId, setExpandedSDTrackerId] = useState<string | null>(null);
+  const [showEngageDropdown, setShowEngageDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const engageDropdownRef = useRef<HTMLDivElement>(null);
 
   // Get selected drone
   const selectedDrone = selectedDroneId ? sessionDrones.get(selectedDroneId) || null : null;
@@ -246,12 +256,15 @@ export default function SessionConsole() {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowJammerDropdown(false);
       }
+      if (engageDropdownRef.current && !engageDropdownRef.current.contains(e.target as Node)) {
+        setShowEngageDropdown(false);
+      }
     };
-    if (showJammerDropdown) {
+    if (showJammerDropdown || showEngageDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [showJammerDropdown]);
+  }, [showJammerDropdown, showEngageDropdown]);
 
   // Handle drone selection
   const handleDroneClick = useCallback((droneId: string) => {
@@ -323,6 +336,37 @@ export default function SessionConsole() {
     setShowNoteInput(false);
   }, [noteText, handleMarkEvent]);
 
+  // Handle engage action
+  const handleEngage = useCallback(async (cuasPlacementId?: string) => {
+    try {
+      const engagement = await quickEngage(cuasPlacementId);
+      if (engagement) {
+        showToast('success', `Engagement active: ${engagement.name || 'Quick Engage'}`);
+        setShowEngageDropdown(false);
+      }
+    } catch (error) {
+      showToast('error', 'Failed to start engagement');
+    }
+  }, [quickEngage, showToast]);
+
+  // Handle disengage action
+  const handleDisengage = useCallback(async (engagementId?: string) => {
+    const targetId = engagementId || (activeEngagements.size === 1 ? Array.from(activeEngagements.keys())[0] : null);
+    if (!targetId) return;
+    try {
+      const result = await disengage(targetId);
+      if (result?.metrics) {
+        const tte = result.metrics.time_to_effect_s;
+        const range = result.metrics.effective_range_m;
+        showToast('success', `Engagement complete — TTE: ${tte ? tte.toFixed(1) + 's' : '--'}, Range: ${range ? Math.round(range) + 'm' : '--'}`);
+      } else {
+        showToast('success', 'Engagement complete');
+      }
+    } catch (error) {
+      showToast('error', 'Failed to disengage');
+    }
+  }, [activeEngagements, disengage, showToast]);
+
   // Keyboard shortcuts
   useEffect(() => {
     if (currentPhase !== 'active') return;
@@ -334,13 +378,39 @@ export default function SessionConsole() {
 
       const key = e.key.toLowerCase();
 
-      if (key === 'j') {
+      // E or J = Engage (J is backward compat)
+      if (key === 'e' || key === 'j') {
         e.preventDefault();
-        if (hasMultipleJammers) {
-          setShowJammerDropdown(prev => !prev);
-        } else if (cuasPlacements.length === 1) {
-          const isJamming = cuasJamStates.get(cuasPlacements[0].id) || false;
-          handleMarkEvent(isJamming ? 'jam_off' : 'jam_on', undefined, cuasPlacements[0].id);
+        if (activeEngagements.size > 0 && key === 'j') {
+          // J with active engagement = legacy JAM toggle, still works
+          if (hasMultipleJammers) {
+            setShowJammerDropdown(prev => !prev);
+          } else if (cuasPlacements.length === 1) {
+            const isJamming = cuasJamStates.get(cuasPlacements[0].id) || false;
+            handleMarkEvent(isJamming ? 'jam_off' : 'jam_on', undefined, cuasPlacements[0].id);
+          }
+        } else {
+          // E = Engage workflow
+          if (activeEngagements.size > 0) {
+            // Already have active engagement, ignore
+            return;
+          }
+          if (hasMultipleJammers) {
+            setShowEngageDropdown(prev => !prev);
+          } else if (cuasPlacements.length === 1) {
+            handleEngage(cuasPlacements[0].id);
+          } else {
+            handleEngage();
+          }
+        }
+        return;
+      }
+
+      // D = Disengage
+      if (key === 'd') {
+        e.preventDefault();
+        if (activeEngagements.size > 0) {
+          handleDisengage();
         }
         return;
       }
@@ -360,13 +430,14 @@ export default function SessionConsole() {
 
       if (key === 'escape') {
         setShowJammerDropdown(false);
+        setShowEngageDropdown(false);
         setShowNoteInput(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentPhase, hasMultipleJammers, cuasPlacements, cuasJamStates, handleMarkEvent]);
+  }, [currentPhase, hasMultipleJammers, cuasPlacements, cuasJamStates, handleMarkEvent, activeEngagements, handleEngage, handleDisengage]);
 
   // If no active session, show loading or redirect
   if (!activeSession) {
@@ -615,17 +686,26 @@ export default function SessionConsole() {
                         {placement.position.lat.toFixed(4)}, {placement.position.lon.toFixed(4)}
                       </span>
                     </div>
-                    {/* Inline JAM toggle button - only show during active session */}
+                    {/* Inline engagement/JAM buttons */}
                     {currentPhase === 'active' ? (
-                      <button
-                        className={`sc-cuas-jam-btn ${isJamming ? 'active' : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleJamState(placement.id);
-                        }}
-                      >
-                        {isJamming ? 'STOP' : 'JAM'}
-                      </button>
+                      // Check if this CUAS has an active engagement
+                      Array.from(activeEngagements.values()).some(e => e.cuas_placement_id === placement.id) ? (
+                        <div className="sc-cuas-engaged-badge">ENGAGED</div>
+                      ) : (
+                        <button
+                          className={`sc-cuas-jam-btn ${isJamming ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!isJamming) {
+                              handleEngage(placement.id);
+                            } else {
+                              toggleJamState(placement.id);
+                            }
+                          }}
+                        >
+                          {isJamming ? 'STOP' : 'ENGAGE'}
+                        </button>
+                      )
                     ) : (
                       <div className={`sc-cuas-status ${isJamming ? 'active' : 'idle'}`}>
                         {isJamming ? 'JAM' : 'IDLE'}
@@ -639,6 +719,25 @@ export default function SessionConsole() {
               )}
             </div>
           </div>
+
+          {/* Engagements Section */}
+          <EngagementPanel
+            engagements={engagements}
+            activeEngagements={activeEngagements}
+            cuasPlacements={cuasPlacements}
+            cuasProfiles={cuasProfiles}
+            onDisengage={handleDisengage}
+            onNewEngagement={currentPhase === 'active' ? () => {
+              if (hasMultipleJammers) {
+                setShowEngageDropdown(true);
+              } else if (cuasPlacements.length === 1) {
+                handleEngage(cuasPlacements[0].id);
+              } else {
+                handleEngage();
+              }
+            } : undefined}
+            isActive={currentPhase === 'active'}
+          />
 
           {/* Event Log - Enhanced with CUAS names */}
           <div className="sc-section">
@@ -695,6 +794,7 @@ export default function SessionConsole() {
               mapStyle={mapStyle}
               sdCardTracks={sdCardTracks}
               showSDCardTracks={showSDCardTracks}
+              activeEngagements={Array.from(activeEngagements.values())}
             />
 
             {/* 3D View Overlay */}
@@ -774,11 +874,64 @@ export default function SessionConsole() {
 
           {/* Event Buttons Bar */}
           <div className="sc-event-bar">
-            {/* JAM button with dropdown */}
+            {/* ENGAGE / DISENGAGE button */}
+            {activeEngagements.size > 0 ? (
+              /* DISENGAGE button when engagement is active */
+              <button
+                className="sc-event-btn sc-event-btn--disengage"
+                onClick={() => handleDisengage()}
+              >
+                <Square size={14} />
+                <span>DISENGAGE</span>
+                <Badge color="red" size="sm">{activeEngagements.size}</Badge>
+              </button>
+            ) : (
+              /* ENGAGE button with optional CUAS picker */
+              <div className="sc-event-btn-wrapper" ref={engageDropdownRef}>
+                <button
+                  className="sc-event-btn sc-event-btn--engage"
+                  onClick={() => {
+                    if (hasMultipleJammers) {
+                      setShowEngageDropdown(!showEngageDropdown);
+                    } else if (cuasPlacements.length === 1) {
+                      handleEngage(cuasPlacements[0].id);
+                    } else {
+                      handleEngage();
+                    }
+                  }}
+                >
+                  <Radio size={14} />
+                  <span>ENGAGE</span>
+                  {hasMultipleJammers && <ChevronDown size={10} />}
+                </button>
+
+                {showEngageDropdown && (
+                  <div className="sc-jammer-dropdown">
+                    <div className="sc-dropdown-label">SELECT CUAS TO ENGAGE</div>
+                    {cuasPlacements.map((placement, index) => {
+                      const profile = getProfile(placement);
+                      return (
+                        <button
+                          key={placement.id}
+                          className="sc-jammer-option"
+                          onClick={() => handleEngage(placement.id)}
+                        >
+                          <Badge color="gray" size="sm">{index + 1}</Badge>
+                          <span>{profile?.name || `CUAS ${index + 1}`}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Legacy JAM button (secondary, for manual jam without engagement) */}
             <div className="sc-event-btn-wrapper" ref={dropdownRef}>
               <button
                 className={`sc-event-btn ${activeJammerCount > 0 ? 'active-jam' : ''}`}
                 onClick={() => hasMultipleJammers ? setShowJammerDropdown(!showJammerDropdown) : handleMarkEvent('jam_on')}
+                title="Manual JAM toggle (legacy)"
               >
                 <Radio size={14} />
                 <span>JAM</span>
@@ -1690,5 +1843,46 @@ const styles = `
     background: rgba(239, 68, 68, 0.2);
     border-color: rgba(239, 68, 68, 0.4);
     color: #ef4444;
+  }
+
+  /* Engage/Disengage button styles */
+  .sc-event-btn--engage {
+    background: rgba(6, 182, 212, 0.15) !important;
+    border-color: rgba(6, 182, 212, 0.3) !important;
+    color: #06b6d4 !important;
+  }
+
+  .sc-event-btn--engage:hover {
+    background: rgba(6, 182, 212, 0.25) !important;
+  }
+
+  .sc-event-btn--disengage {
+    background: rgba(139, 92, 246, 0.2) !important;
+    border-color: rgba(139, 92, 246, 0.4) !important;
+    color: #8b5cf6 !important;
+    animation: pulse-engage 1.5s ease-in-out infinite;
+  }
+
+  .sc-event-btn--disengage:hover {
+    background: rgba(139, 92, 246, 0.3) !important;
+  }
+
+  @keyframes pulse-engage {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  /* CUAS inline engaged badge */
+  .sc-cuas-engaged-badge {
+    padding: 4px 8px;
+    font-size: 9px;
+    font-weight: 700;
+    border-radius: 4px;
+    border: 1px solid rgba(6, 182, 212, 0.4);
+    background: rgba(6, 182, 212, 0.15);
+    color: #06b6d4;
+    letter-spacing: 0.5px;
+    animation: pulse-engage 1.5s ease-in-out infinite;
+    flex-shrink: 0;
   }
 `;

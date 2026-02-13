@@ -118,24 +118,23 @@ export async function startServer(port: number): Promise<void> {
 
   // Start server with port conflict handling (Fix 2)
   return new Promise((resolve, reject) => {
-    server.listen(port, bindHost, () => {
+    server.listen(port, bindHost, async () => {
       log.info(`Server listening on http://${bindHost}:${port}`);
 
-      // Start Python backend subprocess (terrain, RF, SQLAlchemy endpoints)
+      // Await Python backend so the window doesn't load before it's ready
       const pythonBackend = getPythonBackend({
         logRootFolder: config.log_root_folder,
       });
-      pythonBackend.start().then((ready) => {
-        if (ready) {
-          log.info('[server] Python backend ready — /api/v2/* proxied');
-        } else {
-          log.warn('[server] Python backend not available — /api/v2/* will fall through to Express');
-        }
-      }).catch((err) => {
+      try {
+        const ready = await pythonBackend.start();
+        log.info(ready
+          ? '[server] Python backend ready — /api/v2/* proxied'
+          : '[server] Python backend not available — /api/v2/* will fall through to Express');
+      } catch (err) {
         log.warn(`[server] Python backend start failed: ${err}`);
-      });
+      }
 
-      // Start CoT listener in ops mode
+      // Start CoT listener in ops mode — fire-and-forget (non-critical)
       if (config.ops_mode && config.cot_enabled) {
         cotListener = new CotListener(
           {
@@ -158,8 +157,13 @@ export async function startServer(port: number): Promise<void> {
         });
       }
 
-      // Start monitoring
-      dashboardApp!.startup().then(resolve).catch(reject);
+      // Start monitoring — must succeed for resolve
+      try {
+        await dashboardApp!.startup();
+        resolve();
+      } catch (err) {
+        reject(err as Error);
+      }
     });
 
     server.on('error', (err: NodeJS.ErrnoException) => {

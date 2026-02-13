@@ -14,10 +14,13 @@ import {
   createInitialGPSHealthState,
 } from './models';
 
-// Quality thresholds (matching trackSegmentation.ts)
-const HDOP_GOOD_THRESHOLD = 2.0;
-const HDOP_DEGRADED_THRESHOLD = 5.0;
-const SATELLITES_GOOD_THRESHOLD = 8;
+// Harmonized quality thresholds (matching analysis.py classify_quality + sd-card-merge.ts)
+// denied: fix_valid=false OR sat_count < 4 OR hdop > 20
+// degraded: sat_count < 6 OR hdop > 5
+// good: everything else
+const HDOP_GOOD_THRESHOLD = 5.0;
+const HDOP_DEGRADED_THRESHOLD = 20.0;
+const SATELLITES_GOOD_THRESHOLD = 6;
 const SATELLITES_DEGRADED_THRESHOLD = 4;
 
 // Rolling window size for quality history

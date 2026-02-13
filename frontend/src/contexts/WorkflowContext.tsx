@@ -126,8 +126,30 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ==========================================================================
-  // Sites
+  // Sites — transform between frontend (center: GeoPoint) and API (center_lat/center_lon)
   // ==========================================================================
+
+  /** Convert API site response to frontend SiteDefinition shape */
+  const siteFromApi = (apiSite: Record<string, unknown>): SiteDefinition => ({
+    ...apiSite,
+    center: { lat: apiSite.center_lat as number ?? 0, lon: apiSite.center_lon as number ?? 0 },
+    boundary_polygon: Array.isArray(apiSite.boundary_polygon)
+      ? apiSite.boundary_polygon
+      : (apiSite.boundary_polygon as Record<string, unknown>)?.points ?? [],
+  }) as unknown as SiteDefinition;
+
+  /** Convert frontend site to API request shape */
+  const siteToApi = (site: Record<string, unknown>) => {
+    const { center, boundary_polygon, ...rest } = site;
+    const c = center as { lat?: number; lon?: number } | undefined;
+    const bp = boundary_polygon as unknown[];
+    return {
+      ...rest,
+      center_lat: c?.lat ?? 0,
+      center_lon: c?.lon ?? 0,
+      boundary_polygon: Array.isArray(bp) && bp.length > 0 ? { points: bp } : null,
+    };
+  };
 
   const loadSites = useCallback(async () => {
     try {
@@ -135,7 +157,8 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch(`${API_BASE}/sites?limit=200`);
       if (!res.ok) throw new Error('Failed to load sites');
       const data = await res.json();
-      setSites(data.items ?? data);
+      const items = data.items ?? data;
+      setSites(items.map(siteFromApi));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
@@ -151,10 +174,10 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     const res = await fetch(`${API_BASE}/sites`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(site),
+      body: JSON.stringify(siteToApi(site as Record<string, unknown>)),
     });
     if (!res.ok) throw new Error('Failed to create site');
-    const newSite = await res.json();
+    const newSite = siteFromApi(await res.json());
     setSites(prev => [...prev, newSite]);
     return newSite;
   }, []);
@@ -163,10 +186,10 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     const res = await fetch(`${API_BASE}/sites/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
+      body: JSON.stringify(siteToApi(updates as Record<string, unknown>)),
     });
     if (!res.ok) return null;
-    const updated = await res.json();
+    const updated = siteFromApi(await res.json());
     setSites(prev => prev.map(s => s.id === id ? updated : s));
     if (selectedSite?.id === id) setSelectedSite(updated);
     return updated;

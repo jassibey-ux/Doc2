@@ -41,7 +41,7 @@ class PythonBackendManager {
     return this._ready;
   }
 
-  /** Start the Python backend as a subprocess. */
+  /** Start the Python backend as a subprocess with retry logic. */
   async start(): Promise<boolean> {
     if (this.isRunning) {
       log.info('[python-backend] Already running');
@@ -50,10 +50,24 @@ class PythonBackendManager {
 
     if (this._startPromise) return this._startPromise;
 
-    this._startPromise = this._doStart();
+    this._startPromise = this._startWithRetry(3);
     const result = await this._startPromise;
     this._startPromise = null;
     return result;
+  }
+
+  private async _startWithRetry(maxAttempts: number): Promise<boolean> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      log.info(`[python-backend] Start attempt ${attempt}/${maxAttempts}`);
+      const ready = await this._doStart();
+      if (ready) return true;
+      if (attempt < maxAttempts) {
+        const delay = 2000 * attempt;
+        log.info(`[python-backend] Retrying in ${delay}ms...`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+    return false;
   }
 
   /** Stop the Python backend. */
@@ -130,7 +144,7 @@ class PythonBackendManager {
       });
 
       // Wait for the backend to become responsive
-      const ready = await this._waitForReady(15000);
+      const ready = await this._waitForReady(20000);
       this._ready = ready;
 
       if (ready) {
@@ -150,7 +164,7 @@ class PythonBackendManager {
   /** Poll the health endpoint until it responds. */
   private async _waitForReady(timeoutMs: number): Promise<boolean> {
     const start = Date.now();
-    const url = `http://127.0.0.1:${this.port}/api/v2/health`;
+    const url = `http://127.0.0.1:${this.port}/api/health`;
 
     while (Date.now() - start < timeoutMs) {
       try {

@@ -38,7 +38,7 @@ import Map3DViewer from './Map3DViewer';
 import TrackLegend from './TrackLegend';
 import TagInput from './crm/TagInput';
 import AnnotationList from './crm/AnnotationList';
-import type { SessionMetrics, TestEvent } from '../types/workflow';
+import type { SessionMetrics, TestEvent, Engagement, CUASPlacement, CUASProfile } from '../types/workflow';
 import type { SessionAnnotation } from '../types/crm';
 
 export default function SessionAnalysisView() {
@@ -58,6 +58,7 @@ export default function SessionAnalysisView() {
   const [expandedSection, setExpandedSection] = useState<string>('metrics');
   const [sessionTags, setSessionTags] = useState<string[]>([]);
   const [sessionAnnotations, setSessionAnnotations] = useState<SessionAnnotation[]>([]);
+  const [sessionEngagements, setSessionEngagements] = useState<Engagement[]>([]);
 
   const { getSessionTags, getSessionAnnotations } = useCRM();
   const [analysisData, setAnalysisData] = useState<{
@@ -160,6 +161,18 @@ export default function SessionAnalysisView() {
       })
       .catch(err => {
         console.error('Failed to fetch analysis:', err);
+      });
+
+    // Fetch engagements
+    fetch(`/api/v2/sessions/${sessionId}/engagements`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setSessionEngagements(data);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch engagements:', err);
       });
   }, [sessionId]);
 
@@ -633,6 +646,45 @@ export default function SessionAnalysisView() {
               </GlassButton>
             </>
           )}
+
+          {/* Engagements Summary */}
+          {sessionEngagements.length > 0 && (
+            <GlassPanel style={{ padding: '16px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  marginBottom: expandedSection === 'engagements' ? '12px' : 0,
+                }}
+                onClick={() => setExpandedSection(expandedSection === 'engagements' ? '' : 'engagements')}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Target size={16} style={{ color: '#06b6d4' }} />
+                  <span style={{ fontSize: '13px', fontWeight: 500 }}>
+                    Engagements ({sessionEngagements.length})
+                  </span>
+                </div>
+                {expandedSection === 'engagements' ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </div>
+
+              {expandedSection === 'engagements' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {sessionEngagements.map(eng => (
+                    <EngagementSummaryCard
+                      key={eng.id}
+                      engagement={eng}
+                      cuasProfiles={cuasProfiles}
+                      cuasPlacements={session?.cuas_placements || []}
+                      formatTime={formatTime}
+                      formatDistance={formatDistance}
+                    />
+                  ))}
+                </div>
+              )}
+            </GlassPanel>
+          )}
         </div>
 
         {/* Right Column - Events & Reports */}
@@ -807,6 +859,107 @@ function EventItem({ event, getBadgeColor }: EventItemProps) {
       {event.note && (
         <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', marginTop: '6px' }}>
           {event.note}
+        </div>
+      )}
+    </GlassCard>
+  );
+}
+
+// Engagement Summary Card for analysis view
+interface EngagementSummaryCardProps {
+  engagement: Engagement;
+  cuasProfiles: CUASProfile[];
+  cuasPlacements: CUASPlacement[];
+  formatTime: (seconds: number | null | undefined) => string;
+  formatDistance: (meters: number | null | undefined) => string;
+}
+
+function EngagementSummaryCard({ engagement, cuasProfiles, cuasPlacements, formatTime, formatDistance }: EngagementSummaryCardProps) {
+  const placement = cuasPlacements.find(p => p.id === engagement.cuas_placement_id);
+  const profile = placement ? cuasProfiles.find(p => p.id === placement.cuas_profile_id) : null;
+  const cuasName = profile?.name || 'Unknown CUAS';
+  const targetNames = engagement.targets.map(t => t.tracker_id).join(', ');
+  const m = engagement.metrics;
+
+  const statusColor = engagement.status === 'complete' ? '#22c55e' : engagement.status === 'aborted' ? '#f97316' : '#06b6d4';
+
+  return (
+    <GlassCard
+      style={{
+        padding: '14px',
+        borderLeft: `3px solid ${statusColor}`,
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+        <div>
+          <div style={{ fontSize: '13px', fontWeight: 500, color: '#fff' }}>
+            {engagement.name || `${cuasName} → ${targetNames}`}
+          </div>
+          <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>
+            {engagement.engage_timestamp && new Date(engagement.engage_timestamp).toLocaleTimeString()}
+            {engagement.disengage_timestamp && ` — ${new Date(engagement.disengage_timestamp).toLocaleTimeString()}`}
+          </div>
+        </div>
+        <Badge
+          color={engagement.status === 'complete' ? 'green' : engagement.status === 'aborted' ? 'orange' : 'blue'}
+          size="sm"
+        >
+          {engagement.status.toUpperCase()}
+        </Badge>
+      </div>
+
+      {/* Initial geometry */}
+      {engagement.targets[0]?.initial_range_m && (
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '8px', fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
+          <span>Range: {Math.round(engagement.targets[0].initial_range_m)}m</span>
+          {engagement.targets[0].initial_bearing_deg !== undefined && (
+            <span>Bearing: {Math.round(engagement.targets[0].initial_bearing_deg)}°</span>
+          )}
+          {engagement.targets[0].angle_off_boresight_deg !== undefined && (
+            <span>AoB: {Math.round(engagement.targets[0].angle_off_boresight_deg)}°</span>
+          )}
+        </div>
+      )}
+
+      {/* Metrics grid */}
+      {m && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>TTE</div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#06b6d4' }}>{formatTime(m.time_to_effect_s)}</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>Range</div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#3b82f6' }}>{formatDistance(m.effective_range_m)}</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>Recovery</div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#22c55e' }}>{formatTime(m.recovery_time_s)}</div>
+          </div>
+          {m.denial_consistency_pct !== undefined && (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>Denial</div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#ef4444' }}>{Math.round(m.denial_consistency_pct)}%</div>
+            </div>
+          )}
+          {m.max_lateral_drift_m !== undefined && (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>Drift</div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#f59e0b' }}>{formatDistance(m.max_lateral_drift_m)}</div>
+            </div>
+          )}
+          {m.pass_fail && (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>Result</div>
+              <Badge
+                color={m.pass_fail === 'pass' ? 'green' : m.pass_fail === 'fail' ? 'red' : 'yellow'}
+                size="md"
+              >
+                {m.pass_fail.toUpperCase()}
+              </Badge>
+            </div>
+          )}
         </div>
       )}
     </GlassCard>

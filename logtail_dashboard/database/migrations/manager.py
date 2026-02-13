@@ -39,23 +39,85 @@ MIGRATIONS: List[Migration] = [
         up_sql="-- Schema created by SQLAlchemy ORM",
         down_sql="-- Cannot rollback initial schema without data loss",
     ),
-    # Future migrations will be added here
-    # Example:
-    # Migration(
-    #     version=2,
-    #     name="add_user_preferences",
-    #     description="Add user preferences table",
-    #     up_sql='''
-    #         CREATE TABLE user_preferences (
-    #             id TEXT PRIMARY KEY,
-    #             user_id TEXT REFERENCES users(id),
-    #             preference_key TEXT NOT NULL,
-    #             preference_value TEXT,
-    #             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    #         );
-    #     ''',
-    #     down_sql="DROP TABLE IF EXISTS user_preferences;",
-    # ),
+    Migration(
+        version=2,
+        name="add_engagements",
+        description="Add engagement model tables and engagement_id FK on test_events",
+        up_sql="""
+            CREATE TABLE IF NOT EXISTS engagements (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL REFERENCES test_sessions(id),
+                cuas_placement_id TEXT NOT NULL REFERENCES cuas_placements(id),
+                name TEXT,
+                engagement_type TEXT DEFAULT 'test',
+                status TEXT DEFAULT 'planned',
+                engage_timestamp TIMESTAMP,
+                disengage_timestamp TIMESTAMP,
+                cuas_lat REAL,
+                cuas_lon REAL,
+                cuas_alt_m REAL,
+                cuas_orientation_deg REAL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_engagements_session ON engagements(session_id);
+            CREATE INDEX IF NOT EXISTS idx_engagements_status ON engagements(status);
+            CREATE INDEX IF NOT EXISTS idx_engagements_cuas_placement ON engagements(cuas_placement_id);
+
+            CREATE TABLE IF NOT EXISTS engagement_targets (
+                id TEXT PRIMARY KEY,
+                engagement_id TEXT NOT NULL REFERENCES engagements(id),
+                tracker_id TEXT NOT NULL,
+                drone_profile_id TEXT REFERENCES drone_profiles(id),
+                role TEXT DEFAULT 'primary_target',
+                initial_range_m REAL,
+                initial_bearing_deg REAL,
+                angle_off_boresight_deg REAL,
+                initial_altitude_m REAL,
+                drone_lat REAL,
+                drone_lon REAL,
+                final_range_m REAL,
+                final_bearing_deg REAL
+            );
+            CREATE INDEX IF NOT EXISTS idx_engagement_targets_engagement ON engagement_targets(engagement_id);
+
+            CREATE TABLE IF NOT EXISTS engagement_metrics (
+                id TEXT PRIMARY KEY,
+                engagement_id TEXT NOT NULL UNIQUE REFERENCES engagements(id),
+                time_to_effect_s REAL,
+                time_to_full_denial_s REAL,
+                denial_duration_s REAL,
+                denial_consistency_pct REAL,
+                recovery_time_s REAL,
+                effective_range_m REAL,
+                denial_bearing_deg REAL,
+                denial_angle_off_boresight_deg REAL,
+                min_range_m REAL,
+                recovery_range_m REAL,
+                max_drift_m REAL,
+                max_lateral_drift_m REAL,
+                max_vertical_drift_m REAL,
+                altitude_change_m REAL,
+                failsafe_triggered BOOLEAN DEFAULT 0,
+                failsafe_type TEXT,
+                pass_fail TEXT,
+                overall_score REAL,
+                data_source TEXT DEFAULT 'live_only',
+                metrics_json TEXT,
+                analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            ALTER TABLE test_events ADD COLUMN engagement_id TEXT REFERENCES engagements(id);
+            CREATE INDEX IF NOT EXISTS idx_events_engagement ON test_events(engagement_id)
+        """,
+        down_sql="""
+            DROP INDEX IF EXISTS idx_events_engagement;
+            DROP TABLE IF EXISTS engagement_metrics;
+            DROP TABLE IF EXISTS engagement_targets;
+            DROP TABLE IF EXISTS engagements
+        """,
+    ),
 ]
 
 
