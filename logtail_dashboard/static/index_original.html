@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCENSUS Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #020617;
+            color: #e2e8f0;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        aside {
+            width: 256px;
+            background: #0f172a;
+            border-right: 1px solid #1e293b;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            z-index: 20;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px;
+            margin-bottom: 32px;
+            margin-top: 8px;
+        }
+
+        .brand-icon {
+            width: 40px;
+            height: 40px;
+            background: #2563eb;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.4);
+        }
+
+        .brand-icon svg {
+            width: 24px;
+            height: 24px;
+            color: white;
+            transform: rotate(-45deg);
+        }
+
+        .brand-text h1 {
+            font-weight: 700;
+            color: #f1f5f9;
+            font-size: 1.125rem;
+            line-height: 1.2;
+        }
+
+        .brand-text p {
+            font-size: 0.75rem;
+            color: #64748b;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 0.05em;
+        }
+
+        nav {
+            flex: 1;
+        }
+
+        .sidebar-footer {
+            padding-top: 16px;
+            border-top: 1px solid #1e293b;
+        }
+
+        .sidebar-footer button {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: #64748b;
+            background: transparent;
+            border: none;
+            width: 100%;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .sidebar-footer button:hover {
+            background: #1e293b;
+            color: #cbd5e1;
+        }
+
+        .version-info {
+            margin-top: 16px;
+            padding: 0 16px;
+            text-align: center;
+            font-size: 0.75rem;
+            color: #475569;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Main Content */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .grid-background {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            opacity: 0.03;
+            pointer-events: none;
+            background-image: radial-gradient(#94a3b8 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        .content-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 24px;
+            z-index: 10;
+        }
+
+        .content-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .page-header {
+            margin-bottom: 24px;
+        }
+
+        .page-header h2 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 4px;
+        }
+
+        .page-header p {
+            color: #94a3b8;
+            font-size: 0.875rem;
+        }
+
+        /* Controls Card */
+        .controls-card {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            align-items: end;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 0.875rem;
+            color: #94a3b8;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+
+        .control-group select {
+            width: 100%;
+            background: #020617;
+            color: #e2e8f0;
+            border: 1px solid #334155;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-group select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: #020617;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            font-size: 0.875rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-dot.disconnected {
+            background: #ef4444;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-card:hover {
+            border-color: #334155;
+            transform: translateY(-1px);
+            transition: all 0.2s;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #3b82f6;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+
+        /* Content Grid */
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        .content-grid.map-enabled {
+            grid-template-columns: 1.5fr 1fr;
+        }
+
+        .panel {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .panel h3 {
+            color: #3b82f6;
+            margin-bottom: 20px;
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        thead {
+            background: #020617;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px;
+            color: #94a3b8;
+            font-weight: 600;
+            border-bottom: 2px solid #1e293b;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #1e293b;
+        }
+
+        tr.healthy {
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        tr.no-fix {
+            background: rgba(251, 191, 36, 0.05);
+        }
+
+        tr.stale {
+            background: rgba(239, 68, 68, 0.05);
+            color: #94a3b8;
+        }
+
+        .fix-indicator {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 12px;
+        }
+
+        .fix-indicator.valid {
+            background: #10b981;
+            color: white;
+        }
+
+        .fix-indicator.invalid {
+            background: #fbbf24;
+            color: #020617;
+        }
+
+        .age-cell {
+            color: #94a3b8;
+            font-size: 0.8125rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #64748b;
+        }
+
+        .empty-state h4 {
+            margin-bottom: 8px;
+            color: #94a3b8;
+            font-size: 1rem;
+        }
+
+        .empty-state p {
+            font-size: 0.875rem;
+        }
+
+        /* Map */
+        #map {
+            height: 500px;
+            background: #020617;
+            border-radius: 8px;
+            border: 1px solid #1e293b;
+        }
+
+        .leaflet-container {
+            background: #020617;
+        }
+
+        /* Console */
+        .console {
+            background: #020617;
+            border: 1px solid #1e293b;
+            padding: 16px;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+        }
+
+        .console-line {
+            padding: 4px 0;
+            border-bottom: 1px solid #0f172a;
+        }
+
+        .console-line:last-child {
+            border-bottom: none;
+        }
+
+        .console-time {
+            color: #64748b;
+            margin-right: 8px;
+        }
+
+        .console-message {
+            color: #cbd5e1;
+        }
+
+        .console-message.error {
+            color: #f87171;
+        }
+
+        .console-message.success {
+            color: #4ade80;
+        }
+
+        /* Icons */
+        .icon {
+            width: 20px;
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside>
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z"/>
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1>SCENSUS</h1>
+                    <p>UAS T&E SUITE</p>
+                </div>
+            </div>
+
+            <nav>
+                <!-- Navigation can be expanded here -->
+            </nav>
+
+            <div class="sidebar-footer">
+                <button>
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M12 1v6m0 6v6m-6-6h6m6 0h-6"/>
+                    </svg>
+                    <span>Settings</span>
+                </button>
+                <div class="version-info">
+                    v1.0.0-stable<br>
+                    Connected: LOCALHOST
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main>
+            <div class="grid-background"></div>
+
+            <div class="content-wrapper">
+                <div class="content-inner">
+                    <!-- Page Header -->
+                    <div class="page-header">
+                        <h2>Dashboard</h2>
+                        <p>Real-time UAS telemetry monitoring</p>
+                    </div>
+
+                    <!-- Controls -->
+                    <div class="controls-card">
+                        <div class="controls-grid">
+                            <div class="control-group">
+                                <label for="event-select">Active Event</label>
+                                <select id="event-select">
+                                    <option value="">Select flight event...</option>
+                                </select>
+                            </div>
+                            <div class="status-badge">
+                                <div class="status-dot" id="ws-indicator"></div>
+                                <span id="ws-status">Connecting...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stats -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="tracker-count">0</div>
+                            <div class="stat-label">Active UAS</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="healthy-count">0</div>
+                            <div class="stat-label">Healthy</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stale-count">0</div>
+                            <div class="stat-label">Stale</div>
+                        </div>
+                    </div>
+
+                    <!-- Main Content Grid -->
+                    <div class="content-grid" id="content-grid">
+                        <div class="panel">
+                            <h3>UAS Telemetry</h3>
+                            <div id="tracker-table-container">
+                                <div class="empty-state">
+                                    <h4>No Active Event</h4>
+                                    <p>Select a flight event from the dropdown to start monitoring</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="panel" id="map-panel" style="display: none;">
+                            <h3>Map View</h3>
+                            <div id="map"></div>
+                        </div>
+                    </div>
+
+                    <!-- Console -->
+                    <div class="panel" style="margin-top: 24px;">
+                        <h3>Status Console</h3>
+                        <div class="console" id="console"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Global state
+        const state = {
+            trackers: new Map(),
+            ws: null,
+            map: null,
+            markers: new Map(),
+            mapEnabled: false,
+            activeEvent: null
+        };
+
+        // Format datetime
+        function formatDateTime(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleTimeString();
+        }
+
+        // Format age
+        function formatAge(seconds) {
+            if (seconds < 60) return `${Math.round(seconds)}s`;
+            if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+            return `${Math.round(seconds / 3600)}h`;
+        }
+
+        // Add console message
+        function addConsoleMessage(message, type = 'info') {
+            const console = document.getElementById('console');
+            const line = document.createElement('div');
+            line.className = 'console-line';
+
+            const time = document.createElement('span');
+            time.className = 'console-time';
+            time.textContent = new Date().toLocaleTimeString();
+
+            const msg = document.createElement('span');
+            msg.className = `console-message ${type}`;
+            msg.textContent = message;
+
+            line.appendChild(time);
+            line.appendChild(msg);
+            console.insertBefore(line, console.firstChild);
+
+            // Limit console lines
+            while (console.children.length > 50) {
+                console.removeChild(console.lastChild);
+            }
+        }
+
+        // Update stats
+        function updateStats() {
+            const total = state.trackers.size;
+            let healthy = 0;
+            let stale = 0;
+
+            state.trackers.forEach(tracker => {
+                if (tracker.is_stale) {
+                    stale++;
+                } else if (tracker.fix_valid) {
+                    healthy++;
+                }
+            });
+
+            document.getElementById('tracker-count').textContent = total;
+            document.getElementById('healthy-count').textContent = healthy;
+            document.getElementById('stale-count').textContent = stale;
+        }
+
+        // Render tracker table
+        function renderTrackerTable() {
+            const container = document.getElementById('tracker-table-container');
+
+            if (state.trackers.size === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h4>No UAS Detected</h4>
+                        <p>Waiting for telemetry data...</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const trackers = Array.from(state.trackers.values())
+                .sort((a, b) => a.tracker_id.localeCompare(b.tracker_id));
+
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Lat</th>
+                            <th>Lon</th>
+                            <th>Alt (m)</th>
+                            <th>RSSI (dBm)</th>
+                            <th>Fix</th>
+                            <th>Age</th>
+                            <th>Last Update</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            trackers.forEach(tracker => {
+                const rowClass = tracker.is_stale ? 'stale' :
+                                tracker.fix_valid ? 'healthy' : 'no-fix';
+
+                const fixClass = tracker.fix_valid ? 'valid' : 'invalid';
+                const fixSymbol = tracker.fix_valid ? '✓' : '✗';
+
+                const lat = tracker.lat != null ? tracker.lat.toFixed(6) : '-';
+                const lon = tracker.lon != null ? tracker.lon.toFixed(6) : '-';
+                const alt = tracker.alt_m != null ? tracker.alt_m.toFixed(1) : '-';
+                const rssi = tracker.rssi_dbm != null ? tracker.rssi_dbm.toFixed(0) : '-';
+
+                html += `
+                    <tr class="${rowClass}">
+                        <td><strong>${tracker.tracker_id}</strong></td>
+                        <td>${lat}</td>
+                        <td>${lon}</td>
+                        <td>${alt}</td>
+                        <td>${rssi}</td>
+                        <td><span class="fix-indicator ${fixClass}">${fixSymbol}</span></td>
+                        <td class="age-cell">${formatAge(tracker.age_seconds)}</td>
+                        <td>${formatDateTime(tracker.last_update)}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        // Update map markers
+        function updateMapMarkers() {
+            if (!state.mapEnabled || !state.map) return;
+
+            state.trackers.forEach(tracker => {
+                if (tracker.lat == null || tracker.lon == null) return;
+
+                const latlng = [tracker.lat, tracker.lon];
+                let marker = state.markers.get(tracker.tracker_id);
+
+                // Determine marker color
+                let color = '#fbbf24'; // yellow (no fix)
+                if (tracker.is_stale) {
+                    color = '#ef4444'; // red (stale)
+                } else if (tracker.fix_valid) {
+                    color = '#10b981'; // green (healthy)
+                }
+
+                if (marker) {
+                    marker.setLatLng(latlng);
+                    marker.setIcon(createMarkerIcon(color));
+                    marker.setPopupContent(createPopupContent(tracker));
+                } else {
+                    marker = L.marker(latlng, {
+                        icon: createMarkerIcon(color)
+                    }).addTo(state.map);
+                    marker.bindPopup(createPopupContent(tracker));
+                    state.markers.set(tracker.tracker_id, marker);
+                }
+            });
+
+            if (state.markers.size === 1) {
+                const bounds = [];
+                state.markers.forEach(m => bounds.push(m.getLatLng()));
+                state.map.fitBounds(bounds);
+            }
+        }
+
+        function createMarkerIcon(color) {
+            return L.divIcon({
+                className: 'custom-marker',
+                html: `<div style="background: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+        }
+
+        function createPopupContent(tracker) {
+            const alt = tracker.alt_m != null ? tracker.alt_m.toFixed(1) + 'm' : '-';
+            const rssi = tracker.rssi_dbm != null ? tracker.rssi_dbm.toFixed(0) + 'dBm' : '-';
+            const fix = tracker.fix_valid ? 'Valid' : 'Invalid';
+
+            return `
+                <strong>UAS ${tracker.tracker_id}</strong><br>
+                Fix: ${fix}<br>
+                Alt: ${alt}<br>
+                RSSI: ${rssi}<br>
+                Age: ${formatAge(tracker.age_seconds)}<br>
+                Updated: ${formatDateTime(tracker.last_update)}
+            `;
+        }
+
+        // Initialize map
+        function initMap() {
+            if (!window.L) return;
+
+            const mapDiv = document.getElementById('map');
+            mapDiv.innerHTML = '';
+
+            state.map = L.map('map').setView([0, 0], 2);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(state.map);
+
+            addConsoleMessage('Map initialized', 'success');
+        }
+
+        // Load events
+        async function loadEvents() {
+            try {
+                const response = await fetch('/api/events');
+                const data = await response.json();
+
+                const select = document.getElementById('event-select');
+                select.innerHTML = '<option value="">Select flight event...</option>';
+
+                data.events.forEach(event => {
+                    const option = document.createElement('option');
+                    option.value = event;
+                    option.textContent = event;
+                    select.appendChild(option);
+                });
+
+                addConsoleMessage(`Loaded ${data.events.length} events`);
+            } catch (err) {
+                addConsoleMessage(`Failed to load events: ${err.message}`, 'error');
+            }
+        }
+
+        // Set active event
+        async function setActiveEvent(eventName) {
+            try {
+                const response = await fetch('/api/active_event', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ event_name: eventName })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    state.activeEvent = eventName;
+                    addConsoleMessage(data.message, 'success');
+                } else {
+                    addConsoleMessage(data.message, 'error');
+                }
+            } catch (err) {
+                addConsoleMessage(`Failed to set event: ${err.message}`, 'error');
+            }
+        }
+
+        // WebSocket connection
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+            state.ws = new WebSocket(wsUrl);
+
+            state.ws.onopen = () => {
+                document.getElementById('ws-status').textContent = 'Connected';
+                document.getElementById('ws-indicator').classList.remove('disconnected');
+                addConsoleMessage('WebSocket connected', 'success');
+            };
+
+            state.ws.onclose = () => {
+                document.getElementById('ws-status').textContent = 'Disconnected';
+                document.getElementById('ws-indicator').classList.add('disconnected');
+                addConsoleMessage('WebSocket disconnected', 'error');
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            state.ws.onerror = () => {
+                addConsoleMessage('WebSocket error', 'error');
+            };
+
+            state.ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    handleWebSocketMessage(message);
+                } catch (err) {
+                    console.error('Failed to parse WebSocket message:', err);
+                }
+            };
+        }
+
+        // Handle WebSocket messages
+        function handleWebSocketMessage(message) {
+            switch (message.type) {
+                case 'tracker_updated':
+                    state.trackers.set(message.data.tracker_id, message.data);
+                    updateStats();
+                    renderTrackerTable();
+                    updateMapMarkers();
+                    break;
+
+                case 'tracker_stale':
+                    const tracker = state.trackers.get(message.data.tracker_id);
+                    if (tracker) {
+                        tracker.is_stale = true;
+                        tracker.age_seconds = message.data.age_seconds;
+                        updateStats();
+                        renderTrackerTable();
+                        updateMapMarkers();
+                    }
+                    addConsoleMessage(`UAS ${message.data.tracker_id} is stale`, 'error');
+                    break;
+
+                case 'active_event_changed':
+                    state.activeEvent = message.data.event_name;
+                    state.trackers.clear();
+                    state.markers.clear();
+                    if (state.map) {
+                        state.markers.forEach(m => state.map.removeLayer(m));
+                        state.markers.clear();
+                    }
+                    updateStats();
+                    renderTrackerTable();
+                    addConsoleMessage(`Event changed to: ${message.data.event_name}`, 'success');
+                    break;
+
+                case 'backend_status':
+                    addConsoleMessage(message.data.message);
+                    break;
+            }
+        }
+
+        // Check health and config
+        async function checkHealth() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+
+                state.mapEnabled = data.enable_map !== false;
+
+                if (state.mapEnabled) {
+                    document.getElementById('content-grid').classList.add('map-enabled');
+                    document.getElementById('map-panel').style.display = 'block';
+
+                    if (!window.L) {
+                        const link = document.createElement('link');
+                        link.rel = 'stylesheet';
+                        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+                        document.head.appendChild(link);
+
+                        const script = document.createElement('script');
+                        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+                        script.onload = initMap;
+                        document.body.appendChild(script);
+                    } else {
+                        initMap();
+                    }
+                }
+
+                if (data.active_event) {
+                    state.activeEvent = data.active_event;
+                    document.getElementById('event-select').value = data.active_event;
+                }
+            } catch (err) {
+                console.error('Health check failed:', err);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('event-select').addEventListener('change', (e) => {
+            const eventName = e.target.value;
+            if (eventName) {
+                setActiveEvent(eventName);
+            }
+        });
+
+        // Initialize
+        async function init() {
+            addConsoleMessage('SCENSUS Dashboard starting...');
+            await checkHealth();
+            await loadEvents();
+            connectWebSocket();
+        }
+
+        init();
+    </script>
+</body>
+</html>

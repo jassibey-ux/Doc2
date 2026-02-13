@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: cloud/Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://scensus:${POSTGRES_PASSWORD:-scensus_secret}@postgres:5432/scensus
+      - REDIS_URL=redis://redis:6379/0
+      - SRTM_CACHE_DIR=/data/srtm
+      - HMAC_SECRET=${HMAC_SECRET:-change-me-in-production}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - srtm_data:/data/srtm
+      - export_data:/data/exports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: scensus
+      POSTGRES_USER: scensus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scensus_secret}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scensus"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  srtm_data:
+  export_data:

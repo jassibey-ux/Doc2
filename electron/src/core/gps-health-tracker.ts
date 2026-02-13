@@ -28,7 +28,31 @@ export interface GPSHealthTrackerConfig {
   hdopDegradedThreshold?: number;
   satellitesGoodThreshold?: number;
   satellitesDegradedThreshold?: number;
+  /** Duration in ms of continuous fix loss before emitting gps_lost event */
+  fixLossDurationMs?: number;
+  /** Duration in ms of continuous degradation before emitting gps_degraded event */
+  degradedDurationMs?: number;
+  /** Whether to auto-emit session events on GPS state changes */
+  autoEmitEvents?: boolean;
 }
+
+export type GPSEventType = 'gps_lost' | 'gps_acquired' | 'gps_degraded' | 'gps_recovered';
+
+export interface GPSAutoEvent {
+  type: GPSEventType;
+  trackerId: string;
+  timestamp: string;
+  metadata: {
+    hdop?: number | null;
+    satellites?: number | null;
+    rssi_dbm?: number | null;
+    duration_ms?: number;
+    previous_status: string;
+    new_status: string;
+  };
+}
+
+export type GPSAutoEventCallback = (event: GPSAutoEvent) => void;
 
 export type GPSHealthChangeCallback = (
   trackerId: string,
@@ -73,15 +97,49 @@ export class GPSHealthTracker {
   private trackerHealth: Map<string, TrackerHealthData> = new Map();
   private config: Required<GPSHealthTrackerConfig>;
   private onHealthChange?: GPSHealthChangeCallback;
+  private onAutoEvent?: GPSAutoEventCallback;
+  // Track sustained state durations for debounced event emission
+  private sustainedLost: Map<string, number> = new Map(); // trackerId -> first timestamp ms
+  private sustainedDegraded: Map<string, number> = new Map();
+  private emittedLost: Set<string> = new Set(); // trackerIds that already emitted gps_lost
+  private emittedDegraded: Set<string> = new Set();
 
-  constructor(config: GPSHealthTrackerConfig = {}, onHealthChange?: GPSHealthChangeCallback) {
+  constructor(
+    config: GPSHealthTrackerConfig = {},
+    onHealthChange?: GPSHealthChangeCallback,
+    onAutoEvent?: GPSAutoEventCallback,
+  ) {
     this.config = {
       hdopGoodThreshold: config.hdopGoodThreshold ?? HDOP_GOOD_THRESHOLD,
       hdopDegradedThreshold: config.hdopDegradedThreshold ?? HDOP_DEGRADED_THRESHOLD,
       satellitesGoodThreshold: config.satellitesGoodThreshold ?? SATELLITES_GOOD_THRESHOLD,
       satellitesDegradedThreshold: config.satellitesDegradedThreshold ?? SATELLITES_DEGRADED_THRESHOLD,
+      fixLossDurationMs: config.fixLossDurationMs ?? 3000,
+      degradedDurationMs: config.degradedDurationMs ?? 5000,
+      autoEmitEvents: config.autoEmitEvents ?? true,
     };
     this.onHealthChange = onHealthChange;
+    this.onAutoEvent = onAutoEvent;
+  }
+
+  /**
+   * Set the auto-event callback for GPS state change events
+   */
+  setAutoEventCallback(callback: GPSAutoEventCallback): void {
+    this.onAutoEvent = callback;
+  }
+
+  /**
+   * Update GPS denial detection thresholds at runtime
+   */
+  updateThresholds(config: Partial<GPSHealthTrackerConfig>): void {
+    if (config.hdopGoodThreshold !== undefined) this.config.hdopGoodThreshold = config.hdopGoodThreshold;
+    if (config.hdopDegradedThreshold !== undefined) this.config.hdopDegradedThreshold = config.hdopDegradedThreshold;
+    if (config.satellitesGoodThreshold !== undefined) this.config.satellitesGoodThreshold = config.satellitesGoodThreshold;
+    if (config.satellitesDegradedThreshold !== undefined) this.config.satellitesDegradedThreshold = config.satellitesDegradedThreshold;
+    if (config.fixLossDurationMs !== undefined) this.config.fixLossDurationMs = config.fixLossDurationMs;
+    if (config.degradedDurationMs !== undefined) this.config.degradedDurationMs = config.degradedDurationMs;
+    if (config.autoEmitEvents !== undefined) this.config.autoEmitEvents = config.autoEmitEvents;
   }
 
   /**
@@ -158,6 +216,11 @@ export class GPSHealthTracker {
     if (previousStatus !== state.health_status && this.onHealthChange) {
       const event = this.getCurrentLossEvent(data);
       this.onHealthChange(trackerId, previousStatus, state.health_status, event);
+    }
+
+    // Auto-emit GPS denial events with debouncing
+    if (this.config.autoEmitEvents && this.onAutoEvent) {
+      this.checkAndEmitAutoEvents(trackerId, previousStatus, state.health_status, now, hdop, satellites, rssi);
     }
 
     return state;
@@ -250,6 +313,126 @@ export class GPSHealthTracker {
       data.state.satellites_avg = null;
       data.firstUpdateTime = null;
       data.lastUpdateTime = null;
+    }
+  }
+
+  // =========================================================================
+  // GPS Denial Auto-Event Emission
+  // =========================================================================
+
+  /**
+   * Check GPS state transitions and emit auto-detected events with debouncing.
+   * Events are only emitted after sustained state duration thresholds are met.
+   */
+  private checkAndEmitAutoEvents(
+    trackerId: string,
+    previousStatus: GPSHealthStatus,
+    newStatus: GPSHealthStatus,
+    nowMs: number,
+    hdop: number | null,
+    satellites: number | null,
+    rssi: number | null,
+  ): void {
+    // Track sustained "lost" state
+    if (newStatus === 'lost') {
+      if (!this.sustainedLost.has(trackerId)) {
+        this.sustainedLost.set(trackerId, nowMs);
+      }
+      // Check if sustained long enough to emit
+      const lostSince = this.sustainedLost.get(trackerId)!;
+      if (nowMs - lostSince >= this.config.fixLossDurationMs && !this.emittedLost.has(trackerId)) {
+        this.emittedLost.add(trackerId);
+        this.onAutoEvent!({
+          type: 'gps_lost',
+          trackerId,
+          timestamp: new Date(nowMs).toISOString(),
+          metadata: {
+            hdop, satellites, rssi_dbm: rssi,
+            duration_ms: nowMs - lostSince,
+            previous_status: previousStatus,
+            new_status: newStatus,
+          },
+        });
+        log.info(`[GPSAutoEvent] gps_lost emitted for ${trackerId} after ${nowMs - lostSince}ms`);
+      }
+      // Clear degraded tracking since we're past degraded
+      this.sustainedDegraded.delete(trackerId);
+      this.emittedDegraded.delete(trackerId);
+    } else if (newStatus === 'degraded') {
+      if (!this.sustainedDegraded.has(trackerId)) {
+        this.sustainedDegraded.set(trackerId, nowMs);
+      }
+      const degradedSince = this.sustainedDegraded.get(trackerId)!;
+      if (nowMs - degradedSince >= this.config.degradedDurationMs && !this.emittedDegraded.has(trackerId)) {
+        this.emittedDegraded.add(trackerId);
+        this.onAutoEvent!({
+          type: 'gps_degraded',
+          trackerId,
+          timestamp: new Date(nowMs).toISOString(),
+          metadata: {
+            hdop, satellites, rssi_dbm: rssi,
+            duration_ms: nowMs - degradedSince,
+            previous_status: previousStatus,
+            new_status: newStatus,
+          },
+        });
+        log.info(`[GPSAutoEvent] gps_degraded emitted for ${trackerId} after ${nowMs - degradedSince}ms`);
+      }
+      // Clear lost tracking since we recovered from lost
+      if (this.emittedLost.has(trackerId)) {
+        this.emittedLost.delete(trackerId);
+        this.sustainedLost.delete(trackerId);
+        // Emit gps_acquired since we went from lost to degraded
+        this.onAutoEvent!({
+          type: 'gps_acquired',
+          trackerId,
+          timestamp: new Date(nowMs).toISOString(),
+          metadata: {
+            hdop, satellites, rssi_dbm: rssi,
+            previous_status: previousStatus,
+            new_status: newStatus,
+          },
+        });
+        log.info(`[GPSAutoEvent] gps_acquired emitted for ${trackerId} (lost → degraded)`);
+      }
+    } else if (newStatus === 'healthy') {
+      // Emit gps_acquired if we were in lost state
+      if (this.emittedLost.has(trackerId)) {
+        const lostSince = this.sustainedLost.get(trackerId);
+        this.onAutoEvent!({
+          type: 'gps_acquired',
+          trackerId,
+          timestamp: new Date(nowMs).toISOString(),
+          metadata: {
+            hdop, satellites, rssi_dbm: rssi,
+            duration_ms: lostSince ? nowMs - lostSince : undefined,
+            previous_status: previousStatus,
+            new_status: newStatus,
+          },
+        });
+        log.info(`[GPSAutoEvent] gps_acquired emitted for ${trackerId} (lost → healthy)`);
+      }
+      // Emit gps_recovered if we were in degraded state
+      if (this.emittedDegraded.has(trackerId)) {
+        const degradedSince = this.sustainedDegraded.get(trackerId);
+        this.onAutoEvent!({
+          type: 'gps_recovered',
+          trackerId,
+          timestamp: new Date(nowMs).toISOString(),
+          metadata: {
+            hdop, satellites, rssi_dbm: rssi,
+            duration_ms: degradedSince ? nowMs - degradedSince : undefined,
+            previous_status: previousStatus,
+            new_status: newStatus,
+          },
+        });
+        log.info(`[GPSAutoEvent] gps_recovered emitted for ${trackerId} (degraded → healthy)`);
+      }
+      // Clear all tracking
+      this.sustainedLost.delete(trackerId);
+      this.sustainedDegraded.delete(trackerId);
+      this.emittedLost.delete(trackerId);
+      this.emittedDegraded.delete(trackerId);
     }
   }
 

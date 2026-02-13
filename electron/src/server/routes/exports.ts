@@ -4,6 +4,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { DashboardApp } from '../app';
 import { generateKML } from '../../core/kml-export';
+import { sessionDataCollector } from '../../core/session-data-collector';
+import { getTestSessionById } from '../../core/library-store';
 
 export function exportRoutes(app: DashboardApp): Router {
   const router = Router();
@@ -71,6 +73,66 @@ export function exportRoutes(app: DashboardApp): Router {
       res.send(kmlContent);
     } catch (e: any) {
       res.status(500).json({ detail: 'KML export failed' });
+    }
+  });
+
+  /**
+   * GET /api/export/session/:id/csv
+   * Export full session telemetry as CSV download
+   */
+  router.get('/export/session/:id/csv', (req, res) => {
+    try {
+      const sessionId = req.params.id;
+      const session = getTestSessionById(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      const positionsByTracker = sessionDataCollector.getPositionsByTracker(sessionId);
+      if (positionsByTracker.size === 0) {
+        return res.status(404).json({ error: 'No telemetry data for session' });
+      }
+
+      // Build CSV
+      const header = [
+        'timestamp', 'tracker_id', 'lat', 'lon', 'alt_m',
+        'hdop', 'satellites', 'fix_valid', 'rssi_dbm',
+        'speed_mps', 'course_deg', 'battery_mv', 'gps_quality',
+      ].join(',');
+
+      const rows: string[] = [];
+      for (const [trackerId, positions] of positionsByTracker) {
+        for (const p of positions) {
+          rows.push([
+            p.timestamp,
+            trackerId,
+            p.latitude,
+            p.longitude,
+            p.altitude_m,
+            p.hdop ?? '',
+            p.satellites ?? '',
+            p.fix_valid ?? '',
+            p.rssi_dbm ?? '',
+            p.speed_ms,
+            p.heading_deg,
+            p.battery_mv ?? '',
+            p.gps_quality,
+          ].join(','));
+        }
+      }
+
+      // Sort by timestamp
+      rows.sort();
+
+      const csv = [header, ...rows].join('\n');
+      const safeName = session.name.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 30);
+      const filename = `${safeName}_telemetry.csv`;
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (error) {
+      res.status(500).json({ error: 'CSV export failed' });
     }
   });
 

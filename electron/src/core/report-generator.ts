@@ -776,6 +776,106 @@ export async function saveTextReport(
 }
 
 /**
+ * Generate PDF report using Electron's BrowserWindow.printToPDF()
+ * Zero new dependencies - uses the existing HTML report generator.
+ */
+export async function generatePDF(
+  data: ReportData,
+  outputPath: string,
+  options?: ReportOptions
+): Promise<string> {
+  // Generate the HTML report first
+  const html = generateHTMLReport(data, options);
+
+  try {
+    // Try Electron's BrowserWindow for PDF generation
+    const { BrowserWindow } = await import('electron');
+
+    const win = new BrowserWindow({
+      show: false,
+      width: 1024,
+      height: 768,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    });
+
+    // Load the HTML content
+    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+
+    // Wait for content to render
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Generate PDF
+    const pdfBuffer = await win.webContents.printToPDF({
+      landscape: false,
+      printBackground: true,
+      pageSize: 'Letter',
+      margins: {
+        top: 0.5,
+        bottom: 0.5,
+        left: 0.5,
+        right: 0.5,
+      },
+    });
+
+    // Write PDF to file
+    await fs.promises.writeFile(outputPath, pdfBuffer);
+    win.close();
+
+    log.info(`PDF report saved: ${outputPath} (${pdfBuffer.length} bytes)`);
+    return outputPath;
+  } catch (electronError) {
+    // Fallback: save as HTML if Electron is not available (e.g., in tests)
+    log.warn('Electron BrowserWindow not available for PDF generation, saving HTML instead');
+    const htmlPath = outputPath.replace('.pdf', '.html');
+    await fs.promises.writeFile(htmlPath, html, 'utf-8');
+    return htmlPath;
+  }
+}
+
+/**
+ * Generate PDF report and return as Buffer (for API responses)
+ */
+export async function generatePDFBuffer(
+  data: ReportData,
+  options?: ReportOptions
+): Promise<Buffer> {
+  const html = generateHTMLReport(data, options);
+
+  try {
+    const { BrowserWindow } = await import('electron');
+
+    const win = new BrowserWindow({
+      show: false,
+      width: 1024,
+      height: 768,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    });
+
+    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const pdfBuffer = await win.webContents.printToPDF({
+      landscape: false,
+      printBackground: true,
+      pageSize: 'Letter',
+      margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 },
+    });
+
+    win.close();
+    return Buffer.from(pdfBuffer);
+  } catch {
+    // Fallback: return HTML as buffer
+    return Buffer.from(html, 'utf-8');
+  }
+}
+
+/**
  * Generate report filename based on session
  */
 export function generateReportFilename(session: TestSession, extension: string): string {

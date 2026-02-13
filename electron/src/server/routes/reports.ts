@@ -17,6 +17,7 @@ import {
 import {
   generateHTMLReport,
   generateTextReport,
+  generatePDFBuffer,
   saveHTMLReport,
   saveTextReport,
   generateReportFilename,
@@ -223,8 +224,8 @@ export function reportsRoutes(): Router {
     try {
       const { sessionId, format } = req.params;
 
-      if (!['html', 'txt'].includes(format)) {
-        return res.status(400).json({ error: 'format must be "html" or "txt"' });
+      if (!['html', 'txt', 'pdf'].includes(format)) {
+        return res.status(400).json({ error: 'format must be "html", "txt", or "pdf"' });
       }
 
       // Load session
@@ -254,6 +255,19 @@ export function reportsRoutes(): Router {
       const filename = generateReportFilename(session, format);
 
       // Generate content
+      if (format === 'pdf') {
+        try {
+          const pdfBuffer = await generatePDFBuffer(reportData);
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          res.send(pdfBuffer);
+        } catch (pdfError: any) {
+          log.error('Error generating PDF:', pdfError);
+          res.status(500).json({ error: 'PDF generation failed: ' + pdfError.message });
+        }
+        return;
+      }
+
       let content: string;
       let contentType: string;
 

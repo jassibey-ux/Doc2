@@ -70,6 +70,8 @@ export type FailsafeType = 'rth' | 'land' | 'hover' | 'atti_mode' | 'fly_away' |
 
 export type FlightPlan = 'hover' | 'orbit' | 'waypoint' | 'manual' | 'free_flight';
 
+export type JamResistanceCategory = 'none' | 'basic' | 'moderate' | 'hardened';
+
 export interface DroneProfile {
   id: string;
   name: string;
@@ -82,6 +84,12 @@ export interface DroneProfile {
   max_speed_mps?: number;
   max_altitude_m?: number;
   endurance_minutes?: number;
+  // C2 link characteristics (for J/S modeling)
+  c2_protocol?: string;
+  c2_frequency_mhz?: number;
+  c2_receiver_sensitivity_dbm?: number;
+  gps_receiver_type?: string;
+  jam_resistance_category?: JamResistanceCategory;
   icon?: string;
   notes?: string;
   created_at: string;
@@ -139,6 +147,10 @@ export interface CUASProfile {
   power_output_w?: number;
   antenna_gain_dbi?: number;
   frequency_ranges?: string[];
+  // RF engineering parameters (for propagation / J/S modeling)
+  eirp_dbm?: number;
+  min_js_ratio_db?: number;
+  polarization?: string;
   icon?: string;
   notes?: string;
   created_at: string;

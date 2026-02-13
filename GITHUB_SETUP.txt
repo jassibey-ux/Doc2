@@ -1,0 +1,23 @@
+To push to GitHub:
+
+1. Create new repository at: https://github.com/new
+   Name: scensus-dashboard
+   Description: UAS Test & Evaluation Dashboard
+   Keep it private or public (your choice)
+
+2. Run these commands in the logtail-dashboard folder:
+
+cd /Users/scensus/logtail-dashboard
+git init
+git add .
+git commit -m "Initial release - SCENSUS Dashboard v2.2.1"
+git remote add origin https://github.com/YOUR_USERNAME/scensus-dashboard.git
+git push -u origin main
+
+3. Share the repository URL with other developers
+
+They can clone with:
+git clone https://github.com/YOUR_USERNAME/scensus-dashboard.git
+cd scensus-dashboard
+pip install -r requirements.txt
+python -m logtail_dashboard --log-root examples

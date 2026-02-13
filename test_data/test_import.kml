@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
+  <Document>
+    <name>Test Import</name>
+    <Folder>
+      <name>Drone_Alpha</name>
+      <Placemark>
+        <name>Position 1</name>
+        <TimeStamp><when>2026-01-20T14:30:00Z</when></TimeStamp>
+        <Point>
+          <coordinates>-77.0369,38.9072,100</coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+    <Placemark>
+      <name>Track_Beta</name>
+      <LineString>
+        <coordinates>
+          -77.0400,38.9100,50
+          -77.0410,38.9110,55
+          -77.0420,38.9120,60
+          -77.0430,38.9130,65
+          -77.0440,38.9140,70
+        </coordinates>
+      </LineString>
+    </Placemark>
+    <Placemark>
+      <name>GX_Track_Gamma</name>
+      <gx:Track>
+        <when>2026-01-20T15:00:00Z</when>
+        <when>2026-01-20T15:01:00Z</when>
+        <when>2026-01-20T15:02:00Z</when>
+        <gx:coord>-77.05 38.92 80</gx:coord>
+        <gx:coord>-77.051 38.921 85</gx:coord>
+        <gx:coord>-77.052 38.922 90</gx:coord>
+      </gx:Track>
+    </Placemark>
+  </Document>
+</kml>
