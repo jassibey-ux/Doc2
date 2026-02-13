@@ -138,7 +138,7 @@ export interface DroneSummary {
 }
 
 export interface WebSocketMessage {
-  type: 'tracker_updated' | 'tracker_stale' | 'active_event_changed' | 'config_changed' | 'replay_state' | 'new_file_detected' | 'anomaly_alert' | 'demo_mode_changed' | 'replay_frames_ready' | 'replay_frames_error' | 'replay_build_progress' | 'gps_health_alert';
+  type: 'tracker_updated' | 'tracker_stale' | 'active_event_changed' | 'config_changed' | 'replay_state' | 'new_file_detected' | 'anomaly_alert' | 'demo_mode_changed' | 'replay_frames_ready' | 'replay_frames_error' | 'replay_build_progress' | 'gps_health_alert' | 'engagement_started' | 'engagement_ended' | 'engagement_metrics_ready';
   data: Record<string, unknown>;
 }
 

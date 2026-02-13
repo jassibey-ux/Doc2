@@ -1,5 +1,6 @@
 import { BrowserWindow, app } from 'electron';
 import { join } from 'path';
+import log from 'electron-log';
 
 export function createWindow(serverPort: number): BrowserWindow {
   // Use correct icon format for each platform
@@ -27,6 +28,18 @@ export function createWindow(serverPort: number): BrowserWindow {
     // Open DevTools in development
     if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
       win.webContents.openDevTools();
+    }
+  });
+
+  // Retry page load on failure (e.g. if server wasn't quite ready)
+  win.webContents.on('did-fail-load', (_event, errorCode, _errorDesc, _url, isMainFrame) => {
+    if (isMainFrame && errorCode !== -3) {
+      log.warn(`[window] Page load failed (code ${errorCode}), retrying in 1s...`);
+      setTimeout(() => {
+        if (!win.isDestroyed()) {
+          win.loadURL(`http://127.0.0.1:${serverPort}/app/`);
+        }
+      }, 1000);
     }
   });
 

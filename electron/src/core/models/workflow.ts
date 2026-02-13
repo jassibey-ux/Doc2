@@ -169,6 +169,9 @@ export type SessionStatus = 'planning' | 'active' | 'capturing' | 'analyzing' | 
 export type EventType =
   | 'jam_on'
   | 'jam_off'
+  | 'engage'
+  | 'disengage'
+  | 'engagement_aborted'
   | 'launch'
   | 'recover'
   | 'failsafe'
@@ -191,6 +194,7 @@ export interface TestEvent {
   source: EventSource;
   cuas_id?: string;
   tracker_id?: string;
+  engagement_id?: string;
   note?: string;
   metadata?: Record<string, unknown>;
 }
@@ -229,6 +233,75 @@ export interface SessionAnnotation {
 }
 
 // =============================================================================
+// Engagement Types
+// =============================================================================
+
+export type EngagementStatus = 'planned' | 'active' | 'complete' | 'aborted';
+
+export type EngagementType = 'test' | 'control' | 'operational';
+
+export type EngagementTargetRole = 'primary_target' | 'observer';
+
+export interface EngagementTarget {
+  id: string;
+  tracker_id: string;
+  drone_profile_id?: string;
+  role: EngagementTargetRole;
+  initial_range_m?: number;
+  initial_bearing_deg?: number;
+  angle_off_boresight_deg?: number;
+  initial_altitude_m?: number;
+  drone_lat?: number;
+  drone_lon?: number;
+  final_range_m?: number;
+  final_bearing_deg?: number;
+}
+
+export interface EngagementMetrics {
+  time_to_effect_s?: number;
+  time_to_full_denial_s?: number;
+  denial_duration_s?: number;
+  denial_consistency_pct?: number;
+  recovery_time_s?: number;
+  effective_range_m?: number;
+  denial_bearing_deg?: number;
+  denial_angle_off_boresight_deg?: number;
+  min_range_m?: number;
+  recovery_range_m?: number;
+  max_drift_m?: number;
+  max_lateral_drift_m?: number;
+  max_vertical_drift_m?: number;
+  altitude_change_m?: number;
+  failsafe_triggered: boolean;
+  failsafe_type?: string;
+  pass_fail?: 'pass' | 'fail' | 'inconclusive';
+  overall_score?: number;
+  data_source?: 'live_only' | 'sd_merged';
+  metrics_json?: Record<string, unknown>;
+  analyzed_at?: string;
+}
+
+export interface Engagement {
+  id: string;
+  session_id: string;
+  cuas_placement_id: string;
+  name?: string;
+  engagement_type: EngagementType;
+  status: EngagementStatus;
+  engage_timestamp?: string;
+  disengage_timestamp?: string;
+  cuas_lat?: number;
+  cuas_lon?: number;
+  cuas_alt_m?: number;
+  cuas_orientation_deg?: number;
+  notes?: string;
+  targets: EngagementTarget[];
+  metrics?: EngagementMetrics;
+  created_at: string;
+  updated_at: string;
+}
+
+// =============================================================================
 // Test Session (Step 4-6)
 // =============================================================================
 
@@ -247,6 +320,7 @@ export interface TestSession {
   end_time?: string;
   duration_seconds?: number;
   events: TestEvent[];
+  engagements?: Engagement[];
 
   // Data sources
   live_data_path?: string;
@@ -350,7 +424,10 @@ export type ExtendedWSMessageType =
   | 'gps_quality_change'
   | 'geofence_breach'
   | 'jammer_state_change'
-  | 'session_status_change';
+  | 'session_status_change'
+  | 'engagement_started'
+  | 'engagement_ended'
+  | 'engagement_metrics_ready';
 
 export interface GPSQualityChange {
   tracker_id: string;

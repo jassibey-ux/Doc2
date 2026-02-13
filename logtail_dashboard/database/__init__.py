@@ -20,6 +20,9 @@ from .models import (
     SessionTag,
     SessionAnnotation,
     AuditLog,
+    Engagement,
+    EngagementTarget,
+    EngagementMetrics,
 )
 from .csv_importer import CSVImporter
 
@@ -43,6 +46,9 @@ __all__ = [
     "SessionTag",
     "SessionAnnotation",
     "AuditLog",
+    "Engagement",
+    "EngagementTarget",
+    "EngagementMetrics",
     # Utilities
     "CSVImporter",
 ]

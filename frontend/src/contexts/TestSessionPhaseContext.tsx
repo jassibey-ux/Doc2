@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useWorkflow } from './WorkflowContext';
-import type { TestSession } from '../types/workflow';
+import type { TestSession, Engagement } from '../types/workflow';
 
 // Session phases
 export type SessionPhase = 'idle' | 'planning' | 'active' | 'capturing' | 'analyzing' | 'completed';
@@ -67,6 +67,16 @@ interface TestSessionPhaseContextType {
   // CUAS jam controls
   toggleJamState: (cuasPlacementId: string) => Promise<boolean>;
   setJamState: (cuasPlacementId: string, isJamming: boolean) => Promise<void>;
+
+  // Engagement controls
+  engagements: Engagement[];
+  activeEngagements: Map<string, Engagement>;
+  createEngagement: (cuasPlacementId: string, targetTrackerIds: string[], name?: string) => Promise<Engagement | null>;
+  quickEngage: (cuasPlacementId?: string) => Promise<Engagement | null>;
+  engage: (engagementId: string) => Promise<Engagement | null>;
+  disengage: (engagementId: string) => Promise<Engagement | null>;
+  abortEngagement: (engagementId: string) => Promise<void>;
+  refreshEngagements: () => Promise<void>;
 }
 
 // Storage keys for persistence
@@ -77,6 +87,7 @@ const STORAGE_KEYS = {
   WIZARD_DATA: 'scensus_wizard_data',
   WIZARD_STEP: 'scensus_wizard_step',
   CUAS_JAM_STATES: 'scensus_cuas_jam_states',
+  ENGAGEMENTS: 'scensus_engagements',
 };
 
 // Default wizard data
@@ -121,6 +132,16 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
 
   // CUAS jam states
   const [cuasJamStates, setCuasJamStates] = useState<CUASJamStates>(new Map());
+
+  // Engagement state
+  const [engagements, setEngagements] = useState<Engagement[]>([]);
+  const activeEngagements = useMemo(() => {
+    const map = new Map<string, Engagement>();
+    engagements
+      .filter(e => e.status === 'active')
+      .forEach(e => map.set(e.id, e));
+    return map;
+  }, [engagements]);
 
   // Timer ref for phase duration
   const durationTimerRef = useRef<number | null>(null);
@@ -592,6 +613,143 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
     });
   }, [activeSessionId, currentPhase, cuasJamStates, addEvent, persistJamStates, activeSession, phaseStartTime]);
 
+  // Engagement actions
+  const refreshEngagements = useCallback(async () => {
+    if (!activeSessionId) return;
+    try {
+      const response = await fetch(`/api/v2/sessions/${activeSessionId}/engagements`);
+      if (response.ok) {
+        const data = await response.json();
+        setEngagements(data.engagements || []);
+      }
+    } catch (error) {
+      console.error('Failed to refresh engagements:', error);
+    }
+  }, [activeSessionId]);
+
+  // Refresh engagements when active session changes
+  useEffect(() => {
+    if (activeSessionId && currentPhase === 'active') {
+      refreshEngagements();
+    }
+  }, [activeSessionId, currentPhase, refreshEngagements]);
+
+  const createEngagement = useCallback(async (
+    cuasPlacementId: string,
+    targetTrackerIds: string[],
+    name?: string,
+  ): Promise<Engagement | null> => {
+    if (!activeSessionId) return null;
+    try {
+      const response = await fetch(`/api/v2/sessions/${activeSessionId}/engagements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cuas_placement_id: cuasPlacementId,
+          name,
+          targets: targetTrackerIds.map(tid => ({
+            tracker_id: tid,
+            role: 'primary_target',
+          })),
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to create engagement');
+      const engagement = await response.json();
+      await refreshEngagements();
+      return engagement;
+    } catch (error) {
+      console.error('Failed to create engagement:', error);
+      return null;
+    }
+  }, [activeSessionId, refreshEngagements]);
+
+  const quickEngage = useCallback(async (cuasPlacementId?: string): Promise<Engagement | null> => {
+    if (!activeSessionId) return null;
+    try {
+      const response = await fetch(`/api/v2/sessions/${activeSessionId}/engagements/quick`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cuas_placement_id: cuasPlacementId || undefined,
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to quick engage');
+      const engagement = await response.json();
+
+      // Auto-sync JAM state
+      if (engagement.cuas_placement_id) {
+        await setJamState(engagement.cuas_placement_id, true);
+      }
+
+      await refreshEngagements();
+      return engagement;
+    } catch (error) {
+      console.error('Failed to quick engage:', error);
+      return null;
+    }
+  }, [activeSessionId, refreshEngagements, setJamState]);
+
+  const engageAction = useCallback(async (engagementId: string): Promise<Engagement | null> => {
+    try {
+      const response = await fetch(`/api/v2/engagements/${engagementId}/engage`, {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error('Failed to engage');
+      const engagement = await response.json();
+
+      // Auto-sync JAM state
+      if (engagement.cuas_placement_id) {
+        await setJamState(engagement.cuas_placement_id, true);
+      }
+
+      await refreshEngagements();
+      return engagement;
+    } catch (error) {
+      console.error('Failed to engage:', error);
+      return null;
+    }
+  }, [refreshEngagements, setJamState]);
+
+  const disengageAction = useCallback(async (engagementId: string): Promise<Engagement | null> => {
+    try {
+      const response = await fetch(`/api/v2/engagements/${engagementId}/disengage`, {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error('Failed to disengage');
+      const engagement = await response.json();
+
+      // Auto-sync JAM state off
+      if (engagement.cuas_placement_id) {
+        await setJamState(engagement.cuas_placement_id, false);
+      }
+
+      await refreshEngagements();
+      return engagement;
+    } catch (error) {
+      console.error('Failed to disengage:', error);
+      return null;
+    }
+  }, [refreshEngagements, setJamState]);
+
+  const abortEngagement = useCallback(async (engagementId: string): Promise<void> => {
+    try {
+      const response = await fetch(`/api/v2/engagements/${engagementId}/abort`, {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error('Failed to abort engagement');
+
+      // Find the engagement to get CUAS placement ID
+      const eng = engagements.find(e => e.id === engagementId);
+      if (eng?.cuas_placement_id) {
+        await setJamState(eng.cuas_placement_id, false);
+      }
+
+      await refreshEngagements();
+    } catch (error) {
+      console.error('Failed to abort engagement:', error);
+    }
+  }, [engagements, refreshEngagements, setJamState]);
+
   const value: TestSessionPhaseContextType = {
     currentPhase,
     activeSessionId,
@@ -618,6 +776,14 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
     loadSessionById,
     toggleJamState,
     setJamState,
+    engagements,
+    activeEngagements,
+    createEngagement,
+    quickEngage,
+    engage: engageAction,
+    disengage: disengageAction,
+    abortEngagement,
+    refreshEngagements,
   };
 
   return (

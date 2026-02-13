@@ -128,6 +128,27 @@ class EventOutcome(str, Enum):
     ABORTED = "aborted"
 
 
+class EngagementStatus(str, Enum):
+    """Engagement lifecycle status."""
+    PLANNED = "planned"
+    ACTIVE = "active"
+    COMPLETE = "complete"
+    ABORTED = "aborted"
+
+
+class EngagementType(str, Enum):
+    """Engagement type for analysis context."""
+    TEST = "test"
+    CONTROL = "control"
+    OPERATIONAL = "operational"
+
+
+class EngagementTargetRole(str, Enum):
+    """Role of a drone within an engagement."""
+    PRIMARY_TARGET = "primary_target"
+    OBSERVER = "observer"
+
+
 # ============================================================================
 # SITE MODEL
 # ============================================================================
@@ -318,6 +339,7 @@ class TestSession(Base):
     session_metrics = relationship("SessionMetrics", back_populates="session", uselist=False, cascade="all, delete-orphan")
     tags = relationship("SessionTag", back_populates="session", cascade="all, delete-orphan")
     annotations = relationship("SessionAnnotation", back_populates="session", cascade="all, delete-orphan")
+    engagements = relationship("Engagement", back_populates="session", cascade="all, delete-orphan")
 
     # Indexes
     __table_args__ = (
@@ -466,6 +488,7 @@ class TestEvent(Base):
     cuas_id = Column(String(36), ForeignKey("cuas_profiles.id"))
     tracker_id = Column(String(100))
     drone_profile_id = Column(String(36), ForeignKey("drone_profiles.id"))
+    engagement_id = Column(String(36), ForeignKey("engagements.id"), nullable=True)
 
     # Outcome
     outcome = Column(String(20))  # success, partial, failed, aborted
@@ -475,10 +498,12 @@ class TestEvent(Base):
     # Relationships
     session = relationship("TestSession", back_populates="events")
     cuas_profile = relationship("CUASProfile", back_populates="test_events")
+    engagement = relationship("Engagement", back_populates="events")
 
     __table_args__ = (
         Index("idx_events_session", "session_id"),
         Index("idx_events_type", "type"),
+        Index("idx_events_engagement", "engagement_id"),
     )
 
     def __repr__(self):
@@ -586,6 +611,139 @@ class SessionAnnotation(Base):
 
     def __repr__(self):
         return f"<SessionAnnotation(session={self.session_id}, type={self.annotation_type})>"
+
+
+# ============================================================================
+# ENGAGEMENT MODELS
+# ============================================================================
+
+class Engagement(Base):
+    """Links one CUAS placement to target drones for a specific test run."""
+
+    __tablename__ = "engagements"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    session_id = Column(String(36), ForeignKey("test_sessions.id"), nullable=False)
+    cuas_placement_id = Column(String(36), ForeignKey("cuas_placements.id"), nullable=False)
+
+    # Identification
+    name = Column(String(255))
+    engagement_type = Column(String(20), default=EngagementType.TEST.value)  # test, control, operational
+    status = Column(String(20), default=EngagementStatus.PLANNED.value)  # planned, active, complete, aborted
+
+    # Timing
+    engage_timestamp = Column(DateTime)
+    disengage_timestamp = Column(DateTime)
+
+    # CUAS position snapshot at engage time
+    cuas_lat = Column(Float)
+    cuas_lon = Column(Float)
+    cuas_alt_m = Column(Float)
+    cuas_orientation_deg = Column(Float)
+
+    # Metadata
+    notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    session = relationship("TestSession", back_populates="engagements")
+    cuas_placement = relationship("CUASPlacement")
+    targets = relationship("EngagementTarget", back_populates="engagement", cascade="all, delete-orphan")
+    metrics = relationship("EngagementMetrics", back_populates="engagement", uselist=False, cascade="all, delete-orphan")
+    events = relationship("TestEvent", back_populates="engagement")
+
+    __table_args__ = (
+        Index("idx_engagements_session", "session_id"),
+        Index("idx_engagements_status", "status"),
+        Index("idx_engagements_cuas_placement", "cuas_placement_id"),
+    )
+
+    def __repr__(self):
+        return f"<Engagement(id={self.id}, session={self.session_id}, status={self.status})>"
+
+
+class EngagementTarget(Base):
+    """Per-drone snapshot within an engagement."""
+
+    __tablename__ = "engagement_targets"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    engagement_id = Column(String(36), ForeignKey("engagements.id"), nullable=False)
+    tracker_id = Column(String(100), nullable=False)
+    drone_profile_id = Column(String(36), ForeignKey("drone_profiles.id"))
+    role = Column(String(20), default=EngagementTargetRole.PRIMARY_TARGET.value)
+
+    # Initial geometry snapshot (computed at ENGAGE)
+    initial_range_m = Column(Float)
+    initial_bearing_deg = Column(Float)
+    angle_off_boresight_deg = Column(Float)
+    initial_altitude_m = Column(Float)
+    drone_lat = Column(Float)
+    drone_lon = Column(Float)
+
+    # Final geometry (computed at DISENGAGE)
+    final_range_m = Column(Float)
+    final_bearing_deg = Column(Float)
+
+    # Relationships
+    engagement = relationship("Engagement", back_populates="targets")
+    drone_profile = relationship("DroneProfile")
+
+    __table_args__ = (
+        Index("idx_engagement_targets_engagement", "engagement_id"),
+    )
+
+    def __repr__(self):
+        return f"<EngagementTarget(engagement={self.engagement_id}, tracker={self.tracker_id})>"
+
+
+class EngagementMetrics(Base):
+    """Computed metrics for an engagement (1:1 with Engagement)."""
+
+    __tablename__ = "engagement_metrics"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    engagement_id = Column(String(36), ForeignKey("engagements.id"), unique=True, nullable=False)
+
+    # Core timing metrics
+    time_to_effect_s = Column(Float)
+    time_to_full_denial_s = Column(Float)
+    denial_duration_s = Column(Float)
+    denial_consistency_pct = Column(Float)
+    recovery_time_s = Column(Float)
+
+    # Range & bearing
+    effective_range_m = Column(Float)
+    denial_bearing_deg = Column(Float)
+    denial_angle_off_boresight_deg = Column(Float)
+    min_range_m = Column(Float)
+    recovery_range_m = Column(Float)
+
+    # Drift
+    max_drift_m = Column(Float)
+    max_lateral_drift_m = Column(Float)
+    max_vertical_drift_m = Column(Float)
+    altitude_change_m = Column(Float)
+
+    # Failsafe
+    failsafe_triggered = Column(Boolean, default=False)
+    failsafe_type = Column(String(50))
+
+    # Scoring
+    pass_fail = Column(String(20))  # pass, fail, inconclusive
+    overall_score = Column(Float)
+
+    # Data source
+    data_source = Column(String(20), default="live_only")  # live_only, sd_merged
+    metrics_json = Column(JSONType)  # Per-target breakdown + extended metrics
+    analyzed_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    engagement = relationship("Engagement", back_populates="metrics")
+
+    def __repr__(self):
+        return f"<EngagementMetrics(engagement={self.engagement_id}, pass_fail={self.pass_fail})>"
 
 
 # ============================================================================

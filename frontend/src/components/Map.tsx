@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import type { DroneSummary, PositionPoint, GPSHealthStatus } from '../types/drone';
-import type { CUASPlacement, CUASProfile, EnhancedPositionPoint, SiteDefinition, GeoPoint } from '../types/workflow';
+import type { CUASPlacement, CUASProfile, EnhancedPositionPoint, SiteDefinition, GeoPoint, Engagement } from '../types/workflow';
 import {
   generateCUASCoverageGeoJSON,
   generateCUASMarkersGeoJSON,
@@ -51,6 +51,8 @@ interface MapProps {
   viewshedImageUrl?: string | null;
   viewshedBounds?: [[number, number], [number, number], [number, number], [number, number]] | null;
   showViewshed?: boolean;
+  // Active engagement visualization
+  activeEngagements?: Engagement[];
 }
 
 // Color palette for drone tracks (cycle through for different drones)
@@ -195,6 +197,7 @@ export default function MapComponent({
   viewshedImageUrl = null,
   viewshedBounds = null,
   showViewshed = true,
+  activeEngagements = [],
 }: MapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -205,6 +208,7 @@ export default function MapComponent({
   const siteSourceAddedRef = useRef<boolean>(false);
   const sdCardSourceAddedRef = useRef<boolean>(false);
   const viewshedSourceAddedRef = useRef<boolean>(false);
+  const engagementSourceAddedRef = useRef<boolean>(false);
 
   // Create a stable mapping of tracker_id to color index
   const droneColorMap = useMemo(() => {
@@ -317,6 +321,81 @@ export default function MapComponent({
     };
   }, [sdCardTracks, currentTime, timelineStart]);
 
+  // Generate engagement line GeoJSON (CUAS-to-drone lines during active engagement)
+  const engagementLinesGeoJSON = useMemo(() => {
+    if (!activeEngagements || activeEngagements.length === 0) {
+      return { type: 'FeatureCollection' as const, features: [] };
+    }
+
+    const features: GeoJSON.Feature[] = [];
+
+    for (const eng of activeEngagements) {
+      if (eng.status !== 'active') continue;
+
+      // Get CUAS position
+      const placement = cuasPlacements.find(p => p.id === eng.cuas_placement_id);
+      if (!placement) continue;
+
+      const cuasLon = eng.cuas_lon ?? placement.position.lon;
+      const cuasLat = eng.cuas_lat ?? placement.position.lat;
+
+      // Draw line to each target drone
+      for (const target of eng.targets) {
+        const drone = drones.get(target.tracker_id);
+        if (!drone || drone.lat === null || drone.lon === null) continue;
+
+        // Determine line color based on GPS health
+        const gpsHealth = drone.gps_health?.health_status ?? 'healthy';
+        const lineColor = gpsHealth === 'healthy' ? '#22c55e' : gpsHealth === 'degraded' ? '#eab308' : '#ef4444';
+
+        // Calculate range for label
+        const R = 6371000;
+        const dLat = ((drone.lat - cuasLat) * Math.PI) / 180;
+        const dLon = ((drone.lon! - cuasLon) * Math.PI) / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+          Math.cos((cuasLat * Math.PI) / 180) * Math.cos((drone.lat * Math.PI) / 180) *
+          Math.sin(dLon / 2) ** 2;
+        const rangeM = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        // Line feature
+        features.push({
+          type: 'Feature',
+          properties: {
+            color: lineColor,
+            rangeM: Math.round(rangeM),
+            trackerId: target.tracker_id,
+            engagementId: eng.id,
+            type: 'line',
+          },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [cuasLon, cuasLat],
+              [drone.lon!, drone.lat],
+            ],
+          },
+        });
+
+        // Midpoint label feature
+        const midLon = (cuasLon + drone.lon!) / 2;
+        const midLat = (cuasLat + drone.lat) / 2;
+        features.push({
+          type: 'Feature',
+          properties: {
+            label: `${Math.round(rangeM)}m`,
+            type: 'label',
+          },
+          geometry: {
+            type: 'Point',
+            coordinates: [midLon, midLat],
+          },
+        });
+      }
+    }
+
+    return { type: 'FeatureCollection' as const, features };
+  }, [activeEngagements, cuasPlacements, drones]);
+
   // Generate CUAS coverage GeoJSON
   const cuasProfilesMap = useMemo(() => createProfilesMap(cuasProfiles), [cuasProfiles]);
 
@@ -416,6 +495,17 @@ export default function MapComponent({
       source.setData(sdCardTrackGeoJSON);
     }
   }, [sdCardTrackGeoJSON]);
+
+  // Update engagement lines when data changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !engagementSourceAddedRef.current) return;
+
+    const source = map.getSource('engagement-lines') as maplibregl.GeoJSONSource;
+    if (source) {
+      source.setData(engagementLinesGeoJSON);
+    }
+  }, [engagementLinesGeoJSON]);
 
   // Toggle SD Card track visibility
   useEffect(() => {
@@ -619,6 +709,69 @@ export default function MapComponent({
       }, 'drone-tracks-glow'); // Place SD line under live track glow
 
       sdCardSourceAddedRef.current = true;
+
+      // Add engagement lines source and layers
+      map.addSource('engagement-lines', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+
+      // Engagement line layer (CUAS-to-drone connection)
+      map.addLayer({
+        id: 'engagement-lines-line',
+        type: 'line',
+        source: 'engagement-lines',
+        filter: ['==', ['get', 'type'], 'line'],
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 2,
+          'line-opacity': 0.8,
+          'line-dasharray': [4, 4],
+        },
+      });
+
+      // Engagement line glow
+      map.addLayer({
+        id: 'engagement-lines-glow',
+        type: 'line',
+        source: 'engagement-lines',
+        filter: ['==', ['get', 'type'], 'line'],
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 6,
+          'line-opacity': 0.3,
+          'line-blur': 3,
+        },
+      }, 'engagement-lines-line');
+
+      // Engagement range label layer
+      map.addLayer({
+        id: 'engagement-lines-label',
+        type: 'symbol',
+        source: 'engagement-lines',
+        filter: ['==', ['get', 'type'], 'label'],
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-size': 11,
+          'text-font': ['Open Sans Bold'],
+          'text-allow-overlap': true,
+        },
+        paint: {
+          'text-color': '#ffffff',
+          'text-halo-color': 'rgba(0, 0, 0, 0.8)',
+          'text-halo-width': 2,
+        },
+      });
+
+      engagementSourceAddedRef.current = true;
 
       // Add CUAS coverage source and layers
       map.addSource('cuas-coverage', {

@@ -20,6 +20,7 @@ from ..models import (
     TrackerAssignment,
     CUASPlacement,
     SessionStatus,
+    Engagement,
 )
 from .base import BaseRepository
 
@@ -80,6 +81,10 @@ class SessionRepository(BaseRepository[TestSession]):
                 selectinload(TestSession.tracker_assignments),
                 selectinload(TestSession.cuas_placements),
                 selectinload(TestSession.events),
+                selectinload(TestSession.engagements)
+                    .selectinload(Engagement.targets),
+                selectinload(TestSession.engagements)
+                    .selectinload(Engagement.metrics),
             )
             .where(TestSession.id == session_id)
         )
