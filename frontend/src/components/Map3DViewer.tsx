@@ -1112,6 +1112,9 @@ export default function Map3DViewer({
         id: 'viewshed-layer',
         type: 'raster',
         source: 'viewshed-overlay',
+        layout: {
+          'visibility': 'none',
+        },
         paint: {
           'raster-opacity': 0.6,
           'raster-fade-duration': 300,

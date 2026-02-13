@@ -714,6 +714,9 @@ export default function MapComponent({
         id: 'viewshed-layer',
         type: 'raster',
         source: 'viewshed-overlay',
+        layout: {
+          'visibility': 'none', // Hidden until a viewshed is computed
+        },
         paint: {
           'raster-opacity': 0.7,
           'raster-fade-duration': 300,
