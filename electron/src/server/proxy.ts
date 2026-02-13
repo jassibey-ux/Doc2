@@ -7,7 +7,6 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { createProxyMiddleware } from 'http-proxy-middleware';
 import log from 'electron-log';
 
 const PYTHON_BACKEND_PORT = 8083;
@@ -18,6 +17,9 @@ const PYTHON_BACKEND_URL = `http://127.0.0.1:${PYTHON_BACKEND_PORT}`;
  */
 export function createPythonProxy() {
   try {
+    // Dynamic import to avoid build failure when not installed
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createProxyMiddleware } = require('http-proxy-middleware');
     const proxy = createProxyMiddleware({
       target: PYTHON_BACKEND_URL,
       changeOrigin: true,
