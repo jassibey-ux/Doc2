@@ -6,7 +6,7 @@
  * to the MapLibre 2D view.
  */
 
-import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import type { PositionPoint } from '../types/drone';
 import type { EnhancedPositionPoint, CUASPlacement, CUASProfile, SiteDefinition } from '../types/workflow';
 
@@ -42,19 +42,19 @@ interface CesiumMapProps {
 
 const CesiumMap: React.FC<CesiumMapProps> = ({
   droneHistory,
-  enhancedHistory,
+  enhancedHistory: _enhancedHistory,
   currentTime,
   timelineStart,
   site,
   cuasPlacements,
   cuasProfiles,
   cuasJamStates,
-  selectedDroneId,
-  onDroneClick,
-  viewshedImageUrl,
-  viewshedBounds,
-  rfCoverageImageUrl,
-  rfCoverageBounds,
+  selectedDroneId: _selectedDroneId,
+  onDroneClick: _onDroneClick,
+  viewshedImageUrl: _viewshedImageUrl,
+  viewshedBounds: _viewshedBounds,
+  rfCoverageImageUrl: _rfCoverageImageUrl,
+  rfCoverageBounds: _rfCoverageBounds,
   onClose,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -93,7 +93,7 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
 
         // Dark atmosphere
         viewer.scene.globe.enableLighting = true;
-        viewer.scene.skyAtmosphere.show = true;
+        if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = true;
 
         // Add Google 3D Tiles if API key available
         if (GOOGLE_MAPS_API_KEY) {
@@ -153,9 +153,9 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
         // Create polyline positions
         const cartesians = filtered.map((p) =>
           Cesium.Cartesian3.fromDegrees(
-            p.longitude,
-            p.latitude,
-            (p.altitude_m || 0) + 1, // Slight offset above terrain
+            p.lon,
+            p.lat,
+            (p.alt_m || 0) + 1, // Slight offset above terrain
           )
         );
 
@@ -175,9 +175,9 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
         viewer.entities.add({
           name: `${trackerId}_marker`,
           position: Cesium.Cartesian3.fromDegrees(
-            lastPos.longitude,
-            lastPos.latitude,
-            (lastPos.altitude_m || 0) + 2,
+            lastPos.lon,
+            lastPos.lat,
+            (lastPos.alt_m || 0) + 2,
           ),
           point: {
             pixelSize: 10,
@@ -207,9 +207,9 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
           viewer.entities.add({
             name: `cuas_${placement.id}`,
             position: Cesium.Cartesian3.fromDegrees(
-              placement.lon,
-              placement.lat,
-              (placement.alt_m || 0) + 2,
+              placement.position.lon,
+              placement.position.lat,
+              (placement.height_agl_m || 0) + 2,
             ),
             billboard: {
               image: createCUASDataUri(isJamming ? '#ef4444' : '#f97316'),
@@ -236,8 +236,8 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
       } else if (site) {
         viewer.camera.flyTo({
           destination: Cesium.Cartesian3.fromDegrees(
-            site.center_lon,
-            site.center_lat,
+            site.center.lon,
+            site.center.lat,
             5000,
           ),
         });

@@ -527,8 +527,8 @@ export default function MapView() {
           const drone = selectedDrone;
           const cuas = placements[0];
           if (!cuas) return null;
-          const pt2Lat = drone?.lat ?? selectedSite?.center_lat ?? cuas.lat + 0.005;
-          const pt2Lon = drone?.lon ?? selectedSite?.center_lon ?? cuas.lon + 0.005;
+          const pt2Lat = drone?.lat ?? selectedSite?.center.lat ?? cuas.position.lat + 0.005;
+          const pt2Lon = drone?.lon ?? selectedSite?.center.lon ?? cuas.position.lon + 0.005;
           return (
             <div style={{
               position: 'absolute', bottom: '80px', left: '280px', right: '20px',
@@ -536,7 +536,7 @@ export default function MapView() {
             }}>
               <div style={{ flex: 2 }}>
                 <TerrainProfileChart
-                  lat1={cuas.lat} lon1={cuas.lon} height1_m={cuas.alt_m ?? 5}
+                  lat1={cuas.position.lat} lon1={cuas.position.lon} height1_m={cuas.height_agl_m ?? 5}
                   lat2={pt2Lat} lon2={pt2Lon} height2_m={drone?.alt_m ?? 50}
                   onClose={() => setShowTerrainProfile(false)}
                 />
@@ -544,8 +544,8 @@ export default function MapView() {
               {showLinkBudget && (
                 <div style={{ flex: 1 }}>
                   <LinkBudgetPanel
-                    cuasLat={cuas.lat} cuasLon={cuas.lon}
-                    cuasHeightM={cuas.alt_m ?? 5}
+                    cuasLat={cuas.position.lat} cuasLon={cuas.position.lon}
+                    cuasHeightM={cuas.height_agl_m ?? 5}
                     targetLat={pt2Lat} targetLon={pt2Lon}
                     targetHeightM={drone?.alt_m ?? 50}
                     onClose={() => setShowLinkBudget(false)}

@@ -30,7 +30,7 @@ const API_BASE = '';
 export const CloudSyncStatus: React.FC = () => {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [showConfig, setShowConfig] = useState(false);
-  const [config, setConfig] = useState<CloudConfig | null>(null);
+  const [_config, setConfig] = useState<CloudConfig | null>(null);
   const [configForm, setConfigForm] = useState({
     cloud_url: '',
     api_key: '',
