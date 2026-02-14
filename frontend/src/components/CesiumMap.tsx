@@ -16,8 +16,10 @@ import type {
   CUASProfile,
   SiteDefinition,
   Engagement,
+  JamBurst,
 } from '../types/workflow';
 import { QUALITY_COLORS } from '../utils/trackSegmentation';
+import { computeEngagementGeometries } from '../utils/engagementGeometry';
 
 // Cesium types - lazy loaded
 type CesiumViewer = any;
@@ -50,6 +52,9 @@ interface CesiumMapProps {
   rfCoverageImageUrl?: string | null;
   rfCoverageBounds?: [[number, number], [number, number], [number, number], [number, number]] | null;
   onClose?: () => void;
+  activeBursts?: Map<string, JamBurst>;
+  onCuasClick?: (cuasPlacementId: string) => void;
+  engagementModeCuasId?: string | null;
 }
 
 const CesiumMap: React.FC<CesiumMapProps> = ({
@@ -66,6 +71,9 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
   onDroneClick,
   engagements,
   onClose,
+  activeBursts,
+  onCuasClick,
+  engagementModeCuasId,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CesiumViewer>(null);
@@ -121,6 +129,10 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
             if (name.startsWith('drone_') && onDroneClick) {
               const droneId = name.replace('drone_', '').replace('_marker', '').replace('_track', '');
               onDroneClick(droneId);
+            } else if (name.startsWith('cuas_') && onCuasClick) {
+              // Extract placement ID stored in entity description
+              const placementId = entity.description?.getValue?.() || '';
+              if (placementId) onCuasClick(placementId);
             }
           }
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
@@ -230,9 +242,11 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
         const effectiveRange = profile?.effective_range_m || 500;
         const placementColor = isJamming ? '#ef4444' : '#f97316';
 
-        // CUAS marker
+        // CUAS marker (description stores placement ID for click handler)
+        const isSelected = engagementModeCuasId === placement.id;
         viewer.entities.add({
           name: `cuas_${placement.id}`,
+          description: placement.id,
           position: Cesium.Cartesian3.fromDegrees(
             placement.position.lon,
             placement.position.lat,
@@ -240,8 +254,8 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
           ),
           billboard: {
             image: createCUASDataUri(placementColor),
-            width: 28,
-            height: 28,
+            width: isSelected ? 36 : 28,
+            height: isSelected ? 36 : 28,
           },
           label: showLabels ? {
             text: profile?.name || 'CUAS',
@@ -433,82 +447,68 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
       });
     }
 
-    // ── Engagement Visualization ──
+    // ── Engagement Visualization (shared geometry module) ──
     if (engagements && cuasPlacements) {
-      for (const engagement of engagements) {
-        if (engagement.status !== 'active' && engagement.status !== 'complete') continue;
+      const geometries = computeEngagementGeometries(
+        engagements,
+        activeBursts,
+        cuasPlacements,
+        currentDroneData ?? new Map(),
+      );
 
-        // Find CUAS position
-        const cuasPlacement = cuasPlacements.find(
-          (p) => p.id === engagement.cuas_placement_id
-        );
-        if (!cuasPlacement) continue;
-
+      for (const g of geometries) {
         const cuasPos = Cesium.Cartesian3.fromDegrees(
-          cuasPlacement.position.lon,
-          cuasPlacement.position.lat,
-          (cuasPlacement.height_agl_m || 0) + 2,
+          g.emitterLon, g.emitterLat, g.emitterAlt + 2,
+        );
+        const dronePos = Cesium.Cartesian3.fromDegrees(
+          g.droneLon, g.droneLat, g.droneAlt + 2,
         );
 
-        // Draw lines from CUAS to each target drone
-        for (const target of engagement.targets) {
-          // Find drone's current position
-          const droneData = currentDroneData?.get(target.tracker_id);
-          if (!droneData?.lat || !droneData?.lon) continue;
+        // Per-jam-state color: red when jamming, cyan when active, yellow when complete
+        let engColor: any;
+        let lineWidth: number;
+        let dashLen: number;
+        if (g.isJamming) {
+          engColor = Cesium.Color.RED.withAlpha(0.9);
+          lineWidth = 3;
+          dashLen = 8.0;
+        } else {
+          engColor = Cesium.Color.CYAN.withAlpha(0.8);
+          lineWidth = 2;
+          dashLen = 16.0;
+        }
 
-          const dronePos = Cesium.Cartesian3.fromDegrees(
-            droneData.lon,
-            droneData.lat,
-            (droneData.alt_m || 0) + 2,
-          );
+        viewer.entities.add({
+          name: `engagement_${g.engagementId}_${g.trackerId}`,
+          polyline: {
+            positions: [cuasPos, dronePos],
+            width: lineWidth,
+            material: new Cesium.PolylineDashMaterialProperty({
+              color: engColor,
+              dashLength: dashLen,
+            }),
+          },
+        });
 
-          const engColor =
-            engagement.status === 'active'
-              ? Cesium.Color.RED.withAlpha(0.8)
-              : Cesium.Color.YELLOW.withAlpha(0.5);
-
+        // Distance + bearing label at midpoint
+        if (showLabels) {
+          const midAlt = (g.emitterAlt + g.droneAlt) / 2;
           viewer.entities.add({
-            name: `engagement_${engagement.id}_${target.tracker_id}`,
-            polyline: {
-              positions: [cuasPos, dronePos],
-              width: engagement.status === 'active' ? 3 : 1,
-              material: new Cesium.PolylineDashMaterialProperty({
-                color: engColor,
-                dashLength: 12.0,
-              }),
+            name: `engagement_dist_${g.engagementId}_${g.trackerId}`,
+            position: Cesium.Cartesian3.fromDegrees(
+              g.midpoint.lon, g.midpoint.lat, midAlt + 10,
+            ),
+            label: {
+              text: g.distanceLabel,
+              font: '10px monospace',
+              fillColor: g.isJamming ? Cesium.Color.RED : Cesium.Color.CYAN,
+              outlineColor: Cesium.Color.BLACK,
+              outlineWidth: 2,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              showBackground: true,
+              backgroundColor: Cesium.Color.BLACK.withAlpha(0.6),
             },
           });
-
-          // Distance label at midpoint
-          if (showLabels) {
-            const midLat = (cuasPlacement.position.lat + droneData.lat) / 2;
-            const midLon = (cuasPlacement.position.lon + droneData.lon) / 2;
-            const midAlt =
-              ((cuasPlacement.height_agl_m || 0) + (droneData.alt_m || 0)) / 2;
-
-            // Calculate distance
-            const dLat = (droneData.lat - cuasPlacement.position.lat) * 111320;
-            const dLon =
-              (droneData.lon - cuasPlacement.position.lon) *
-              111320 *
-              Math.cos((cuasPlacement.position.lat * Math.PI) / 180);
-            const dist = Math.sqrt(dLat * dLat + dLon * dLon);
-
-            viewer.entities.add({
-              name: `engagement_dist_${engagement.id}_${target.tracker_id}`,
-              position: Cesium.Cartesian3.fromDegrees(midLon, midLat, midAlt + 10),
-              label: {
-                text: `${dist.toFixed(0)}m`,
-                font: '10px monospace',
-                fillColor: Cesium.Color.RED,
-                outlineColor: Cesium.Color.BLACK,
-                outlineWidth: 2,
-                style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-                showBackground: true,
-                backgroundColor: Cesium.Color.BLACK.withAlpha(0.6),
-              },
-            });
-          }
         }
       }
     }
@@ -537,7 +537,7 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
   }, [
     cesiumLoaded, droneHistory, enhancedHistory, currentTime, timelineStart,
     cuasPlacements, cuasProfiles, cuasJamStates, site, engagements,
-    currentDroneData, selectedDroneId, showLabels,
+    currentDroneData, selectedDroneId, showLabels, activeBursts, engagementModeCuasId,
   ]);
 
   // Fly to selected drone

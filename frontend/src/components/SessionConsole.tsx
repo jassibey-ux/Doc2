@@ -36,6 +36,7 @@ import {
   Globe,
   Map as MapIcon,
   History,
+  Crosshair,
 } from 'lucide-react';
 import SDCardPanel from './SDCardPanel';
 import TrackerSDCardSection from './TrackerSDCardSection';
@@ -111,6 +112,8 @@ export default function SessionConsole() {
     engagements,
     activeEngagements,
     quickEngage,
+    createEngagement,
+    engage,
     disengage,
     jamOn,
     jamOff,
@@ -202,6 +205,7 @@ export default function SessionConsole() {
   const [showSDCardPanel, setShowSDCardPanel] = useState(false);
   const [expandedSDTrackerId, setExpandedSDTrackerId] = useState<string | null>(null);
   const [showEngageDropdown, setShowEngageDropdown] = useState(false);
+  const [engagementModeCuasId, setEngagementModeCuasId] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const engageDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -268,10 +272,30 @@ export default function SessionConsole() {
     }
   }, [showJammerDropdown, showEngageDropdown]);
 
-  // Handle drone selection
-  const handleDroneClick = useCallback((droneId: string) => {
-    setSelectedDroneId(droneId);
+  // Handle CUAS click on map — enter engagement mode
+  const handleCuasClickOnMap = useCallback((cuasPlacementId: string) => {
+    setEngagementModeCuasId(cuasPlacementId);
   }, []);
+
+  // Handle drone selection — if in engagement mode, create engagement
+  const handleDroneClick = useCallback(async (droneId: string) => {
+    if (engagementModeCuasId) {
+      try {
+        const engagement = await createEngagement(engagementModeCuasId, [droneId]);
+        if (engagement) {
+          await engage(engagement.id);
+          const placement = cuasPlacements.find(p => p.id === engagementModeCuasId);
+          const cuasName = placement ? profilesMap.get(placement.cuas_profile_id)?.name : 'CUAS';
+          showToast('success', `Engaged ${cuasName} → ${droneId}`);
+        }
+      } catch (error) {
+        showToast('error', 'Failed to create engagement');
+      }
+      setEngagementModeCuasId(null);
+      return;
+    }
+    setSelectedDroneId(droneId);
+  }, [engagementModeCuasId, createEngagement, engage, cuasPlacements, profilesMap, showToast]);
 
   // Handle stop session - stay on page, don't redirect
   const handleStop = useCallback(async () => {
@@ -480,6 +504,7 @@ export default function SessionConsole() {
       }
 
       if (key === 'escape') {
+        setEngagementModeCuasId(null);
         setShowJammerDropdown(false);
         setShowEngageDropdown(false);
         setShowNoteInput(false);
@@ -830,6 +855,51 @@ export default function SessionConsole() {
         {/* Center - Map */}
         <main className="sc-center">
           <div className="sc-map">
+            {/* Engagement Mode Banner */}
+            {engagementModeCuasId && (
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                zIndex: 1001,
+                background: 'linear-gradient(180deg, rgba(239, 68, 68, 0.95) 0%, rgba(239, 68, 68, 0.85) 100%)',
+                color: '#fff',
+                padding: '8px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                fontSize: '13px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                backdropFilter: 'blur(8px)',
+                borderBottom: '2px solid rgba(255, 255, 255, 0.3)',
+              }}>
+                <Crosshair size={16} />
+                <span>ENGAGEMENT MODE — Click a drone to engage with {
+                  (() => {
+                    const p = cuasPlacements.find(pl => pl.id === engagementModeCuasId);
+                    return p ? profilesMap.get(p.cuas_profile_id)?.name ?? 'CUAS' : 'CUAS';
+                  })()
+                }</span>
+                <button
+                  onClick={() => setEngagementModeCuasId(null)}
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    border: '1px solid rgba(255,255,255,0.4)',
+                    color: '#fff',
+                    borderRadius: '4px',
+                    padding: '2px 8px',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    marginLeft: '8px',
+                  }}
+                >
+                  ESC to cancel
+                </button>
+              </div>
+            )}
             <MapComponent
               drones={sessionDrones}
               droneHistory={sessionDroneHistory}
@@ -846,6 +916,9 @@ export default function SessionConsole() {
               sdCardTracks={sdCardTracks}
               showSDCardTracks={showSDCardTracks}
               activeEngagements={Array.from(activeEngagements.values())}
+              activeBursts={activeBursts}
+              onCuasClick={handleCuasClickOnMap}
+              engagementModeCuasId={engagementModeCuasId}
             />
 
             {/* 3D View Overlay */}
@@ -866,6 +939,10 @@ export default function SessionConsole() {
                 onDroneClick={handleDroneClick}
                 sdCardTracks={sdCardTracks}
                 showSDCardTracks={showSDCardTracks}
+                activeEngagements={Array.from(activeEngagements.values())}
+                activeBursts={activeBursts}
+                onCuasClick={handleCuasClickOnMap}
+                engagementModeCuasId={engagementModeCuasId}
               />
             )}
 
@@ -884,6 +961,10 @@ export default function SessionConsole() {
                   selectedDroneId={selectedDroneId}
                   onDroneClick={handleDroneClick}
                   onClose={() => setShowCesiumGlobe(false)}
+                  engagements={Array.from(activeEngagements.values())}
+                  activeBursts={activeBursts}
+                  onCuasClick={handleCuasClickOnMap}
+                  engagementModeCuasId={engagementModeCuasId}
                 />
               </div>
             )}

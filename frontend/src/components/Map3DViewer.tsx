@@ -7,7 +7,8 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import type { PositionPoint, DroneSummary } from '../types/drone';
-import type { EnhancedPositionPoint, SiteDefinition, CUASPlacement, CUASProfile } from '../types/workflow';
+import type { EnhancedPositionPoint, SiteDefinition, CUASPlacement, CUASProfile, Engagement, JamBurst } from '../types/workflow';
+import { computeEngagementGeometries, engagementGeometriesToGeoJSON } from '../utils/engagementGeometry';
 import { QUALITY_COLORS } from '../utils/trackSegmentation';
 import { createCUASMarkerElement, CUAS_MARKER_STYLES } from '../utils/cuasIcons';
 import { RotateCcw, ChevronUp, ChevronDown, Eye, Settings, Mountain, Building2 } from 'lucide-react';
@@ -44,6 +45,12 @@ interface Map3DViewerProps {
   viewshedImageUrl?: string | null;
   viewshedBounds?: [[number, number], [number, number], [number, number], [number, number]] | null;
   showViewshed?: boolean;
+  // Engagement visualization
+  activeEngagements?: Engagement[];
+  activeBursts?: Map<string, JamBurst>;
+  // Map-click engagement mode
+  onCuasClick?: (cuasPlacementId: string) => void;
+  engagementModeCuasId?: string | null;
 }
 
 // Track colors
@@ -392,11 +399,16 @@ export default function Map3DViewer({
   viewshedImageUrl = null,
   viewshedBounds = null,
   showViewshed = true,
+  activeEngagements = [],
+  activeBursts = new Map(),
+  onCuasClick,
+  engagementModeCuasId = null,
 }: Map3DViewerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const sourceAddedRef = useRef(false);
   const sdCardSourceAddedRef = useRef(false);
+  const engagementSourceAddedRef = useRef(false);
   const viewshedSourceAddedRef = useRef(false);
   const mapLoadedRef = useRef(false);
   const cuasMarkersRef = useRef<maplibregl.Marker[]>([]);
@@ -417,6 +429,12 @@ export default function Map3DViewer({
     mapStyleRef.current = mapStyle;
     console.log('[Map3DViewer] mapStyleRef updated to:', mapStyle);
   }, [mapStyle]);
+
+  // Engagement line GeoJSON (shared geometry module)
+  const engagementLinesGeoJSON = useMemo(() => {
+    const geometries = computeEngagementGeometries(activeEngagements, activeBursts, cuasPlacements, currentDroneData ?? new Map());
+    return engagementGeometriesToGeoJSON(geometries);
+  }, [activeEngagements, activeBursts, cuasPlacements, currentDroneData]);
 
   // Calculate bounds from data (history + current drones)
   const bounds = useMemo(() => {
@@ -596,6 +614,38 @@ export default function Map3DViewer({
       );
     }
   }, [showViewshed, viewshedImageUrl]);
+
+  // Update engagement lines when data changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !engagementSourceAddedRef.current) return;
+
+    const source = map.getSource('engagement-lines-3d') as maplibregl.GeoJSONSource;
+    if (source) {
+      source.setData(engagementLinesGeoJSON);
+    }
+  }, [engagementLinesGeoJSON]);
+
+  // Engagement mode: highlight selected CUAS marker
+  useEffect(() => {
+    for (const marker of cuasMarkersRef.current) {
+      const el = marker.getElement();
+      const cuasId = el.dataset?.cuasId;
+      if (engagementModeCuasId && cuasId === engagementModeCuasId) {
+        el.style.outline = '3px solid #ef4444';
+        el.style.outlineOffset = '2px';
+        el.style.borderRadius = '50%';
+      } else {
+        el.style.outline = '';
+        el.style.outlineOffset = '';
+      }
+    }
+    // Set crosshair cursor on the map container
+    const map = mapRef.current;
+    if (map) {
+      map.getCanvas().style.cursor = engagementModeCuasId ? 'crosshair' : '';
+    }
+  }, [engagementModeCuasId]);
 
   // Update live drone markers with current position and telemetry
   useEffect(() => {
@@ -1088,6 +1138,14 @@ export default function Map3DViewer({
             isJamming
           );
 
+          // Make CUAS marker clickable for engagement mode
+          el.style.cursor = 'pointer';
+          el.dataset.cuasId = placement.id;
+          el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (onCuasClick) onCuasClick(placement.id);
+          });
+
           const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
             .setLngLat([placement.position.lon, placement.position.lat])
             .addTo(map);
@@ -1095,6 +1153,125 @@ export default function Map3DViewer({
           cuasMarkersRef.current.push(marker);
         });
       }
+
+      // Add engagement lines source and layers
+      map.addSource('engagement-lines-3d', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+
+      // Engagement line - non-jamming (dashed, GPS-health colored)
+      map.addLayer({
+        id: 'engagement-lines-3d-line',
+        type: 'line',
+        source: 'engagement-lines-3d',
+        filter: ['all', ['==', ['get', 'type'], 'line'], ['!=', ['get', 'isJamming'], true]],
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 2,
+          'line-opacity': 0.8,
+          'line-dasharray': [4, 4],
+        },
+      });
+
+      // Engagement line - active jamming (red, wider)
+      map.addLayer({
+        id: 'engagement-lines-3d-jamming',
+        type: 'line',
+        source: 'engagement-lines-3d',
+        filter: ['all', ['==', ['get', 'type'], 'line'], ['==', ['get', 'isJamming'], true]],
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#ef4444',
+          'line-width': 3.5,
+          'line-opacity': 0.95,
+          'line-dasharray': [2, 2],
+        },
+      });
+
+      // Engagement glow - non-jamming
+      map.addLayer({
+        id: 'engagement-lines-3d-glow',
+        type: 'line',
+        source: 'engagement-lines-3d',
+        filter: ['all', ['==', ['get', 'type'], 'line'], ['!=', ['get', 'isJamming'], true]],
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 6,
+          'line-opacity': 0.3,
+          'line-blur': 3,
+        },
+      }, 'engagement-lines-3d-line');
+
+      // Engagement glow - jamming
+      map.addLayer({
+        id: 'engagement-lines-3d-jamming-glow',
+        type: 'line',
+        source: 'engagement-lines-3d',
+        filter: ['all', ['==', ['get', 'type'], 'line'], ['==', ['get', 'isJamming'], true]],
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#ef4444',
+          'line-width': 10,
+          'line-opacity': 0.4,
+          'line-blur': 4,
+        },
+      }, 'engagement-lines-3d-jamming');
+
+      // Engagement range + bearing label
+      map.addLayer({
+        id: 'engagement-lines-3d-label',
+        type: 'symbol',
+        source: 'engagement-lines-3d',
+        filter: ['==', ['get', 'type'], 'label'],
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-size': 11,
+          'text-font': ['Open Sans Bold'],
+          'text-allow-overlap': true,
+          'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
+          'text-radial-offset': 0.5,
+        },
+        paint: {
+          'text-color': [
+            'case',
+            ['==', ['get', 'isJamming'], true],
+            '#fca5a5',
+            '#ffffff',
+          ],
+          'text-halo-color': 'rgba(0, 0, 0, 0.8)',
+          'text-halo-width': 2,
+        },
+      });
+
+      engagementSourceAddedRef.current = true;
+
+      // Engagement line click popup
+      const engLineClickHandler = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        if (!e.features || e.features.length === 0) return;
+        const props = e.features[0].properties;
+        if (!props) return;
+
+        const elapsed = props.engageTimestamp
+          ? `${Math.round((Date.now() - new Date(props.engageTimestamp).getTime()) / 1000)}s`
+          : '--';
+
+        new maplibregl.Popup({ closeOnClick: true })
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div style="font-family:monospace;font-size:11px;line-height:1.6;color:#fff;background:rgba(15,15,30,0.92);padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);backdrop-filter:blur(8px);">
+              <div style="font-weight:700;margin-bottom:4px;">${props.cuasName || 'CUAS'} → ${props.trackerId}</div>
+              <div>Range: <b>${props.rangeM}m</b> | Bearing: <b>${props.bearingDeg}°</b></div>
+              <div>Slant: <b>${props.slantRangeM}m</b> | ΔAlt: <b>${props.altitudeDeltaM}m</b></div>
+              <div>Jam: <b style="color:${props.isJamming ? '#ef4444' : '#22c55e'}">${props.isJamming ? 'ACTIVE' : 'OFF'}</b> | Time: <b>${elapsed}</b></div>
+            </div>
+          `)
+          .addTo(map);
+      };
+      map.on('click', 'engagement-lines-3d-line', engLineClickHandler);
+      map.on('click', 'engagement-lines-3d-jamming', engLineClickHandler);
 
       // Add viewshed overlay source (terrain-aware LOS/NLOS)
       map.addSource('viewshed-overlay', {

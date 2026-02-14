@@ -16,6 +16,7 @@ import {
   calculateSiteBounds,
 } from '../utils/siteVisualization';
 import { createQualityTrackGeoJSON } from '../utils/trackSegmentation';
+import { computeEngagementGeometries, engagementGeometriesToGeoJSON } from '../utils/engagementGeometry';
 
 interface MapProps {
   drones: Map<string, DroneSummary>;
@@ -57,6 +58,9 @@ interface MapProps {
   sessionActors?: SessionActor[];
   // Active jam bursts keyed by engagement ID
   activeBursts?: Map<string, JamBurst>;
+  // Map-click engagement mode
+  onCuasClick?: (cuasPlacementId: string) => void;
+  engagementModeCuasId?: string | null;
 }
 
 // Color palette for drone tracks (cycle through for different drones)
@@ -204,6 +208,8 @@ export default function MapComponent({
   activeEngagements = [],
   sessionActors = [],
   activeBursts = new Map(),
+  onCuasClick,
+  engagementModeCuasId = null,
 }: MapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -216,6 +222,8 @@ export default function MapComponent({
   const viewshedSourceAddedRef = useRef<boolean>(false);
   const engagementSourceAddedRef = useRef<boolean>(false);
   const actorSourceAddedRef = useRef<boolean>(false);
+  const onCuasClickRef = useRef(onCuasClick);
+  onCuasClickRef.current = onCuasClick;
 
   // Create a stable mapping of tracker_id to color index
   const droneColorMap = useMemo(() => {
@@ -330,100 +338,8 @@ export default function MapComponent({
 
   // Generate engagement line GeoJSON (CUAS-to-drone lines during active engagement)
   const engagementLinesGeoJSON = useMemo(() => {
-    if (!activeEngagements || activeEngagements.length === 0) {
-      return { type: 'FeatureCollection' as const, features: [] };
-    }
-
-    const features: GeoJSON.Feature[] = [];
-
-    for (const eng of activeEngagements) {
-      if (eng.status !== 'active') continue;
-
-      // Check if this engagement has an active burst
-      const activeBurst = activeBursts.get(eng.id);
-      const isJamming = !!activeBurst;
-
-      // Use emitter position from engagement snapshot (handles both CUAS and actor emitters)
-      // Fall back to CUAS placement lookup only if engagement snapshot has no position
-      let emitterLat = eng.cuas_lat;
-      let emitterLon = eng.cuas_lon;
-
-      if (isJamming && activeBurst.emitter_lat != null && activeBurst.emitter_lon != null) {
-        // Prefer burst emitter position (most current snapshot)
-        emitterLat = activeBurst.emitter_lat;
-        emitterLon = activeBurst.emitter_lon;
-      }
-
-      if (emitterLat == null || emitterLon == null) {
-        // Fall back to CUAS placement position
-        const placement = cuasPlacements.find(p => p.id === eng.cuas_placement_id);
-        if (!placement) continue;
-        emitterLat = placement.position.lat;
-        emitterLon = placement.position.lon;
-      }
-
-      // Draw line to each target drone
-      for (const target of eng.targets) {
-        const drone = drones.get(target.tracker_id);
-        if (!drone || drone.lat === null || drone.lon === null) continue;
-
-        // Determine line color: red when actively jamming, otherwise based on GPS health
-        let lineColor: string;
-        if (isJamming) {
-          lineColor = '#ef4444'; // Red for active jamming
-        } else {
-          const gpsHealth = drone.gps_health?.health_status ?? 'healthy';
-          lineColor = gpsHealth === 'healthy' ? '#22c55e' : gpsHealth === 'degraded' ? '#eab308' : '#ef4444';
-        }
-
-        // Calculate range for label
-        const R = 6371000;
-        const dLat = ((drone.lat - emitterLat) * Math.PI) / 180;
-        const dLon = ((drone.lon! - emitterLon) * Math.PI) / 180;
-        const a = Math.sin(dLat / 2) ** 2 +
-          Math.cos((emitterLat * Math.PI) / 180) * Math.cos((drone.lat * Math.PI) / 180) *
-          Math.sin(dLon / 2) ** 2;
-        const rangeM = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-        // Line feature
-        features.push({
-          type: 'Feature',
-          properties: {
-            color: lineColor,
-            rangeM: Math.round(rangeM),
-            trackerId: target.tracker_id,
-            engagementId: eng.id,
-            type: 'line',
-            isJamming,
-          },
-          geometry: {
-            type: 'LineString',
-            coordinates: [
-              [emitterLon, emitterLat],
-              [drone.lon!, drone.lat],
-            ],
-          },
-        });
-
-        // Midpoint label feature
-        const midLon = (emitterLon + drone.lon!) / 2;
-        const midLat = (emitterLat + drone.lat) / 2;
-        features.push({
-          type: 'Feature',
-          properties: {
-            label: `${Math.round(rangeM)}m`,
-            type: 'label',
-            isJamming,
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [midLon, midLat],
-          },
-        });
-      }
-    }
-
-    return { type: 'FeatureCollection' as const, features };
+    const geometries = computeEngagementGeometries(activeEngagements, activeBursts, cuasPlacements, drones);
+    return engagementGeometriesToGeoJSON(geometries);
   }, [activeEngagements, activeBursts, cuasPlacements, drones]);
 
   // Generate session actor GeoJSON (human emitter operators on the field)
@@ -578,6 +494,37 @@ export default function MapComponent({
       source.setData(sessionActorsGeoJSON);
     }
   }, [sessionActorsGeoJSON]);
+
+  // Engagement mode: crosshair cursor + highlight selected CUAS
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !cuasSourceAddedRef.current) return;
+
+    if (engagementModeCuasId) {
+      map.getCanvas().style.cursor = 'crosshair';
+      // Enlarge selected CUAS marker, shrink others
+      if (map.getLayer('cuas-markers-circle')) {
+        map.setPaintProperty('cuas-markers-circle', 'circle-radius', [
+          'case',
+          ['==', ['get', 'id'], engagementModeCuasId],
+          12,
+          8,
+        ]);
+        map.setPaintProperty('cuas-markers-circle', 'circle-stroke-width', [
+          'case',
+          ['==', ['get', 'id'], engagementModeCuasId],
+          3,
+          2,
+        ]);
+      }
+    } else {
+      map.getCanvas().style.cursor = '';
+      if (map.getLayer('cuas-markers-circle')) {
+        map.setPaintProperty('cuas-markers-circle', 'circle-radius', 8);
+        map.setPaintProperty('cuas-markers-circle', 'circle-stroke-width', 2);
+      }
+    }
+  }, [engagementModeCuasId]);
 
   // Toggle SD Card track visibility
   useEffect(() => {
@@ -861,7 +808,7 @@ export default function MapComponent({
         },
       }, 'engagement-lines-jamming');
 
-      // Engagement range label layer
+      // Engagement range + bearing label layer (auto-deconflicts with variable-anchor)
       map.addLayer({
         id: 'engagement-lines-label',
         type: 'symbol',
@@ -871,7 +818,9 @@ export default function MapComponent({
           'text-field': ['get', 'label'],
           'text-size': 11,
           'text-font': ['Open Sans Bold'],
-          'text-allow-overlap': true,
+          'text-allow-overlap': false,
+          'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
+          'text-radial-offset': 0.5,
         },
         paint: {
           'text-color': [
@@ -886,6 +835,64 @@ export default function MapComponent({
       });
 
       engagementSourceAddedRef.current = true;
+
+      // Engagement line click popup
+      map.on('click', 'engagement-lines-line', (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        if (!e.features || e.features.length === 0) return;
+        const props = e.features[0].properties;
+        if (!props) return;
+
+        const elapsed = props.engageTimestamp
+          ? `${Math.round((Date.now() - new Date(props.engageTimestamp).getTime()) / 1000)}s`
+          : '--';
+
+        new maplibregl.Popup({ closeOnClick: true, className: 'engagement-popup' })
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div style="font-family:monospace;font-size:11px;line-height:1.6;color:#fff;background:rgba(15,15,30,0.92);padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);backdrop-filter:blur(8px);">
+              <div style="font-weight:700;margin-bottom:4px;">${props.cuasName || 'CUAS'} → ${props.trackerId}</div>
+              <div>Range: <b>${props.rangeM}m</b> | Bearing: <b>${props.bearingDeg}°</b></div>
+              <div>Slant: <b>${props.slantRangeM}m</b> | ΔAlt: <b>${props.altitudeDeltaM}m</b></div>
+              <div>Jam: <b style="color:${props.isJamming ? '#ef4444' : '#22c55e'}">${props.isJamming ? 'ACTIVE' : 'OFF'}</b> | Time: <b>${elapsed}</b></div>
+            </div>
+          `)
+          .addTo(mapRef.current!);
+      });
+      map.on('click', 'engagement-lines-jamming', (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        if (!e.features || e.features.length === 0) return;
+        const props = e.features[0].properties;
+        if (!props) return;
+
+        const elapsed = props.engageTimestamp
+          ? `${Math.round((Date.now() - new Date(props.engageTimestamp).getTime()) / 1000)}s`
+          : '--';
+
+        new maplibregl.Popup({ closeOnClick: true, className: 'engagement-popup' })
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div style="font-family:monospace;font-size:11px;line-height:1.6;color:#fff;background:rgba(15,15,30,0.92);padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);backdrop-filter:blur(8px);">
+              <div style="font-weight:700;margin-bottom:4px;color:#fca5a5;">${props.cuasName || 'CUAS'} → ${props.trackerId} [JAMMING]</div>
+              <div>Range: <b>${props.rangeM}m</b> | Bearing: <b>${props.bearingDeg}°</b></div>
+              <div>Slant: <b>${props.slantRangeM}m</b> | ΔAlt: <b>${props.altitudeDeltaM}m</b></div>
+              <div>Time: <b>${elapsed}</b></div>
+            </div>
+          `)
+          .addTo(mapRef.current!);
+      });
+
+      // Hover cursor for engagement lines
+      map.on('mouseenter', 'engagement-lines-line', () => {
+        if (!engagementModeCuasId) map.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', 'engagement-lines-line', () => {
+        if (!engagementModeCuasId) map.getCanvas().style.cursor = '';
+      });
+      map.on('mouseenter', 'engagement-lines-jamming', () => {
+        if (!engagementModeCuasId) map.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', 'engagement-lines-jamming', () => {
+        if (!engagementModeCuasId) map.getCanvas().style.cursor = '';
+      });
 
       // Add session actors source and layers
       map.addSource('session-actors', {
@@ -1016,6 +1023,24 @@ export default function MapComponent({
       });
 
       cuasSourceAddedRef.current = true;
+
+      // CUAS marker click handler — enters engagement mode
+      map.on('click', 'cuas-markers-circle', (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+        if (e.features && e.features.length > 0) {
+          const cuasId = e.features[0].properties?.id;
+          if (cuasId && onCuasClickRef.current) {
+            onCuasClickRef.current(cuasId);
+          }
+        }
+      });
+
+      // Change cursor to pointer over CUAS markers
+      map.on('mouseenter', 'cuas-markers-circle', () => {
+        map.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', 'cuas-markers-circle', () => {
+        map.getCanvas().style.cursor = '';
+      });
 
       // Add viewshed overlay source (image source for terrain-aware LOS/NLOS)
       // Starts with a transparent 1x1 pixel - updated when viewshed is computed
