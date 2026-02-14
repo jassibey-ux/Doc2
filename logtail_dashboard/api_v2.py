@@ -203,6 +203,7 @@ class SessionActorCreateRequest(BaseModel):
     """Request to create a session actor."""
     name: str
     callsign: Optional[str] = None
+    cot_uid: Optional[str] = None
     lat: Optional[float] = None
     lon: Optional[float] = None
     heading_deg: Optional[float] = None
@@ -213,6 +214,7 @@ class SessionActorUpdateRequest(BaseModel):
     """Request to update a session actor."""
     name: Optional[str] = None
     callsign: Optional[str] = None
+    cot_uid: Optional[str] = None
     lat: Optional[float] = None
     lon: Optional[float] = None
     heading_deg: Optional[float] = None
@@ -452,6 +454,7 @@ def actor_to_dict(a: SessionActor) -> Dict[str, Any]:
         "session_id": a.session_id,
         "name": a.name,
         "callsign": a.callsign,
+        "cot_uid": a.cot_uid,
         "lat": a.lat,
         "lon": a.lon,
         "heading_deg": a.heading_deg,
@@ -2525,6 +2528,7 @@ async def create_actor(
         "session_id": session_id,
         "name": request.name,
         "callsign": request.callsign,
+        "cot_uid": request.cot_uid,
         "lat": request.lat,
         "lon": request.lon,
         "heading_deg": request.heading_deg,
@@ -2559,7 +2563,7 @@ async def update_actor(
         raise HTTPException(status_code=404, detail="Actor not found")
 
     update_data = {}
-    for field in ["name", "callsign", "lat", "lon", "heading_deg", "tracker_unit_id", "is_active"]:
+    for field in ["name", "callsign", "cot_uid", "lat", "lon", "heading_deg", "tracker_unit_id", "is_active"]:
         value = getattr(request, field, None)
         if value is not None:
             update_data[field] = value
