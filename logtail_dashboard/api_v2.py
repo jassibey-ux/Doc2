@@ -1253,6 +1253,64 @@ async def delete_session(
     return {"success": True}
 
 
+@router.post("/sessions/{session_id}/clone")
+async def clone_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Clone a session's configuration (site, tracker assignments, CUAS placements).
+
+    Creates a new session in 'planning' status with the same setup as the source.
+    Useful for running repeated tests with the same configuration.
+    """
+    repo = SessionRepository(db)
+    source = await repo.get_with_relations(session_id)
+
+    if not source:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Create the new session
+    new_session = await repo.create({
+        "name": f"{source.name} (Copy)",
+        "site_id": source.site_id,
+        "operator_name": source.operator_name,
+        "weather_notes": source.weather_notes,
+        "classification": source.classification,
+        "status": "planning",
+    })
+
+    # Clone tracker assignments
+    for ta in (source.tracker_assignments or []):
+        db.add(TrackerAssignment(
+            id=generate_uuid(),
+            session_id=new_session.id,
+            tracker_id=ta.tracker_id,
+            drone_profile_id=ta.drone_profile_id,
+            session_color=ta.session_color,
+            target_altitude_m=ta.target_altitude_m,
+        ))
+
+    # Clone CUAS placements
+    for cp in (source.cuas_placements or []):
+        db.add(CUASPlacement(
+            id=generate_uuid(),
+            session_id=new_session.id,
+            cuas_profile_id=cp.cuas_profile_id,
+            lat=cp.lat,
+            lon=cp.lon,
+            height_agl_m=cp.height_agl_m,
+            orientation_deg=cp.orientation_deg,
+            active=cp.active,
+        ))
+
+    new_session_id = new_session.id
+    await db.commit()
+
+    # Re-fetch with relations
+    new_session = await repo.get_with_relations(new_session_id)
+    return session_to_dict_full(new_session)
+
+
 # Session Lifecycle
 @router.post("/sessions/{session_id}/start")
 async def start_session(

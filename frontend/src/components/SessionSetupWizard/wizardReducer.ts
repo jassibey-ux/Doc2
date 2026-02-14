@@ -130,6 +130,17 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
         sessionName: action.sessionName,
       };
 
+    case 'LOAD_TEMPLATE':
+      return {
+        ...initialWizardState,
+        currentStep: 0, // Stay on step 1, user reviews and proceeds
+        selectedSiteId: action.siteId,
+        droneAssignments: action.droneAssignments,
+        cuasPlacements: action.cuasPlacements,
+        sessionName: action.sessionName,
+        weatherNotes: action.weatherNotes,
+      };
+
     default:
       return state;
   }
