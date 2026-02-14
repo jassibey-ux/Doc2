@@ -12,7 +12,7 @@ from .drones import DroneProfileRepository
 from .cuas import CUASProfileRepository
 from .telemetry import TelemetryRepository
 from .audit import AuditRepository
-from .engagements import EngagementRepository
+from .engagements import EngagementRepository, SessionActorRepository
 
 __all__ = [
     "BaseRepository",
@@ -23,4 +23,5 @@ __all__ = [
     "TelemetryRepository",
     "AuditRepository",
     "EngagementRepository",
+    "SessionActorRepository",
 ]

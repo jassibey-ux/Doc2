@@ -23,6 +23,8 @@ from .database.models import (
     Engagement,
     EngagementTarget,
     EngagementMetrics,
+    EngagementJamBurst,
+    SessionActor,
 )
 
 logger = logging.getLogger(__name__)
@@ -153,6 +155,205 @@ def angle_off_boresight(cuas_orientation_deg: float, bearing_to_target_deg: floa
 
 
 # =============================================================================
+# GPS Denial Detection — Debounced Algorithm
+# =============================================================================
+
+def detect_gps_denial_debounced(
+    telemetry_points: List[PositionPoint],
+    n_consecutive: int = 3,
+) -> Dict:
+    """Debounced GPS denial detection.
+
+    DENIED if: fix_valid=False OR satellites < 4 OR hdop > 20
+    Onset: first timestamp where N consecutive samples are DENIED.
+    Recovery: first timestamp where N consecutive GOOD samples after denial.
+
+    Args:
+        telemetry_points: Sorted telemetry points.
+        n_consecutive: Number of consecutive samples required for onset/recovery.
+
+    Returns:
+        Dict with: denial_detected, onset_timestamp_ms, recovery_timestamp_ms,
+                   denial_duration_s, denied_count, total_count
+    """
+    if not telemetry_points:
+        return {"denial_detected": False}
+
+    def is_denied(p: PositionPoint) -> bool:
+        if not p.fix_valid:
+            return True
+        if p.satellites is not None and p.satellites < 4:
+            return True
+        if p.hdop is not None and p.hdop > 20:
+            return True
+        return False
+
+    # Find onset: N consecutive DENIED
+    onset_ts = None
+    consecutive_denied = 0
+    for p in telemetry_points:
+        if is_denied(p):
+            consecutive_denied += 1
+            if consecutive_denied >= n_consecutive and onset_ts is None:
+                # onset is the timestamp of the first denied in this streak
+                onset_ts = telemetry_points[
+                    telemetry_points.index(p) - n_consecutive + 1
+                ].timestamp_ms
+        else:
+            consecutive_denied = 0
+
+    if onset_ts is None:
+        return {"denial_detected": False, "denied_count": 0, "total_count": len(telemetry_points)}
+
+    # Find recovery: N consecutive GOOD after onset
+    recovery_ts = None
+    consecutive_good = 0
+    for p in telemetry_points:
+        if p.timestamp_ms <= onset_ts:
+            continue
+        if not is_denied(p):
+            consecutive_good += 1
+            if consecutive_good >= n_consecutive:
+                recovery_ts = telemetry_points[
+                    telemetry_points.index(p) - n_consecutive + 1
+                ].timestamp_ms
+                break
+        else:
+            consecutive_good = 0
+
+    denied_count = sum(1 for p in telemetry_points if is_denied(p))
+    denial_duration_s = None
+    if recovery_ts:
+        denial_duration_s = (recovery_ts - onset_ts) / 1000
+
+    return {
+        "denial_detected": True,
+        "onset_timestamp_ms": onset_ts,
+        "recovery_timestamp_ms": recovery_ts,
+        "denial_duration_s": denial_duration_s,
+        "denied_count": denied_count,
+        "total_count": len(telemetry_points),
+    }
+
+
+def compute_telemetry_loss_duration(
+    telemetry_points: List[PositionPoint],
+    gap_threshold_s: float = 3.0,
+) -> float:
+    """Compute cumulative gaps > threshold in track data (telemetry loss)."""
+    if len(telemetry_points) < 2:
+        return 0.0
+
+    total_loss_s = 0.0
+    for i in range(1, len(telemetry_points)):
+        gap_s = (telemetry_points[i].timestamp_ms - telemetry_points[i - 1].timestamp_ms) / 1000
+        if gap_s > gap_threshold_s:
+            total_loss_s += gap_s
+
+    return round(total_loss_s, 3)
+
+
+# =============================================================================
+# Burst-Aware Metric Computation
+# =============================================================================
+
+async def compute_burst_metrics(
+    db: AsyncSession,
+    engagement: Engagement,
+) -> Optional[List[Dict]]:
+    """Compute per-burst metrics for an engagement.
+
+    For each burst window (jam_on_at to jam_off_at):
+    - Find denial onset via debounced detection
+    - Compute TTE, drift, denial duration per target
+    - Return per-burst breakdown
+    """
+    bursts = engagement.bursts or []
+    if not bursts:
+        return None
+
+    per_burst_results = []
+
+    for burst in bursts:
+        if not burst.jam_on_at:
+            continue
+
+        burst_end = burst.jam_off_at or datetime.utcnow()
+        burst_result = {
+            "burst_id": burst.id,
+            "burst_seq": burst.burst_seq,
+            "jam_on_at": burst.jam_on_at.isoformat(),
+            "jam_off_at": burst.jam_off_at.isoformat() if burst.jam_off_at else None,
+            "duration_s": burst.duration_s,
+            "per_target": [],
+        }
+
+        for target in engagement.targets:
+            # Fetch telemetry during burst window
+            telem_result = await db.execute(
+                select(TrackerTelemetry)
+                .where(TrackerTelemetry.session_id == engagement.session_id)
+                .where(TrackerTelemetry.tracker_id == target.tracker_id)
+                .where(TrackerTelemetry.time_local_received >= burst.jam_on_at)
+                .where(TrackerTelemetry.time_local_received <= burst_end)
+                .order_by(TrackerTelemetry.time_local_received)
+            )
+            telem_rows = telem_result.scalars().all()
+
+            if not telem_rows:
+                continue
+
+            points = []
+            for row in telem_rows:
+                quality = classify_quality(bool(row.fix_valid), row.hdop, row.satellites)
+                points.append(PositionPoint(
+                    lat=row.lat or 0.0,
+                    lon=row.lon or 0.0,
+                    alt_m=row.alt_m,
+                    timestamp_ms=int(row.time_local_received.timestamp() * 1000),
+                    hdop=row.hdop,
+                    satellites=row.satellites,
+                    fix_valid=bool(row.fix_valid),
+                    quality=quality,
+                ))
+
+            denial_result = detect_gps_denial_debounced(points)
+            jam_on_ms = int(burst.jam_on_at.timestamp() * 1000)
+
+            tte = None
+            if denial_result.get("denial_detected") and denial_result.get("onset_timestamp_ms"):
+                tte = (denial_result["onset_timestamp_ms"] - jam_on_ms) / 1000
+
+            # Max drift from pre-burst position
+            max_drift = 0.0
+            if points and burst.target_snapshots:
+                snap = next(
+                    (s for s in burst.target_snapshots if s.get("tracker_id") == target.tracker_id),
+                    None,
+                )
+                if snap and snap.get("lat") and snap.get("lon"):
+                    for p in points:
+                        drift = haversine_distance(snap["lat"], snap["lon"], p.lat, p.lon)
+                        max_drift = max(max_drift, drift)
+
+            telem_loss = compute_telemetry_loss_duration(points)
+
+            burst_result["per_target"].append({
+                "tracker_id": target.tracker_id,
+                "denial_detected": denial_result.get("denial_detected", False),
+                "time_to_effect_s": tte,
+                "max_drift_m": round(max_drift, 1),
+                "telemetry_loss_s": telem_loss,
+                "denied_count": denial_result.get("denied_count", 0),
+                "total_count": denial_result.get("total_count", 0),
+            })
+
+        per_burst_results.append(burst_result)
+
+    return per_burst_results
+
+
+# =============================================================================
 # Engagement Geometry & Metrics
 # =============================================================================
 
@@ -163,21 +364,36 @@ async def compute_engagement_geometry(
     """Compute and store initial geometry for all targets in an engagement.
 
     Called when an engagement transitions to ACTIVE.
-    Snapshots CUAS position and computes range/bearing/angle for each target.
+    Snapshots emitter position (CUAS or actor) and computes range/bearing/angle.
     """
-    placement = engagement.cuas_placement
-    if not placement:
-        return
+    from .database.models import EmitterType
 
-    # Snapshot CUAS position
-    engagement.cuas_lat = placement.lat
-    engagement.cuas_lon = placement.lon
-    engagement.cuas_alt_m = placement.alt_m
-    engagement.cuas_orientation_deg = placement.orientation_deg
-
-    cuas_lat = placement.lat
-    cuas_lon = placement.lon
-    cuas_heading = placement.orientation_deg or 0.0
+    # Resolve emitter position based on type
+    if engagement.emitter_type == EmitterType.ACTOR.value:
+        actor_result = await db.execute(
+            select(SessionActor).where(SessionActor.id == engagement.emitter_id)
+        )
+        actor = actor_result.scalar_one_or_none()
+        if not actor or not actor.lat or not actor.lon:
+            return
+        engagement.cuas_lat = actor.lat
+        engagement.cuas_lon = actor.lon
+        engagement.cuas_alt_m = None
+        engagement.cuas_orientation_deg = actor.heading_deg
+        cuas_lat = actor.lat
+        cuas_lon = actor.lon
+        cuas_heading = actor.heading_deg or 0.0
+    else:
+        placement = engagement.cuas_placement
+        if not placement:
+            return
+        engagement.cuas_lat = placement.lat
+        engagement.cuas_lon = placement.lon
+        engagement.cuas_alt_m = placement.alt_m
+        engagement.cuas_orientation_deg = placement.orientation_deg
+        cuas_lat = placement.lat
+        cuas_lon = placement.lon
+        cuas_heading = placement.orientation_deg or 0.0
 
     for target in engagement.targets:
         # Get latest telemetry for this tracker
@@ -414,6 +630,59 @@ async def compute_engagement_metrics(
             ],
         },
     }
+
+    # Compute burst-aware metrics
+    per_burst = await compute_burst_metrics(db, engagement)
+    if per_burst:
+        metrics_data["per_burst_json"] = per_burst
+
+    # Determine anchor timestamp from first burst
+    bursts = engagement.bursts or []
+    if bursts:
+        first_burst = min(bursts, key=lambda b: b.jam_on_at)
+        metrics_data["anchor_type"] = "first_jam_on"
+        metrics_data["anchor_timestamp"] = first_burst.jam_on_at
+
+    # Compute telemetry loss for primary target
+    for target in engagement.targets:
+        telem_result = await db.execute(
+            select(TrackerTelemetry)
+            .where(TrackerTelemetry.session_id == engagement.session_id)
+            .where(TrackerTelemetry.tracker_id == target.tracker_id)
+            .where(TrackerTelemetry.time_local_received >= engagement.engage_timestamp)
+            .where(TrackerTelemetry.time_local_received <= end_time)
+            .order_by(TrackerTelemetry.time_local_received)
+        )
+        rows = telem_result.scalars().all()
+        if rows:
+            points = [
+                PositionPoint(
+                    lat=r.lat or 0.0, lon=r.lon or 0.0, alt_m=r.alt_m,
+                    timestamp_ms=int(r.time_local_received.timestamp() * 1000),
+                    fix_valid=bool(r.fix_valid), hdop=r.hdop, satellites=r.satellites,
+                )
+                for r in rows
+            ]
+            telem_loss = compute_telemetry_loss_duration(points)
+            if telem_loss > 0:
+                metrics_data["telemetry_loss_duration_s"] = telem_loss
+
+            # Debounced denial detection for enhanced onset timestamp
+            denial = detect_gps_denial_debounced(points)
+            if denial.get("denial_detected") and denial.get("onset_timestamp_ms"):
+                metrics_data["denial_onset_timestamp"] = datetime.utcfromtimestamp(
+                    denial["onset_timestamp_ms"] / 1000
+                )
+            if denial.get("recovery_timestamp_ms") and bursts:
+                last_burst = max(bursts, key=lambda b: b.jam_off_at or b.jam_on_at)
+                if last_burst.jam_off_at:
+                    jam_off_ms = int(last_burst.jam_off_at.timestamp() * 1000)
+                    reacq_s = (denial["recovery_timestamp_ms"] - jam_off_ms) / 1000
+                    if reacq_s > 0:
+                        metrics_data["reacquisition_time_s"] = round(reacq_s, 3)
+            break  # Primary target only for now
+
+    metrics_data["computation_version"] = "2.0"
 
     # Upsert metrics
     from .database.repositories.engagements import EngagementRepository

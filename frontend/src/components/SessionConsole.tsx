@@ -12,8 +12,9 @@ import { useToast } from '../contexts/ToastContext';
 import { GlassButton, Badge } from './ui/GlassUI';
 import MapComponent from './Map';
 import Map3DViewer from './Map3DViewer';
+import CesiumMap from './CesiumMap';
 import DroneDetailPanel from './DroneDetailPanel';
-import type { TestEvent, CUASPlacement, CUASProfile } from '../types/workflow';
+import type { TestEvent, CUASPlacement, CUASProfile, JamBurst } from '../types/workflow';
 import {
   ArrowLeft,
   Square,
@@ -35,6 +36,7 @@ import {
   Globe,
   Map as MapIcon,
   History,
+  Crosshair,
 } from 'lucide-react';
 import SDCardPanel from './SDCardPanel';
 import TrackerSDCardSection from './TrackerSDCardSection';
@@ -96,7 +98,6 @@ export default function SessionConsole() {
     addEvent,
     sites,
     selectSite,
-    testSessions,
   } = useWorkflow();
 
   // Get session phase data
@@ -111,7 +112,13 @@ export default function SessionConsole() {
     engagements,
     activeEngagements,
     quickEngage,
+    createEngagement,
+    engage,
     disengage,
+    jamOn,
+    jamOff,
+    activeBursts,
+    refreshEngagements,
   } = useTestSessionPhase();
 
   // Debug: Log session state for diagnosing JAM button and event log issues
@@ -128,14 +135,11 @@ export default function SessionConsole() {
 
   // Load session by URL parameter if not already loaded
   useEffect(() => {
-    if (sessionId && testSessions.length > 0) {
-      // If activeSession doesn't match URL sessionId, load it
-      if (!activeSession || activeSession.id !== sessionId) {
-        console.log('[SessionConsole] Loading session from URL:', sessionId);
-        loadSessionById(sessionId);
-      }
+    if (sessionId && (!activeSession || activeSession.id !== sessionId)) {
+      console.log('[SessionConsole] Loading session from URL:', sessionId);
+      loadSessionById(sessionId);
     }
-  }, [sessionId, testSessions, activeSession, loadSessionById]);
+  }, [sessionId, activeSession, loadSessionById]);
 
   // Determine if this is a completed session (not live)
   const isCompletedSession = activeSession?.status === 'completed' || activeSession?.status === 'analyzing';
@@ -195,11 +199,13 @@ export default function SessionConsole() {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [show3DView, setShow3DView] = useState(true); // Default to 3D view
+  const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
   const [mapStyle, setMapStyle] = useState<'dark' | 'satellite' | 'street'>('satellite');
   const [selectedCuasId, setSelectedCuasId] = useState<string | null>(null);
   const [showSDCardPanel, setShowSDCardPanel] = useState(false);
   const [expandedSDTrackerId, setExpandedSDTrackerId] = useState<string | null>(null);
   const [showEngageDropdown, setShowEngageDropdown] = useState(false);
+  const [engagementModeCuasId, setEngagementModeCuasId] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const engageDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -236,12 +242,12 @@ export default function SessionConsole() {
   // Count active jammers
   const activeJammerCount = Array.from(cuasJamStates.values()).filter(v => v).length;
 
-  // Redirect if no active session
+  // Redirect if no active session (but not if we have a URL sessionId — it's still loading)
   useEffect(() => {
-    if (currentPhase === 'idle' && !activeSession) {
+    if (currentPhase === 'idle' && !activeSession && !sessionId) {
       navigate('/');
     }
-  }, [currentPhase, activeSession, navigate]);
+  }, [currentPhase, activeSession, sessionId, navigate]);
 
   // Ensure site is selected in WorkflowContext for map visualization
   useEffect(() => {
@@ -266,10 +272,30 @@ export default function SessionConsole() {
     }
   }, [showJammerDropdown, showEngageDropdown]);
 
-  // Handle drone selection
-  const handleDroneClick = useCallback((droneId: string) => {
-    setSelectedDroneId(droneId);
+  // Handle CUAS click on map — enter engagement mode
+  const handleCuasClickOnMap = useCallback((cuasPlacementId: string) => {
+    setEngagementModeCuasId(cuasPlacementId);
   }, []);
+
+  // Handle drone selection — if in engagement mode, create engagement
+  const handleDroneClick = useCallback(async (droneId: string) => {
+    if (engagementModeCuasId) {
+      try {
+        const engagement = await createEngagement(engagementModeCuasId, [droneId]);
+        if (engagement) {
+          await engage(engagement.id);
+          const placement = cuasPlacements.find(p => p.id === engagementModeCuasId);
+          const cuasName = placement ? profilesMap.get(placement.cuas_profile_id)?.name : 'CUAS';
+          showToast('success', `Engaged ${cuasName} → ${droneId}`);
+        }
+      } catch (error) {
+        showToast('error', 'Failed to create engagement');
+      }
+      setEngagementModeCuasId(null);
+      return;
+    }
+    setSelectedDroneId(droneId);
+  }, [engagementModeCuasId, createEngagement, engage, cuasPlacements, profilesMap, showToast]);
 
   // Handle stop session - stay on page, don't redirect
   const handleStop = useCallback(async () => {
@@ -351,8 +377,13 @@ export default function SessionConsole() {
 
   // Handle disengage action
   const handleDisengage = useCallback(async (engagementId?: string) => {
+    console.log('[SessionConsole] handleDisengage called, engagementId:', engagementId, 'activeEngagements.size:', activeEngagements.size, 'keys:', Array.from(activeEngagements.keys()));
     const targetId = engagementId || (activeEngagements.size === 1 ? Array.from(activeEngagements.keys())[0] : null);
-    if (!targetId) return;
+    if (!targetId) {
+      console.warn('[SessionConsole] No targetId found for disengage');
+      return;
+    }
+    console.log('[SessionConsole] Disengaging targetId:', targetId);
     try {
       const result = await disengage(targetId);
       if (result?.metrics) {
@@ -367,6 +398,44 @@ export default function SessionConsole() {
     }
   }, [activeEngagements, disengage, showToast]);
 
+  // Determine if there's an active jam burst for the current engagement
+  const activeEngagementId = activeEngagements.size > 0 ? Array.from(activeEngagements.keys())[0] : null;
+  const activeJamBurst: JamBurst | undefined = activeEngagementId
+    ? activeBursts.get(activeEngagementId)
+    : undefined;
+  const hasOpenBurst = !!activeJamBurst && !activeJamBurst.jam_off_at;
+
+  // Burst elapsed timer
+  const [burstElapsed, setBurstElapsed] = useState(0);
+  useEffect(() => {
+    if (!hasOpenBurst || !activeJamBurst?.jam_on_at) {
+      setBurstElapsed(0);
+      return;
+    }
+    const startTime = new Date(activeJamBurst.jam_on_at).getTime();
+    const tick = () => setBurstElapsed(Math.floor((Date.now() - startTime) / 1000));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [hasOpenBurst, activeJamBurst?.jam_on_at]);
+
+  // Handle JAM ON / JAM OFF toggle on active engagement
+  const handleJamToggle = useCallback(async () => {
+    if (!activeEngagementId) return;
+    try {
+      if (hasOpenBurst) {
+        await jamOff(activeEngagementId);
+        showToast('success', 'JAM OFF');
+      } else {
+        await jamOn(activeEngagementId);
+        showToast('success', 'JAM ON');
+      }
+      await refreshEngagements();
+    } catch (error) {
+      showToast('error', 'Failed to toggle jam burst');
+    }
+  }, [activeEngagementId, hasOpenBurst, jamOn, jamOff, refreshEngagements, showToast]);
+
   // Keyboard shortcuts
   useEffect(() => {
     if (currentPhase !== 'active') return;
@@ -378,30 +447,36 @@ export default function SessionConsole() {
 
       const key = e.key.toLowerCase();
 
-      // E or J = Engage (J is backward compat)
-      if (key === 'e' || key === 'j') {
+      // J = JAM ON/OFF burst toggle on active engagement
+      if (key === 'j') {
         e.preventDefault();
-        if (activeEngagements.size > 0 && key === 'j') {
-          // J with active engagement = legacy JAM toggle, still works
+        if (activeEngagements.size > 0) {
+          handleJamToggle();
+        } else {
+          // Fallback: legacy jam toggle when no engagement active
           if (hasMultipleJammers) {
             setShowJammerDropdown(prev => !prev);
           } else if (cuasPlacements.length === 1) {
             const isJamming = cuasJamStates.get(cuasPlacements[0].id) || false;
             handleMarkEvent(isJamming ? 'jam_off' : 'jam_on', undefined, cuasPlacements[0].id);
           }
+        }
+        return;
+      }
+
+      // E = Engage workflow
+      if (key === 'e') {
+        e.preventDefault();
+        if (activeEngagements.size > 0) {
+          // Already have active engagement, ignore
+          return;
+        }
+        if (hasMultipleJammers) {
+          setShowEngageDropdown(prev => !prev);
+        } else if (cuasPlacements.length === 1) {
+          handleEngage(cuasPlacements[0].id);
         } else {
-          // E = Engage workflow
-          if (activeEngagements.size > 0) {
-            // Already have active engagement, ignore
-            return;
-          }
-          if (hasMultipleJammers) {
-            setShowEngageDropdown(prev => !prev);
-          } else if (cuasPlacements.length === 1) {
-            handleEngage(cuasPlacements[0].id);
-          } else {
-            handleEngage();
-          }
+          handleEngage();
         }
         return;
       }
@@ -429,6 +504,7 @@ export default function SessionConsole() {
       }
 
       if (key === 'escape') {
+        setEngagementModeCuasId(null);
         setShowJammerDropdown(false);
         setShowEngageDropdown(false);
         setShowNoteInput(false);
@@ -437,7 +513,7 @@ export default function SessionConsole() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentPhase, hasMultipleJammers, cuasPlacements, cuasJamStates, handleMarkEvent, activeEngagements, handleEngage, handleDisengage]);
+  }, [currentPhase, hasMultipleJammers, cuasPlacements, cuasJamStates, handleMarkEvent, activeEngagements, handleEngage, handleDisengage, handleJamToggle]);
 
   // If no active session, show loading or redirect
   if (!activeSession) {
@@ -779,6 +855,51 @@ export default function SessionConsole() {
         {/* Center - Map */}
         <main className="sc-center">
           <div className="sc-map">
+            {/* Engagement Mode Banner */}
+            {engagementModeCuasId && (
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                zIndex: 1001,
+                background: 'linear-gradient(180deg, rgba(239, 68, 68, 0.95) 0%, rgba(239, 68, 68, 0.85) 100%)',
+                color: '#fff',
+                padding: '8px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                fontSize: '13px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                backdropFilter: 'blur(8px)',
+                borderBottom: '2px solid rgba(255, 255, 255, 0.3)',
+              }}>
+                <Crosshair size={16} />
+                <span>ENGAGEMENT MODE — Click a drone to engage with {
+                  (() => {
+                    const p = cuasPlacements.find(pl => pl.id === engagementModeCuasId);
+                    return p ? profilesMap.get(p.cuas_profile_id)?.name ?? 'CUAS' : 'CUAS';
+                  })()
+                }</span>
+                <button
+                  onClick={() => setEngagementModeCuasId(null)}
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    border: '1px solid rgba(255,255,255,0.4)',
+                    color: '#fff',
+                    borderRadius: '4px',
+                    padding: '2px 8px',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    marginLeft: '8px',
+                  }}
+                >
+                  ESC to cancel
+                </button>
+              </div>
+            )}
             <MapComponent
               drones={sessionDrones}
               droneHistory={sessionDroneHistory}
@@ -795,10 +916,13 @@ export default function SessionConsole() {
               sdCardTracks={sdCardTracks}
               showSDCardTracks={showSDCardTracks}
               activeEngagements={Array.from(activeEngagements.values())}
+              activeBursts={activeBursts}
+              onCuasClick={handleCuasClickOnMap}
+              engagementModeCuasId={engagementModeCuasId}
             />
 
             {/* 3D View Overlay */}
-            {show3DView && (
+            {show3DView && !showCesiumGlobe && (
               <Map3DViewer
                 droneHistory={sessionDroneHistory}
                 currentTime={Date.now()}
@@ -815,8 +939,65 @@ export default function SessionConsole() {
                 onDroneClick={handleDroneClick}
                 sdCardTracks={sdCardTracks}
                 showSDCardTracks={showSDCardTracks}
+                activeEngagements={Array.from(activeEngagements.values())}
+                activeBursts={activeBursts}
+                onCuasClick={handleCuasClickOnMap}
+                engagementModeCuasId={engagementModeCuasId}
               />
             )}
+
+            {/* Cesium Globe Overlay */}
+            {showCesiumGlobe && (
+              <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
+                <CesiumMap
+                  droneHistory={sessionDroneHistory}
+                  currentTime={Date.now()}
+                  timelineStart={Date.now() - 3600000}
+                  site={sessionSite}
+                  cuasPlacements={cuasPlacements}
+                  cuasProfiles={cuasProfiles}
+                  cuasJamStates={cuasJamStates}
+                  currentDroneData={sessionDrones}
+                  selectedDroneId={selectedDroneId}
+                  onDroneClick={handleDroneClick}
+                  onClose={() => setShowCesiumGlobe(false)}
+                  engagements={Array.from(activeEngagements.values())}
+                  activeBursts={activeBursts}
+                  onCuasClick={handleCuasClickOnMap}
+                  engagementModeCuasId={engagementModeCuasId}
+                />
+              </div>
+            )}
+
+            {/* Cesium Globe Toggle Button */}
+            <button
+              onClick={() => {
+                setShowCesiumGlobe(prev => !prev);
+                if (!showCesiumGlobe) setShow3DView(false); // Turn off Map3DViewer when switching to Globe
+              }}
+              title={showCesiumGlobe ? 'Close Globe View' : 'Open Cesium Globe'}
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '102px',
+                zIndex: 1000,
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                background: showCesiumGlobe ? 'rgba(0, 200, 255, 0.3)' : 'rgba(20, 20, 35, 0.9)',
+                color: showCesiumGlobe ? '#00c8ff' : 'rgba(255, 255, 255, 0.7)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease',
+                fontSize: '11px',
+                fontWeight: 700,
+              }}
+            >
+              <Globe size={18} />
+            </button>
 
             {/* Map Style Toggle Button */}
             <button
@@ -847,7 +1028,10 @@ export default function SessionConsole() {
 
             {/* 3D Toggle Button */}
             <button
-              onClick={() => setShow3DView(prev => !prev)}
+              onClick={() => {
+                setShow3DView(prev => !prev);
+                if (!show3DView) setShowCesiumGlobe(false); // Turn off Globe when switching to Map3DViewer
+              }}
               title={show3DView ? 'Switch to 2D Map' : 'Switch to 3D View'}
               className="sc-3d-toggle"
               style={{
@@ -925,6 +1109,20 @@ export default function SessionConsole() {
                 )}
               </div>
             )}
+
+            {/* JAM ON / JAM OFF burst toggle button */}
+            <button
+              className={`sc-event-btn ${hasOpenBurst ? 'sc-event-btn--jam-active' : 'sc-event-btn--jam-ready'}`}
+              onClick={handleJamToggle}
+              disabled={!activeEngagementId}
+              title={activeEngagementId ? (hasOpenBurst ? 'JAM OFF (J)' : 'JAM ON (J)') : 'No active engagement'}
+            >
+              <Zap size={14} />
+              <span>{hasOpenBurst ? 'JAM OFF' : 'JAM ON'}</span>
+              {hasOpenBurst && burstElapsed > 0 && (
+                <span className="sc-jam-timer">{formatDuration(burstElapsed)}</span>
+              )}
+            </button>
 
             {/* Legacy JAM button (secondary, for manual jam without engagement) */}
             <div className="sc-event-btn-wrapper" ref={dropdownRef}>
@@ -1870,6 +2068,53 @@ const styles = `
   @keyframes pulse-engage {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
+  }
+
+  /* JAM ON/OFF burst button styles */
+  .sc-event-btn--jam-ready {
+    background: rgba(239, 68, 68, 0.2) !important;
+    border-color: rgba(239, 68, 68, 0.4) !important;
+    color: #ef4444 !important;
+    font-weight: 700 !important;
+  }
+
+  .sc-event-btn--jam-ready:hover {
+    background: rgba(239, 68, 68, 0.3) !important;
+  }
+
+  .sc-event-btn--jam-ready:disabled {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border-color: rgba(255, 255, 255, 0.06) !important;
+    color: rgba(255, 255, 255, 0.25) !important;
+    cursor: not-allowed !important;
+  }
+
+  .sc-event-btn--jam-active {
+    background: rgba(249, 115, 22, 0.25) !important;
+    border-color: rgba(249, 115, 22, 0.5) !important;
+    color: #f97316 !important;
+    font-weight: 700 !important;
+    animation: pulse-jam-burst 1.2s ease-in-out infinite;
+  }
+
+  .sc-event-btn--jam-active:hover {
+    background: rgba(249, 115, 22, 0.35) !important;
+  }
+
+  @keyframes pulse-jam-burst {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(249, 115, 22, 0.3); }
+    50% { opacity: 0.75; box-shadow: 0 0 16px rgba(249, 115, 22, 0.5); }
+  }
+
+  .sc-jam-timer {
+    font-family: monospace;
+    font-size: 10px;
+    font-weight: 600;
+    color: #f97316;
+    margin-left: 4px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 6px;
+    border-radius: 3px;
   }
 
   /* CUAS inline engaged badge */

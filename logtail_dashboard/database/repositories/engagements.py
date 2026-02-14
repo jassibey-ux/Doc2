@@ -16,7 +16,11 @@ from ..models import (
     Engagement,
     EngagementTarget,
     EngagementMetrics,
+    EngagementJamBurst,
     EngagementStatus,
+    SessionActor,
+    CUASPlacement,
+    CUASProfile,
 )
 from .base import BaseRepository
 
@@ -35,7 +39,8 @@ class EngagementRepository(BaseRepository[Engagement]):
                 selectinload(Engagement.targets),
                 selectinload(Engagement.metrics),
                 selectinload(Engagement.events),
-                selectinload(Engagement.cuas_placement),
+                selectinload(Engagement.cuas_placement).selectinload(CUASPlacement.cuas_profile),
+                selectinload(Engagement.bursts),
             )
             .where(Engagement.id == engagement_id)
         )
@@ -48,7 +53,8 @@ class EngagementRepository(BaseRepository[Engagement]):
             .options(
                 selectinload(Engagement.targets),
                 selectinload(Engagement.metrics),
-                selectinload(Engagement.cuas_placement),
+                selectinload(Engagement.cuas_placement).selectinload(CUASPlacement.cuas_profile),
+                selectinload(Engagement.bursts),
             )
             .where(Engagement.session_id == session_id)
             .order_by(Engagement.created_at)
@@ -119,5 +125,92 @@ class EngagementRepository(BaseRepository[Engagement]):
         result = await self.db.execute(
             select(EngagementTarget)
             .where(EngagementTarget.engagement_id == engagement_id)
+        )
+        return list(result.scalars().all())
+
+    # =========================================================================
+    # Jam Burst Operations
+    # =========================================================================
+
+    async def get_open_burst(self, engagement_id: str) -> Optional[EngagementJamBurst]:
+        """Get the currently open burst (jam_off_at IS NULL) for an engagement."""
+        result = await self.db.execute(
+            select(EngagementJamBurst)
+            .where(and_(
+                EngagementJamBurst.engagement_id == engagement_id,
+                EngagementJamBurst.jam_off_at.is_(None),
+            ))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_max_burst_seq(self, engagement_id: str) -> int:
+        """Get the maximum burst sequence number for an engagement."""
+        from sqlalchemy import func
+        result = await self.db.execute(
+            select(func.max(EngagementJamBurst.burst_seq))
+            .where(EngagementJamBurst.engagement_id == engagement_id)
+        )
+        max_seq = result.scalar()
+        return max_seq if max_seq is not None else 0
+
+    async def create_burst(self, burst_data: Dict[str, Any]) -> EngagementJamBurst:
+        """Create a new jam burst."""
+        burst = EngagementJamBurst(**burst_data)
+        self.db.add(burst)
+        await self.db.flush()
+        return burst
+
+    async def close_burst(
+        self,
+        burst_id: str,
+        jam_off_at: datetime,
+        duration_s: float,
+    ) -> Optional[EngagementJamBurst]:
+        """Close an open burst by setting jam_off_at and duration."""
+        result = await self.db.execute(
+            select(EngagementJamBurst)
+            .where(EngagementJamBurst.id == burst_id)
+        )
+        burst = result.scalar_one_or_none()
+        if burst:
+            burst.jam_off_at = jam_off_at
+            burst.duration_s = duration_s
+            await self.db.flush()
+        return burst
+
+    async def get_bursts(self, engagement_id: str) -> List[EngagementJamBurst]:
+        """Get all bursts for an engagement ordered by sequence."""
+        result = await self.db.execute(
+            select(EngagementJamBurst)
+            .where(EngagementJamBurst.engagement_id == engagement_id)
+            .order_by(EngagementJamBurst.burst_seq)
+        )
+        return list(result.scalars().all())
+
+
+class SessionActorRepository(BaseRepository[SessionActor]):
+    """Repository for session actor operations."""
+
+    def __init__(self, db: AsyncSession):
+        super().__init__(SessionActor, db)
+
+    async def get_by_session(self, session_id: str) -> List[SessionActor]:
+        """Get all actors for a session."""
+        result = await self.db.execute(
+            select(SessionActor)
+            .where(SessionActor.session_id == session_id)
+            .order_by(SessionActor.created_at)
+        )
+        return list(result.scalars().all())
+
+    async def get_active_by_session(self, session_id: str) -> List[SessionActor]:
+        """Get only active actors for a session."""
+        result = await self.db.execute(
+            select(SessionActor)
+            .where(and_(
+                SessionActor.session_id == session_id,
+                SessionActor.is_active.is_(True),
+            ))
+            .order_by(SessionActor.created_at)
         )
         return list(result.scalars().all())

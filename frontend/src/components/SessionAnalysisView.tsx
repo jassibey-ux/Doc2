@@ -38,7 +38,9 @@ import Map3DViewer from './Map3DViewer';
 import TrackLegend from './TrackLegend';
 import TagInput from './crm/TagInput';
 import AnnotationList from './crm/AnnotationList';
-import type { SessionMetrics, TestEvent, Engagement, CUASPlacement, CUASProfile } from '../types/workflow';
+import RangeOverTimeChart from './RangeOverTimeChart';
+import GPSQualityChart from './GPSQualityChart';
+import type { SessionMetrics, TestEvent, TestSession, Engagement, CUASPlacement, CUASProfile } from '../types/workflow';
 import type { SessionAnnotation } from '../types/crm';
 
 export default function SessionAnalysisView() {
@@ -54,11 +56,13 @@ export default function SessionAnalysisView() {
   const { droneHistory } = useWebSocket();
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [detailSession, setDetailSession] = useState<TestSession | null>(null);
   const [show3DView, setShow3DView] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string>('metrics');
   const [sessionTags, setSessionTags] = useState<string[]>([]);
   const [sessionAnnotations, setSessionAnnotations] = useState<SessionAnnotation[]>([]);
   const [sessionEngagements, setSessionEngagements] = useState<Engagement[]>([]);
+  const [chartHoverTimestamp, setChartHoverTimestamp] = useState<number | null>(null);
 
   const { getSessionTags, getSessionAnnotations } = useCRM();
   const [analysisData, setAnalysisData] = useState<{
@@ -74,10 +78,11 @@ export default function SessionAnalysisView() {
     }>;
   } | null>(null);
 
-  // Find the session
+  // Find the session — prefer detail session (has full data from DETAIL endpoint)
   const session = useMemo(() => {
+    if (detailSession?.id === sessionId) return detailSession;
     return testSessions.find(s => s.id === sessionId);
-  }, [testSessions, sessionId]);
+  }, [testSessions, sessionId, detailSession]);
 
   // Get related data - handle null/empty site_id
   const site = useMemo(() => {
@@ -89,7 +94,7 @@ export default function SessionAnalysisView() {
 
   const assignedDrones = useMemo(() => {
     if (!session) return [];
-    return session.tracker_assignments.map(assignment => {
+    return (session.tracker_assignments || []).map(assignment => {
       const profile = droneProfiles.find(p => p.id === assignment.drone_profile_id);
       return { assignment, profile };
     });
@@ -97,7 +102,7 @@ export default function SessionAnalysisView() {
 
   const assignedCuas = useMemo(() => {
     if (!session) return [];
-    return session.cuas_placements.map(placement => {
+    return (session.cuas_placements || []).map(placement => {
       const profile = cuasProfiles.find(p => p.id === placement.cuas_profile_id);
       return { placement, profile };
     });
@@ -116,8 +121,8 @@ export default function SessionAnalysisView() {
 
     const sessionEnd = session.end_time
       ? new Date(session.end_time).getTime()
-      : session.events.length > 0
-        ? Math.max(...session.events.map(e => new Date(e.timestamp).getTime()))
+      : (session.events || []).length > 0
+        ? Math.max(...(session.events || []).map(e => new Date(e.timestamp).getTime()))
         : sessionStart;
 
     const duration = (sessionEnd - sessionStart) / 1000;
@@ -125,21 +130,20 @@ export default function SessionAnalysisView() {
     return { start: sessionStart, end: sessionEnd, duration: Math.max(0, duration) };
   }, [session]);
 
-  // Refresh session data to ensure we have latest data including end_time
+  // Fetch full session data from DETAIL endpoint (includes tracker_assignments, cuas_placements, events)
   useEffect(() => {
     if (!sessionId) return;
-
     fetch(`/api/v2/sessions/${sessionId}`)
       .then(res => res.json())
       .then(data => {
         if (data?.id) {
-          updateTestSession(sessionId, data);
+          setDetailSession(data);
         }
       })
       .catch(err => {
-        console.error('Failed to refresh session:', err);
+        console.error('Failed to fetch session detail:', err);
       });
-  }, [sessionId, updateTestSession]);
+  }, [sessionId]);
 
   // Load tags and annotations for CRM
   useEffect(() => {
@@ -167,8 +171,9 @@ export default function SessionAnalysisView() {
     fetch(`/api/v2/sessions/${sessionId}/engagements`)
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) {
-          setSessionEngagements(data);
+        const engagements = Array.isArray(data) ? data : data?.engagements;
+        if (Array.isArray(engagements)) {
+          setSessionEngagements(engagements);
         }
       })
       .catch(err => {
@@ -672,14 +677,34 @@ export default function SessionAnalysisView() {
               {expandedSection === 'engagements' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {sessionEngagements.map(eng => (
-                    <EngagementSummaryCard
-                      key={eng.id}
-                      engagement={eng}
-                      cuasProfiles={cuasProfiles}
-                      cuasPlacements={session?.cuas_placements || []}
-                      formatTime={formatTime}
-                      formatDistance={formatDistance}
-                    />
+                    <div key={eng.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <EngagementSummaryCard
+                        engagement={eng}
+                        cuasProfiles={cuasProfiles}
+                        cuasPlacements={session?.cuas_placements || []}
+                        formatTime={formatTime}
+                        formatDistance={formatDistance}
+                      />
+                      {/* Range Over Time + GPS Quality Charts per engagement */}
+                      {eng.cuas_placement_id && eng.targets[0]?.tracker_id && sessionId && (
+                        <>
+                          <RangeOverTimeChart
+                            sessionId={sessionId}
+                            cuasPlacementId={eng.cuas_placement_id}
+                            trackerId={eng.targets[0].tracker_id}
+                            hoverTimestamp={chartHoverTimestamp}
+                            onHoverTimestamp={setChartHoverTimestamp}
+                          />
+                          <GPSQualityChart
+                            sessionId={sessionId}
+                            cuasPlacementId={eng.cuas_placement_id}
+                            trackerId={eng.targets[0].tracker_id}
+                            hoverTimestamp={chartHoverTimestamp}
+                            onHoverTimestamp={setChartHoverTimestamp}
+                          />
+                        </>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -704,7 +729,7 @@ export default function SessionAnalysisView() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Activity size={16} style={{ color: '#3b82f6' }} />
                 <span style={{ fontSize: '13px', fontWeight: 500 }}>
-                  Events ({session.events.length})
+                  Events ({(session.events || []).length})
                 </span>
               </div>
               {expandedSection === 'events' ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -712,13 +737,13 @@ export default function SessionAnalysisView() {
 
             {expandedSection === 'events' && (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                {session.events.length === 0 ? (
+                {(session.events || []).length === 0 ? (
                   <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: '20px' }}>
                     No events recorded
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {session.events.map((event, idx) => (
+                    {(session.events || []).map((event, idx) => (
                       <EventItem key={event.id || idx} event={event} getBadgeColor={getEventBadgeColor} />
                     ))}
                   </div>

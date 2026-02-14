@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useWorkflow } from './WorkflowContext';
-import type { TestSession, Engagement } from '../types/workflow';
+import type { TestSession, Engagement, JamBurst, SessionActor } from '../types/workflow';
+import { useToast } from './ToastContext';
 
 // Session phases
 export type SessionPhase = 'idle' | 'planning' | 'active' | 'capturing' | 'analyzing' | 'completed';
@@ -62,7 +63,7 @@ interface TestSessionPhaseContextType {
   runAnalysis: () => Promise<void>;
   completeSession: () => void;
   clearActiveSession: () => void;
-  loadSessionById: (sessionId: string) => void;
+  loadSessionById: (sessionId: string) => Promise<void>;
 
   // CUAS jam controls
   toggleJamState: (cuasPlacementId: string) => Promise<boolean>;
@@ -77,6 +78,17 @@ interface TestSessionPhaseContextType {
   disengage: (engagementId: string) => Promise<Engagement | null>;
   abortEngagement: (engagementId: string) => Promise<void>;
   refreshEngagements: () => Promise<void>;
+
+  // Jam burst controls
+  activeBursts: Map<string, JamBurst>;
+  jamOn: (engagementId: string) => Promise<JamBurst | null>;
+  jamOff: (engagementId: string) => Promise<JamBurst | null>;
+
+  // Session actor controls
+  sessionActors: SessionActor[];
+  createActor: (data: { name: string; callsign?: string; lat?: number; lon?: number; heading_deg?: number; tracker_unit_id?: string }) => Promise<SessionActor | null>;
+  updateActorPosition: (actorId: string, lat: number, lon: number, heading?: number) => Promise<void>;
+  refreshActors: () => Promise<void>;
 }
 
 // Storage keys for persistence
@@ -116,6 +128,7 @@ interface TestSessionPhaseProviderProps {
 
 export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderProps) {
   const { testSessions, activeSession: workflowActiveSession, startSession, stopSession, addEvent } = useWorkflow();
+  const { showToast } = useToast();
 
   // Phase state
   const [currentPhase, setCurrentPhase] = useState<SessionPhase>('idle');
@@ -135,6 +148,8 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
 
   // Engagement state
   const [engagements, setEngagements] = useState<Engagement[]>([]);
+  const [activeBursts, setActiveBursts] = useState<Map<string, JamBurst>>(new Map());
+  const [sessionActors, setSessionActors] = useState<SessionActor[]>([]);
   const activeEngagements = useMemo(() => {
     const map = new Map<string, Engagement>();
     engagements
@@ -146,11 +161,16 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
   // Timer ref for phase duration
   const durationTimerRef = useRef<number | null>(null);
 
-  // Get active session with proper memoization - prioritize workflowActiveSession for real-time updates
+  // Get active session - prefer localActiveSession (from DETAIL endpoint) when it has richer data
   const activeSession = useMemo(() => {
     if (!activeSessionId) return workflowActiveSession;
 
-    // Prefer workflowActiveSession if it matches (most up-to-date with events)
+    // Prefer localActiveSession if it has cuas_placements (fetched from DETAIL endpoint)
+    if (localActiveSession?.id === activeSessionId && (localActiveSession.cuas_placements?.length ?? 0) > 0) {
+      return localActiveSession;
+    }
+
+    // Fall back to workflowActiveSession if it matches
     if (workflowActiveSession?.id === activeSessionId) {
       return workflowActiveSession;
     }
@@ -159,16 +179,19 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
     const fromSessions = testSessions.find(s => s.id === activeSessionId);
     if (fromSessions) return fromSessions;
 
-    // Fallback to localActiveSession for immediate display after startTest
+    // Final fallback to localActiveSession even without cuas_placements
     return localActiveSession;
   }, [activeSessionId, workflowActiveSession, testSessions, localActiveSession]);
 
-  // Sync localActiveSession with workflowActiveSession when it changes
+  // Sync localActiveSession with workflowActiveSession — but only if local doesn't already have richer data
   useEffect(() => {
     if (workflowActiveSession && activeSessionId && workflowActiveSession.id === activeSessionId) {
-      setLocalActiveSession(workflowActiveSession);
+      // Don't overwrite localActiveSession if it has cuas_placements from DETAIL endpoint
+      if ((localActiveSession?.cuas_placements?.length ?? 0) === 0) {
+        setLocalActiveSession(workflowActiveSession);
+      }
     }
-  }, [workflowActiveSession, activeSessionId]);
+  }, [workflowActiveSession, activeSessionId, localActiveSession]);
 
   // Restore state from localStorage on mount
   useEffect(() => {
@@ -455,6 +478,8 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
       // Call analysis API endpoint
       const response = await fetch(`/api/v2/sessions/${activeSessionId}/compute-metrics`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
       });
 
       if (!response.ok) {
@@ -492,35 +517,59 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
   }, [resetWizard]);
 
   // Load a session by ID (used when navigating directly to SessionConsole via URL)
-  const loadSessionById = useCallback((sessionId: string) => {
-    // Find the session in testSessions
-    const session = testSessions.find(s => s.id === sessionId);
-    if (session) {
-      console.log('[TestSessionPhase] Loading session by ID:', sessionId, 'status:', session.status);
-      setActiveSessionId(sessionId);
-      setLocalActiveSession(session);
+  // Always fetches from DETAIL endpoint to get full data including cuas_placements
+  const loadSessionById = useCallback(async (sessionId: string) => {
+    try {
+      // Fetch full session from DETAIL endpoint (includes cuas_placements, tracker_assignments, etc.)
+      const res = await fetch(`/api/v2/sessions/${sessionId}`);
+      let session: TestSession | undefined;
 
-      // Set phase based on session status
-      if (session.status === 'active') {
-        setCurrentPhase('active');
-        const startTime = session.start_time ? new Date(session.start_time).getTime() : Date.now();
-        setPhaseStartTime(startTime);
-        persistState(sessionId, 'active', startTime);
-
-        // Initialize jam states for CUAS placements
-        const initialJamStates = new Map<string, boolean>();
-        session.cuas_placements?.forEach(placement => {
-          initialJamStates.set(placement.id, false);
-        });
-        setCuasJamStates(initialJamStates);
-        persistJamStates(initialJamStates);
-      } else if (session.status === 'completed') {
-        setCurrentPhase('completed');
-        setPhaseStartTime(null);
-        persistState(sessionId, 'completed', null);
+      if (res.ok) {
+        session = await res.json();
+        console.log('[TestSessionPhase] Fetched full session from API:', sessionId,
+          'cuas_placements:', session?.cuas_placements?.length ?? 0,
+          'tracker_assignments:', session?.tracker_assignments?.length ?? 0);
+      } else {
+        // Fallback to local testSessions array
+        console.warn('[TestSessionPhase] DETAIL fetch failed, falling back to local data');
+        session = testSessions.find(s => s.id === sessionId);
       }
-    } else {
-      console.warn('[TestSessionPhase] Session not found:', sessionId);
+
+      if (session) {
+        console.log('[TestSessionPhase] Loading session by ID:', sessionId, 'status:', session.status);
+        setActiveSessionId(sessionId);
+        setLocalActiveSession(session);
+
+        // Set phase based on session status
+        if (session.status === 'active') {
+          setCurrentPhase('active');
+          const startTime = session.start_time ? new Date(session.start_time).getTime() : Date.now();
+          setPhaseStartTime(startTime);
+          persistState(sessionId, 'active', startTime);
+
+          // Initialize jam states for CUAS placements
+          const initialJamStates = new Map<string, boolean>();
+          session.cuas_placements?.forEach(placement => {
+            initialJamStates.set(placement.id, false);
+          });
+          setCuasJamStates(initialJamStates);
+          persistJamStates(initialJamStates);
+        } else if (session.status === 'completed') {
+          setCurrentPhase('completed');
+          setPhaseStartTime(null);
+          persistState(sessionId, 'completed', null);
+        }
+      } else {
+        console.warn('[TestSessionPhase] Session not found:', sessionId);
+      }
+    } catch (err) {
+      console.error('[TestSessionPhase] Error loading session:', err);
+      // Last resort fallback
+      const session = testSessions.find(s => s.id === sessionId);
+      if (session) {
+        setActiveSessionId(sessionId);
+        setLocalActiveSession(session);
+      }
     }
   }, [testSessions, persistState, persistJamStates]);
 
@@ -613,6 +662,20 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
     });
   }, [activeSessionId, currentPhase, cuasJamStates, addEvent, persistJamStates, activeSession, phaseStartTime]);
 
+  // Refresh full session data (events, placements, etc.) from DETAIL endpoint
+  const refreshSession = useCallback(async () => {
+    if (!activeSessionId) return;
+    try {
+      const res = await fetch(`/api/v2/sessions/${activeSessionId}`);
+      if (res.ok) {
+        const session: TestSession = await res.json();
+        setLocalActiveSession(session);
+      }
+    } catch (error) {
+      console.error('Failed to refresh session:', error);
+    }
+  }, [activeSessionId]);
+
   // Engagement actions
   const refreshEngagements = useCallback(async () => {
     if (!activeSessionId) return;
@@ -620,7 +683,20 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
       const response = await fetch(`/api/v2/sessions/${activeSessionId}/engagements`);
       if (response.ok) {
         const data = await response.json();
-        setEngagements(data.engagements || []);
+        const engList: Engagement[] = data.engagements || [];
+        setEngagements(engList);
+
+        // Compute activeBursts from engagement bursts (open bursts where jam_off_at is null)
+        const openBursts = new Map<string, JamBurst>();
+        for (const eng of engList) {
+          if (eng.bursts) {
+            const openBurst = eng.bursts.find(b => !b.jam_off_at);
+            if (openBurst) {
+              openBursts.set(eng.id, openBurst);
+            }
+          }
+        }
+        setActiveBursts(openBursts);
       }
     } catch (error) {
       console.error('Failed to refresh engagements:', error);
@@ -676,23 +752,31 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
       if (!response.ok) throw new Error('Failed to quick engage');
       const engagement = await response.json();
 
-      // Auto-sync JAM state
+      // Sync local jam state to match backend (burst auto-created)
       if (engagement.cuas_placement_id) {
-        await setJamState(engagement.cuas_placement_id, true);
+        setCuasJamStates(prev => {
+          const next = new Map(prev);
+          next.set(engagement.cuas_placement_id, true);
+          persistJamStates(next);
+          return next;
+        });
       }
 
       await refreshEngagements();
+      await refreshSession();
       return engagement;
     } catch (error) {
       console.error('Failed to quick engage:', error);
       return null;
     }
-  }, [activeSessionId, refreshEngagements, setJamState]);
+  }, [activeSessionId, refreshEngagements, refreshSession, persistJamStates]);
 
   const engageAction = useCallback(async (engagementId: string): Promise<Engagement | null> => {
     try {
       const response = await fetch(`/api/v2/engagements/${engagementId}/engage`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
       });
       if (!response.ok) throw new Error('Failed to engage');
       const engagement = await response.json();
@@ -703,17 +787,20 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
       }
 
       await refreshEngagements();
+      await refreshSession();
       return engagement;
     } catch (error) {
       console.error('Failed to engage:', error);
       return null;
     }
-  }, [refreshEngagements, setJamState]);
+  }, [refreshEngagements, refreshSession, setJamState]);
 
   const disengageAction = useCallback(async (engagementId: string): Promise<Engagement | null> => {
     try {
       const response = await fetch(`/api/v2/engagements/${engagementId}/disengage`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
       });
       if (!response.ok) throw new Error('Failed to disengage');
       const engagement = await response.json();
@@ -724,17 +811,20 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
       }
 
       await refreshEngagements();
+      await refreshSession();
       return engagement;
     } catch (error) {
       console.error('Failed to disengage:', error);
       return null;
     }
-  }, [refreshEngagements, setJamState]);
+  }, [refreshEngagements, refreshSession, setJamState]);
 
   const abortEngagement = useCallback(async (engagementId: string): Promise<void> => {
     try {
       const response = await fetch(`/api/v2/engagements/${engagementId}/abort`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
       });
       if (!response.ok) throw new Error('Failed to abort engagement');
 
@@ -749,6 +839,123 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
       console.error('Failed to abort engagement:', error);
     }
   }, [engagements, refreshEngagements, setJamState]);
+
+  // Jam burst controls
+  const jamOn = useCallback(async (engagementId: string): Promise<JamBurst | null> => {
+    try {
+      const response = await fetch(`/api/v2/engagements/${engagementId}/jam-on`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      if (!response.ok) throw new Error('Failed to start jam burst');
+      const burst: JamBurst = await response.json();
+      setActiveBursts(prev => {
+        const next = new Map(prev);
+        next.set(engagementId, burst);
+        return next;
+      });
+      showToast('success', 'JAM ON — burst started');
+      await refreshSession();
+      return burst;
+    } catch (error) {
+      console.error('Failed to start jam burst:', error);
+      showToast('error', 'Failed to start jam burst');
+      return null;
+    }
+  }, [showToast, refreshSession]);
+
+  const jamOff = useCallback(async (engagementId: string): Promise<JamBurst | null> => {
+    try {
+      const response = await fetch(`/api/v2/engagements/${engagementId}/jam-off`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      if (!response.ok) throw new Error('Failed to stop jam burst');
+      const burst: JamBurst = await response.json();
+      setActiveBursts(prev => {
+        const next = new Map(prev);
+        next.delete(engagementId);
+        return next;
+      });
+      showToast('info', `JAM OFF — burst ${burst.duration_s ? burst.duration_s.toFixed(1) + 's' : 'ended'}`);
+      await refreshSession();
+      return burst;
+    } catch (error) {
+      console.error('Failed to stop jam burst:', error);
+      showToast('error', 'Failed to stop jam burst');
+      return null;
+    }
+  }, [showToast, refreshSession]);
+
+  // Session actor controls
+  const refreshActors = useCallback(async () => {
+    if (!activeSessionId) return;
+    try {
+      const response = await fetch(`/api/v2/sessions/${activeSessionId}/actors`);
+      if (response.ok) {
+        const data = await response.json();
+        setSessionActors(data.actors || data);
+      }
+    } catch (error) {
+      console.error('Failed to refresh actors:', error);
+    }
+  }, [activeSessionId]);
+
+  const createActor = useCallback(async (data: {
+    name: string;
+    callsign?: string;
+    lat?: number;
+    lon?: number;
+    heading_deg?: number;
+    tracker_unit_id?: string;
+  }): Promise<SessionActor | null> => {
+    if (!activeSessionId) return null;
+    try {
+      const response = await fetch(`/api/v2/sessions/${activeSessionId}/actors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to create actor');
+      const actor: SessionActor = await response.json();
+      await refreshActors();
+      showToast('success', `Actor created: ${actor.name}`);
+      return actor;
+    } catch (error) {
+      console.error('Failed to create actor:', error);
+      showToast('error', 'Failed to create actor');
+      return null;
+    }
+  }, [activeSessionId, refreshActors, showToast]);
+
+  const updateActorPosition = useCallback(async (
+    actorId: string,
+    lat: number,
+    lon: number,
+    heading?: number,
+  ): Promise<void> => {
+    try {
+      const body: Record<string, number> = { lat, lon };
+      if (heading !== undefined) body.heading_deg = heading;
+      const response = await fetch(`/api/v2/actors/${actorId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error('Failed to update actor position');
+    } catch (error) {
+      console.error('Failed to update actor position:', error);
+    }
+  }, []);
+
+  // Refresh actors when active session changes
+  useEffect(() => {
+    if (activeSessionId && currentPhase === 'active') {
+      refreshActors();
+    }
+  }, [activeSessionId, currentPhase, refreshActors]);
 
   const value: TestSessionPhaseContextType = {
     currentPhase,
@@ -784,6 +991,13 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
     disengage: disengageAction,
     abortEngagement,
     refreshEngagements,
+    activeBursts,
+    jamOn,
+    jamOff,
+    sessionActors,
+    createActor,
+    updateActorPosition,
+    refreshActors,
   };
 
   return (

@@ -4,6 +4,7 @@
  */
 
 import type { CUASProfile, CUASPlacement } from '../types/workflow';
+import { destinationPoint as geoDestinationPoint } from './geo';
 
 // GeoJSON types
 interface GeoJSONFeature {
@@ -21,54 +22,16 @@ interface GeoJSONFeatureCollection {
 }
 
 /**
- * Convert degrees to radians
- */
-function toRadians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
-}
-
-/**
- * Convert radians to degrees
- */
-function toDegrees(radians: number): number {
-  return (radians * 180) / Math.PI;
-}
-
-/**
- * Calculate a destination point given start point, bearing, and distance
- * Uses the haversine formula
- *
- * @param lat - Latitude in degrees
- * @param lon - Longitude in degrees
- * @param bearing - Bearing in degrees (0 = North, 90 = East)
- * @param distanceMeters - Distance in meters
- * @returns [lon, lat] for GeoJSON (note: lon first!)
+ * Wrapper: returns [lon, lat] for GeoJSON compatibility (geo.ts returns {lat, lon}).
  */
 function destinationPoint(
   lat: number,
   lon: number,
   bearing: number,
-  distanceMeters: number
+  distanceMeters: number,
 ): [number, number] {
-  const earthRadius = 6371000; // meters
-  const angularDistance = distanceMeters / earthRadius;
-  const bearingRad = toRadians(bearing);
-  const latRad = toRadians(lat);
-  const lonRad = toRadians(lon);
-
-  const destLatRad = Math.asin(
-    Math.sin(latRad) * Math.cos(angularDistance) +
-      Math.cos(latRad) * Math.sin(angularDistance) * Math.cos(bearingRad)
-  );
-
-  const destLonRad =
-    lonRad +
-    Math.atan2(
-      Math.sin(bearingRad) * Math.sin(angularDistance) * Math.cos(latRad),
-      Math.cos(angularDistance) - Math.sin(latRad) * Math.sin(destLatRad)
-    );
-
-  return [toDegrees(destLonRad), toDegrees(destLatRad)];
+  const pt = geoDestinationPoint(lat, lon, bearing, distanceMeters);
+  return [pt.lon, pt.lat];
 }
 
 /**

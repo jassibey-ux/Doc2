@@ -286,6 +286,60 @@ export interface SessionAnnotation {
 }
 
 // =============================================================================
+// Session Actor Types
+// =============================================================================
+
+export type EmitterType = 'cuas_system' | 'actor';
+
+export interface SessionActor {
+  id: string;
+  session_id: string;
+  name: string;
+  callsign?: string;
+  lat?: number;
+  lon?: number;
+  heading_deg?: number;
+  tracker_unit_id?: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// =============================================================================
+// Jam Burst Types
+// =============================================================================
+
+export type JamBurstSource = 'live' | 'sd_card' | 'recomputed';
+
+export interface JamBurstTargetSnapshot {
+  tracker_id: string;
+  lat?: number;
+  lon?: number;
+  range_m?: number;
+  bearing_deg?: number;
+  gps_status?: string;
+}
+
+export interface JamBurst {
+  id: string;
+  engagement_id: string;
+  burst_seq: number;
+  jam_on_at: string;
+  jam_off_at?: string;
+  duration_s?: number;
+  emitter_lat?: number;
+  emitter_lon?: number;
+  emitter_heading_deg?: number;
+  target_snapshots?: JamBurstTargetSnapshot[];
+  gps_denial_detected: boolean;
+  denial_onset_at?: string;
+  time_to_effect_s?: number;
+  source: JamBurstSource;
+  notes?: string;
+  created_at?: string;
+}
+
+// =============================================================================
 // Engagement Types
 // =============================================================================
 
@@ -332,12 +386,23 @@ export interface EngagementMetrics {
   data_source?: 'live_only' | 'sd_merged';
   metrics_json?: Record<string, unknown>;
   analyzed_at?: string;
+  // Enhanced burst-aware fields
+  anchor_type?: string;
+  anchor_timestamp?: string;
+  denial_onset_timestamp?: string;
+  reacquisition_time_s?: number;
+  telemetry_loss_duration_s?: number;
+  per_burst_json?: Record<string, unknown>[];
+  computation_version?: string;
 }
 
 export interface Engagement {
   id: string;
   session_id: string;
-  cuas_placement_id: string;
+  cuas_placement_id?: string;
+  cuas_name?: string;
+  emitter_type: EmitterType;
+  emitter_id: string;
   name?: string;
   engagement_type: EngagementType;
   status: EngagementStatus;
@@ -349,6 +414,7 @@ export interface Engagement {
   cuas_orientation_deg?: number;
   notes?: string;
   targets: EngagementTarget[];
+  bursts: JamBurst[];
   metrics?: EngagementMetrics;
   created_at: string;
   updated_at: string;

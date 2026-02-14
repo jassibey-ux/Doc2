@@ -8,10 +8,26 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { setApiConfig, clearApiConfig, getApiConfig, apiFetch } from '../services/api';
 
+type UserRole = 'admin' | 'operator' | 'observer' | 'analyst';
+
+const ROLE_HIERARCHY: Record<UserRole, number> = {
+  observer: 0,
+  analyst: 1,
+  operator: 2,
+  admin: 3,
+};
+
+interface AuthUser {
+  email: string;
+  organization_id: string;
+  role: UserRole;
+  name?: string;
+}
+
 interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
-  user: { email: string; organization_id: string } | null;
+  user: AuthUser | null;
   error: string | null;
 }
 
@@ -19,6 +35,7 @@ interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   isCloudMode: boolean;
+  hasRole: (requiredRole: UserRole) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -57,7 +74,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setState({
               isAuthenticated: true,
               isLoading: false,
-              user: { email: user.email, organization_id: user.organization_id },
+              user: {
+                email: user.email,
+                organization_id: user.organization_id,
+                role: user.role || 'observer',
+                name: user.name,
+              },
               error: null,
             });
           } else {
@@ -99,7 +121,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState({
           isAuthenticated: true,
           isLoading: false,
-          user: { email: data.email, organization_id: data.organization_id },
+          user: {
+            email: data.email,
+            organization_id: data.organization_id,
+            role: data.role || 'observer',
+            name: data.name,
+          },
           error: null,
         });
         return true;
@@ -127,8 +154,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState({ isAuthenticated: false, isLoading: false, user: null, error: null });
   }, []);
 
+  const hasRole = useCallback((requiredRole: UserRole): boolean => {
+    if (!isCloudMode) return true; // Local mode has full access
+    if (!state.user) return false;
+    const userLevel = ROLE_HIERARCHY[state.user.role] ?? -1;
+    const requiredLevel = ROLE_HIERARCHY[requiredRole] ?? 99;
+    return userLevel >= requiredLevel;
+  }, [isCloudMode, state.user]);
+
   return (
-    <AuthContext.Provider value={{ ...state, login, logout, isCloudMode }}>
+    <AuthContext.Provider value={{ ...state, login, logout, isCloudMode, hasRole }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,10 +1,15 @@
 """
-HMAC Authentication Middleware
+Authentication Middleware (HMAC + JWT)
 
-Verifies HMAC-signed requests from bridge services and authenticated clients.
-Used for cloud deployments where API endpoints must be authenticated.
+Dual auth scheme:
+  - HMAC: For bridge/electron machine-to-machine authentication
+  - JWT Bearer: For human users authenticated via /api/v2/auth/login
 
-Signature scheme:
+Requests with a valid Bearer token bypass HMAC checks.
+Requests with HMAC headers are validated against the shared secret.
+Excluded paths (health, login, docs) skip all auth.
+
+HMAC Signature scheme:
   - Header: X-HMAC-Signature: <hex-digest>
   - Header: X-HMAC-Timestamp: <unix-timestamp>
   - Signature = HMAC-SHA256(secret, f"{method}\n{path}\n{timestamp}\n{body_hash}")
@@ -19,9 +24,9 @@ import os
 import time
 from typing import Optional
 
-from fastapi import Request, HTTPException
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 logger = logging.getLogger(__name__)
 
@@ -30,19 +35,30 @@ MAX_TIMESTAMP_AGE_S = 300
 
 
 class HMACAuthMiddleware(BaseHTTPMiddleware):
-    """HMAC authentication middleware for cloud API endpoints."""
+    """HMAC + JWT authentication middleware for cloud API endpoints."""
 
     def __init__(self, app, secret: Optional[str] = None, exclude_paths: Optional[list] = None):
         super().__init__(app)
-        self.secret = (secret or os.environ.get("HMAC_SECRET", "")).encode("utf-8")
+        raw_secret = secret or os.environ.get("HMAC_SECRET", "")
+        self.secret = raw_secret.encode("utf-8")
         self.exclude_paths = exclude_paths or [
             "/api/v2/health",
+            "/api/v2/auth/login",
             "/docs",
             "/openapi.json",
             "/redoc",
         ]
 
-        if not self.secret or self.secret == b"change-me-in-production":
+        is_production = os.environ.get("ENVIRONMENT", "").lower() == "production"
+        is_insecure = not raw_secret or raw_secret == "change-me-in-production"
+
+        if is_insecure and is_production:
+            raise RuntimeError(
+                "HMAC_SECRET is not set or uses the insecure default. "
+                "Set a strong HMAC_SECRET in your .env file for production deployments."
+            )
+
+        if is_insecure:
             logger.warning("HMAC_SECRET not set or using default. Auth will be DISABLED.")
             self.enabled = False
         else:
@@ -54,22 +70,30 @@ class HMACAuthMiddleware(BaseHTTPMiddleware):
         if not self.enabled or any(request.url.path.startswith(p) for p in self.exclude_paths):
             return await call_next(request)
 
-        # Extract headers
+        # Check for JWT Bearer token first
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            if self._validate_jwt(token):
+                return await call_next(request)
+            return self._deny("Invalid or expired token")
+
+        # Fall back to HMAC validation
         signature = request.headers.get("X-HMAC-Signature")
         timestamp_str = request.headers.get("X-HMAC-Timestamp")
 
         if not signature or not timestamp_str:
-            raise HTTPException(status_code=401, detail="Missing HMAC authentication headers")
+            return self._deny("Missing authentication headers")
 
         # Validate timestamp (replay protection)
         try:
             timestamp = int(timestamp_str)
         except ValueError:
-            raise HTTPException(status_code=401, detail="Invalid timestamp")
+            return self._deny("Invalid timestamp")
 
         now = int(time.time())
         if abs(now - timestamp) > MAX_TIMESTAMP_AGE_S:
-            raise HTTPException(status_code=401, detail="Request timestamp expired")
+            return self._deny("Request timestamp expired")
 
         # Read request body for signature verification
         body = await request.body()
@@ -88,6 +112,25 @@ class HMACAuthMiddleware(BaseHTTPMiddleware):
         # Constant-time comparison
         if not hmac.compare_digest(signature, expected_signature):
             logger.warning(f"HMAC auth failed for {method} {path}")
-            raise HTTPException(status_code=401, detail="Invalid HMAC signature")
+            return self._deny("Invalid HMAC signature")
 
         return await call_next(request)
+
+    @staticmethod
+    def _deny(detail: str) -> JSONResponse:
+        """Return a 401 JSON response.
+
+        BaseHTTPMiddleware does not propagate HTTPException correctly,
+        so we return a JSONResponse directly instead of raising.
+        """
+        return JSONResponse(status_code=401, content={"detail": detail})
+
+    @staticmethod
+    def _validate_jwt(token: str) -> bool:
+        """Validate a JWT token. Returns True if valid."""
+        try:
+            from .jwt_auth import decode_token
+            payload = decode_token(token)
+            return payload is not None
+        except Exception:
+            return False

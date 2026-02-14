@@ -31,9 +31,11 @@ import { cloudSyncRoutes } from './routes/cloud-sync';
 // Ops Mode routes
 import { iffRoutes } from './routes/iff';
 import { detectionRoutes } from './routes/detections';
+import { analysisRoutes } from './routes/analysis';
 import { loadConfig } from '../core/config';
 // Backend convergence: Python proxy + subprocess
 import { simplePythonProxy } from './proxy';
+import { sessionBridgeMiddleware } from './session-bridge';
 import { getPythonBackend } from '../core/python-backend';
 // CoT listener + deconfliction (Ops Mode)
 import { CotListener } from '../core/cot-listener';
@@ -67,6 +69,10 @@ export async function startServer(port: number): Promise<void> {
   // Setup WebSocket
   setupWebSocket(server, dashboardApp);
 
+  // Session bridge: intercept v2 session start/stop to bridge Express data collection
+  // Must come before the proxy so it can handle these specific paths
+  app.use(sessionBridgeMiddleware());
+
   // Backend convergence: proxy /api/v2/* to Python backend
   // This must come before the Express API routes so /api/v2 paths hit Python first
   app.use(simplePythonProxy());
@@ -98,6 +104,9 @@ export async function startServer(port: number): Promise<void> {
 
   // Cloud sync
   app.use('/api', cloudSyncRoutes());
+
+  // Engagement analysis routes (range-over-time, GPS quality)
+  app.use('/api', analysisRoutes());
 
   // Ops Mode routes (IFF registry and detections)
   app.use('/api', iffRoutes());

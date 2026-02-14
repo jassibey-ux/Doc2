@@ -41,21 +41,11 @@ const DEFAULT_CLOUD_SYNC_CONFIG: CloudSyncConfig = {
   max_retry_attempts: 5,
 };
 
-/**
- * In-memory ring buffer for cloud push.
- * Records are enqueued by the existing watcher callbacks and
- * drained by the push timer.
- */
-interface BufferedRecord {
-  id: number;
-  payload: Record<string, unknown>;
-  retries: number;
-}
+import { CloudSyncBuffer } from './cloud-sync-buffer';
 
 class CloudSyncManager {
   private config: CloudSyncConfig;
-  private buffer: BufferedRecord[] = [];
-  private nextId = 1;
+  private sqliteBuffer: CloudSyncBuffer;
   private pushTimer: ReturnType<typeof setInterval> | null = null;
   private consecutiveFailures = 0;
   private lastPushAt: string | null = null;
@@ -63,6 +53,7 @@ class CloudSyncManager {
 
   constructor() {
     this.config = { ...DEFAULT_CLOUD_SYNC_CONFIG };
+    this.sqliteBuffer = new CloudSyncBuffer();
     this.loadConfig();
   }
 
@@ -107,30 +98,41 @@ class CloudSyncManager {
     return { ...this.config };
   }
 
-  /** Start the push loop. */
+  /** Start the push loop. Opens SQLite buffer and re-queues crash survivors. */
   start(): void {
     if (!this.config.enabled || this.pushTimer) return;
+
+    this.sqliteBuffer.open();
+
+    // Purge records older than 7 days
+    const purged = this.sqliteBuffer.purgeOld();
+    if (purged > 0) {
+      log.info(`Cloud sync: purged ${purged} records older than 7 days`);
+    }
+
+    const pending = this.sqliteBuffer.pendingCount();
+    if (pending > 0) {
+      log.info(`Cloud sync: ${pending} records from prior session ready for push`);
+    }
 
     log.info(`Cloud sync started → ${this.config.cloud_url}`);
     this.pushTimer = setInterval(() => this.pushBatch(), this.config.push_interval_ms);
   }
 
-  /** Stop the push loop. */
+  /** Stop the push loop and close the buffer. */
   stop(): void {
     if (this.pushTimer) {
       clearInterval(this.pushTimer);
       this.pushTimer = null;
     }
+    this.sqliteBuffer.close();
     log.info('Cloud sync stopped');
   }
 
-  /** Enqueue tracker records for cloud push. */
+  /** Enqueue tracker records for cloud push (persisted to SQLite). */
   enqueue(records: Record<string, unknown>[]): void {
     if (!this.config.enabled) return;
-
-    for (const rec of records) {
-      this.buffer.push({ id: this.nextId++, payload: rec, retries: 0 });
-    }
+    this.sqliteBuffer.enqueue(records);
   }
 
   /** Get current sync status. */
@@ -138,7 +140,7 @@ class CloudSyncManager {
     return {
       enabled: this.config.enabled,
       connected: this.consecutiveFailures === 0 && this.lastPushAt !== null,
-      pending_records: this.buffer.length,
+      pending_records: this.sqliteBuffer.pendingCount(),
       last_push_at: this.lastPushAt,
       last_error: this.lastError,
       consecutive_failures: this.consecutiveFailures,
@@ -147,33 +149,32 @@ class CloudSyncManager {
 
   /** Push a batch of records to the cloud. */
   private async pushBatch(): Promise<void> {
-    if (this.buffer.length === 0) return;
+    const batch = this.sqliteBuffer.dequeue(this.config.batch_size);
+    if (batch.length === 0) return;
 
-    const batch = this.buffer.slice(0, this.config.batch_size);
+    const ids = batch.map((b) => b.id);
     const records = batch.map((b) => b.payload);
 
     const success = await this.httpPush(records);
 
     if (success) {
-      // Remove pushed records from buffer
-      const pushedIds = new Set(batch.map((b) => b.id));
-      this.buffer = this.buffer.filter((b) => !pushedIds.has(b.id));
+      this.sqliteBuffer.ack(ids);
       this.consecutiveFailures = 0;
       this.lastPushAt = new Date().toISOString();
       this.lastError = null;
-      log.info(`Cloud sync: pushed ${batch.length} records (${this.buffer.length} remaining)`);
+      const remaining = this.sqliteBuffer.pendingCount();
+      log.info(`Cloud sync: pushed ${batch.length} records (${remaining} remaining)`);
     } else {
       this.consecutiveFailures++;
-      // Increment retry counts
-      for (const b of batch) {
-        b.retries++;
-      }
-      // Drop records that exceeded max retries
+      this.sqliteBuffer.nack(ids);
+
+      // Check if any records have exceeded max retries and drop them
       const maxRetries = this.config.max_retry_attempts;
-      const dropped = this.buffer.filter((b) => b.retries > maxRetries);
-      if (dropped.length > 0) {
-        log.warn(`Cloud sync: dropping ${dropped.length} records after ${maxRetries} retries`);
-        this.buffer = this.buffer.filter((b) => b.retries <= maxRetries);
+      const overRetried = batch.filter((b) => b.retries >= maxRetries);
+      if (overRetried.length > 0) {
+        const dropIds = overRetried.map((b) => b.id);
+        this.sqliteBuffer.ack(dropIds); // Remove permanently
+        log.warn(`Cloud sync: dropping ${dropIds.length} records after ${maxRetries} retries`);
       }
     }
   }

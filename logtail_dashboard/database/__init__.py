@@ -23,6 +23,8 @@ from .models import (
     Engagement,
     EngagementTarget,
     EngagementMetrics,
+    SessionActor,
+    EngagementJamBurst,
 )
 from .csv_importer import CSVImporter
 
@@ -49,6 +51,8 @@ __all__ = [
     "Engagement",
     "EngagementTarget",
     "EngagementMetrics",
+    "SessionActor",
+    "EngagementJamBurst",
     # Utilities
     "CSVImporter",
 ]

@@ -63,7 +63,7 @@ interface CRMContextType {
 
 const CRMContext = createContext<CRMContextType | null>(null);
 
-const API_BASE = '/api/crm';
+const API_BASE = '/api/v2';
 
 export function CRMProvider({ children }: { children: React.ReactNode }) {
   // Dashboard state

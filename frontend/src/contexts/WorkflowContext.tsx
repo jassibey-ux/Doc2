@@ -349,7 +349,11 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
 
   // Session operations
   const startSession = useCallback(async (sessionId: string) => {
-    const res = await fetch(`${API_BASE}/sessions/${sessionId}/start`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/sessions/${sessionId}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
     if (!res.ok) return null;
     const data = await res.json();
     // v2 returns the full session directly (not wrapped in {session: ...})
@@ -360,7 +364,11 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const stopSession = useCallback(async (sessionId: string) => {
-    const res = await fetch(`${API_BASE}/sessions/${sessionId}/stop`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/sessions/${sessionId}/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
     if (!res.ok) return null;
     const data = await res.json();
 
@@ -399,13 +407,13 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     // Update local state
     setTestSessions(prev => prev.map(s => {
       if (s.id === sessionId) {
-        return { ...s, events: [...s.events, newEvent] };
+        return { ...s, events: [...(s.events || []), newEvent] };
       }
       return s;
     }));
 
     if (activeSession?.id === sessionId) {
-      setActiveSession(prev => prev ? { ...prev, events: [...prev.events, newEvent] } : null);
+      setActiveSession(prev => prev ? { ...prev, events: [...(prev.events || []), newEvent] } : null);
     }
 
     return newEvent;

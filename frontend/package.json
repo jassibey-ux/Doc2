@@ -12,10 +12,12 @@
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.1",
+    "@tmcw/togeojson": "^7.1.2",
     "cesium": "^1.138.0",
     "hls.js": "^1.5.0",
     "lucide-react": "^0.400.0",
     "maplibre-gl": "^4.5.0",
+    "mgrs": "^2.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.20.0",

@@ -25,7 +25,10 @@ import Map3DViewer from './Map3DViewer';
 import CesiumMap from './CesiumMap';
 import TerrainProfileChart from './TerrainProfileChart';
 import LinkBudgetPanel from './LinkBudgetPanel';
-import { FileText, X, Globe, Map as MapIcon, Signal, Box, Target, MapPin, Globe2, Mountain } from 'lucide-react';
+import CoordinateBar from './CoordinateBar';
+import MapFileDropHandler from './MapFileDropHandler';
+import type { ImportedLayer } from './MapFileDropHandler';
+import { FileText, X, Globe, Map as MapIcon, Signal, Box, Target, MapPin, Globe2, Mountain, AlertTriangle, Radio, Ruler } from 'lucide-react';
 import type { GeoPoint } from '../types/workflow';
 
 export default function MapView() {
@@ -104,6 +107,35 @@ export default function MapView() {
   const [showTerrainProfile, setShowTerrainProfile] = useState(false);
   const [showLinkBudget, setShowLinkBudget] = useState(false);
 
+  // Cursor position for CoordinateBar
+  const [cursorPos, setCursorPos] = useState<{ lat: number; lon: number } | null>(null);
+
+  // Measurement tool state
+  const [measureMode, setMeasureMode] = useState(false);
+  const [measurements, setMeasurements] = useState<Array<{ id: string; startLat: number; startLon: number; endLat: number; endLon: number; distanceM: number; bearingDeg: number }>>([]);
+
+  // Imported GeoJSON/KML layers
+  const [importedLayers, setImportedLayers] = useState<ImportedLayer[]>([]);
+
+  // Backend health status
+  const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
+
+  // Poll backend health every 30 seconds
+  useEffect(() => {
+    let cancelled = false;
+    const checkHealth = async () => {
+      try {
+        const resp = await fetch('/api/health/backend');
+        const data = await resp.json();
+        if (!cancelled) setBackendReachable(data.python_backend?.reachable ?? false);
+      } catch {
+        if (!cancelled) setBackendReachable(false);
+      }
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   // CUAS placement mode state
   const [placingCuasId, setPlacingCuasId] = useState<string | null>(null);
@@ -157,6 +189,31 @@ export default function MapView() {
 
   const handleCuasPlacementHandled = useCallback(() => {
     setPendingCuasPlacement(null);
+  }, []);
+
+  // Cursor move handler for CoordinateBar
+  const handleCursorMove = useCallback((lat: number, lon: number) => {
+    setCursorPos({ lat, lon });
+  }, []);
+
+  // Measurement handlers
+  const handleMeasurementAdded = useCallback((m: { id: string; startLat: number; startLon: number; endLat: number; endLon: number; distanceM: number; bearingDeg: number }) => {
+    setMeasurements(prev => [...prev, m]);
+  }, []);
+
+  // Imported layer handlers
+  const handleLayerImported = useCallback((layer: ImportedLayer) => {
+    setImportedLayers(prev => [...prev, layer]);
+  }, []);
+
+  const handleToggleImportedLayer = useCallback((layerId: string) => {
+    setImportedLayers(prev =>
+      prev.map(l => l.id === layerId ? { ...l, visible: !l.visible } : l)
+    );
+  }, []);
+
+  const handleRemoveImportedLayer = useCallback((layerId: string) => {
+    setImportedLayers(prev => prev.filter(l => l.id !== layerId));
   }, []);
 
   // Handle panel close
@@ -317,6 +374,61 @@ export default function MapView() {
           <span className="branding">SCENSUS</span>
         </div>
 
+        {/* Backend status warning banner */}
+        {backendReachable === false && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 600,
+              background: 'linear-gradient(90deg, rgba(249, 115, 22, 0.95), rgba(239, 68, 68, 0.95))',
+              color: '#fff',
+              padding: '8px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              fontSize: '13px',
+              fontWeight: 600,
+            }}
+          >
+            <AlertTriangle size={16} />
+            Python backend not connected — sessions will not save.
+          </div>
+        )}
+
+        {/* Active session return banner */}
+        {currentPhase === 'active' && activeSessionId && (
+          <div
+            onClick={() => navigate(`/session/${activeSessionId}/live`)}
+            style={{
+              position: 'absolute',
+              top: backendReachable === false ? 36 : 0,
+              left: 0,
+              right: 0,
+              zIndex: 599,
+              background: 'linear-gradient(90deg, rgba(239, 68, 68, 0.95), rgba(220, 38, 38, 0.95))',
+              color: '#fff',
+              padding: '8px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'filter 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.1)')}
+            onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
+          >
+            <Radio size={16} style={{ animation: 'pulse 1.5s ease-in-out infinite' }} />
+            Session recording in progress — Return to Session Console →
+          </div>
+        )}
+
         {/* Unified Recording Bar (status + events) */}
         {currentPhase !== 'idle' && phaseActiveSession && (
           <RecordingBar
@@ -362,30 +474,36 @@ export default function MapView() {
           onSetJamState={setJamState}
         />
 
-        {/* Main Map */}
-        <MapComponent
-          drones={drones}
-          droneHistory={droneHistory}
-          selectedDroneId={selectedDroneId}
-          onDroneClick={handleDroneClick}
-          currentTime={currentTime}
-          timelineStart={timelineStart}
-          mapStyle={mapStyle}
-          showQualityColors={showQualityColors}
-          cuasPlacements={phaseActiveSession?.cuas_placements}
-          cuasProfiles={cuasProfiles}
-          cuasJamStates={cuasJamStates}
-          showCuasCoverage={currentPhase === 'active' || currentPhase === 'planning'}
-          selectedSite={selectedSite}
-          isDrawingMode={isDrawingMode}
-          onDrawingComplete={handleDrawingComplete}
-          placingCuasId={placingCuasId}
-          onCuasPlaced={handleCuasPlaced}
-          flyToCenter={flyToCenter}
-          onFlyToComplete={() => setFlyToCenter(null)}
-          sdCardTracks={sdCardTracks}
-          showSDCardTracks={showSDCardTracks}
-        />
+        {/* Main Map (wrapped in file drop handler) */}
+        <MapFileDropHandler onLayerImported={handleLayerImported}>
+          <MapComponent
+            drones={drones}
+            droneHistory={droneHistory}
+            selectedDroneId={selectedDroneId}
+            onDroneClick={handleDroneClick}
+            currentTime={currentTime}
+            timelineStart={timelineStart}
+            mapStyle={mapStyle}
+            showQualityColors={showQualityColors}
+            cuasPlacements={phaseActiveSession?.cuas_placements}
+            cuasProfiles={cuasProfiles}
+            cuasJamStates={cuasJamStates}
+            showCuasCoverage={currentPhase === 'active' || currentPhase === 'planning'}
+            selectedSite={selectedSite}
+            isDrawingMode={isDrawingMode}
+            onDrawingComplete={handleDrawingComplete}
+            placingCuasId={placingCuasId}
+            onCuasPlaced={handleCuasPlaced}
+            flyToCenter={flyToCenter}
+            onFlyToComplete={() => setFlyToCenter(null)}
+            sdCardTracks={sdCardTracks}
+            showSDCardTracks={showSDCardTracks}
+            onCursorMove={handleCursorMove}
+            measureMode={measureMode}
+            onMeasurementAdded={handleMeasurementAdded}
+            importedLayers={importedLayers}
+          />
+        </MapFileDropHandler>
 
         {/* 3D View Overlay (MapLibre-based) */}
         {show3DView && !showCesiumGlobe && (
@@ -503,6 +621,27 @@ export default function MapView() {
           >
             <Mountain size={18} />
           </button>
+
+          {/* Measurement Tool */}
+          <button
+            className={`map-control-btn ${measureMode ? 'active' : ''}`}
+            onClick={() => setMeasureMode(prev => !prev)}
+            title={measureMode ? 'Disable Ruler' : 'Measure Distance & Bearing'}
+            style={{ position: 'relative' }}
+          >
+            <Ruler size={18} />
+            {measurements.length > 0 && (
+              <span style={{
+                position: 'absolute', top: -4, right: -4,
+                background: '#f59e0b', color: '#000',
+                fontSize: '9px', fontWeight: 700,
+                borderRadius: '50%', width: '16px', height: '16px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {measurements.length}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* SD Card Panel */}
@@ -558,6 +697,9 @@ export default function MapView() {
           isOpen={activePanel === 'layers'}
           layers={layersWithCount}
           onToggleLayer={handleToggleLayer}
+          importedLayers={importedLayers}
+          onToggleImportedLayer={handleToggleImportedLayer}
+          onRemoveImportedLayer={handleRemoveImportedLayer}
         />
 
         {/* Tracker Workspace Panel (replaces old DroneListPanel) */}
@@ -672,6 +814,7 @@ export default function MapView() {
 
         {/* Bottom Controls with Timeline */}
         <div className="bottom-controls">
+          <CoordinateBar lat={cursorPos?.lat ?? null} lon={cursorPos?.lon ?? null} />
           <TimelineControl
             isLive={isLive}
             setIsLive={setIsLive}
