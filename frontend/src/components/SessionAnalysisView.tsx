@@ -38,6 +38,8 @@ import Map3DViewer from './Map3DViewer';
 import TrackLegend from './TrackLegend';
 import TagInput from './crm/TagInput';
 import AnnotationList from './crm/AnnotationList';
+import RangeOverTimeChart from './RangeOverTimeChart';
+import GPSQualityChart from './GPSQualityChart';
 import type { SessionMetrics, TestEvent, TestSession, Engagement, CUASPlacement, CUASProfile } from '../types/workflow';
 import type { SessionAnnotation } from '../types/crm';
 
@@ -60,6 +62,7 @@ export default function SessionAnalysisView() {
   const [sessionTags, setSessionTags] = useState<string[]>([]);
   const [sessionAnnotations, setSessionAnnotations] = useState<SessionAnnotation[]>([]);
   const [sessionEngagements, setSessionEngagements] = useState<Engagement[]>([]);
+  const [chartHoverTimestamp, setChartHoverTimestamp] = useState<number | null>(null);
 
   const { getSessionTags, getSessionAnnotations } = useCRM();
   const [analysisData, setAnalysisData] = useState<{
@@ -674,14 +677,34 @@ export default function SessionAnalysisView() {
               {expandedSection === 'engagements' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {sessionEngagements.map(eng => (
-                    <EngagementSummaryCard
-                      key={eng.id}
-                      engagement={eng}
-                      cuasProfiles={cuasProfiles}
-                      cuasPlacements={session?.cuas_placements || []}
-                      formatTime={formatTime}
-                      formatDistance={formatDistance}
-                    />
+                    <div key={eng.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <EngagementSummaryCard
+                        engagement={eng}
+                        cuasProfiles={cuasProfiles}
+                        cuasPlacements={session?.cuas_placements || []}
+                        formatTime={formatTime}
+                        formatDistance={formatDistance}
+                      />
+                      {/* Range Over Time + GPS Quality Charts per engagement */}
+                      {eng.cuas_placement_id && eng.targets[0]?.tracker_id && sessionId && (
+                        <>
+                          <RangeOverTimeChart
+                            sessionId={sessionId}
+                            cuasPlacementId={eng.cuas_placement_id}
+                            trackerId={eng.targets[0].tracker_id}
+                            hoverTimestamp={chartHoverTimestamp}
+                            onHoverTimestamp={setChartHoverTimestamp}
+                          />
+                          <GPSQualityChart
+                            sessionId={sessionId}
+                            cuasPlacementId={eng.cuas_placement_id}
+                            trackerId={eng.targets[0].tracker_id}
+                            hoverTimestamp={chartHoverTimestamp}
+                            onHoverTimestamp={setChartHoverTimestamp}
+                          />
+                        </>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}

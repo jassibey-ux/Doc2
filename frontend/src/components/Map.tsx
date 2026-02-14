@@ -17,6 +17,8 @@ import {
 } from '../utils/siteVisualization';
 import { createQualityTrackGeoJSON } from '../utils/trackSegmentation';
 import { computeEngagementGeometries, engagementGeometriesToGeoJSON } from '../utils/engagementGeometry';
+import { haversineDistance, bearing, midpoint, formatDistance, formatBearing } from '../utils/geo';
+import type { ImportedLayer } from './MapFileDropHandler';
 
 interface MapProps {
   drones: Map<string, DroneSummary>;
@@ -61,6 +63,13 @@ interface MapProps {
   // Map-click engagement mode
   onCuasClick?: (cuasPlacementId: string) => void;
   engagementModeCuasId?: string | null;
+  // Cursor position callback for coordinate bar
+  onCursorMove?: (lat: number, lon: number) => void;
+  // Measurement tool
+  measureMode?: boolean;
+  onMeasurementAdded?: (measurement: { id: string; startLat: number; startLon: number; endLat: number; endLon: number; distanceM: number; bearingDeg: number }) => void;
+  // Imported GeoJSON/KML layers
+  importedLayers?: ImportedLayer[];
 }
 
 // Color palette for drone tracks (cycle through for different drones)
@@ -210,6 +219,10 @@ export default function MapComponent({
   activeBursts = new Map(),
   onCuasClick,
   engagementModeCuasId = null,
+  onCursorMove,
+  measureMode = false,
+  onMeasurementAdded,
+  importedLayers = [],
 }: MapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -224,6 +237,9 @@ export default function MapComponent({
   const actorSourceAddedRef = useRef<boolean>(false);
   const onCuasClickRef = useRef(onCuasClick);
   onCuasClickRef.current = onCuasClick;
+  const measureStartRef = useRef<{ lat: number; lon: number } | null>(null);
+  const measureTempMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const importedSourceIdsRef = useRef<Set<string>>(new Set());
 
   // Create a stable mapping of tracker_id to color index
   const droneColorMap = useMemo(() => {
@@ -525,6 +541,223 @@ export default function MapComponent({
       }
     }
   }, [engagementModeCuasId]);
+
+  // Cursor position reporting for CoordinateBar
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !onCursorMove) return;
+    const handler = (e: maplibregl.MapMouseEvent) => {
+      onCursorMove(e.lngLat.lat, e.lngLat.lng);
+    };
+    map.on('mousemove', handler);
+    return () => { map.off('mousemove', handler); };
+  }, [onCursorMove]);
+
+  // Measurement mode: crosshair cursor + click-to-measure
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!measureMode) {
+      // Cleanup temp marker when deactivated
+      if (measureTempMarkerRef.current) {
+        measureTempMarkerRef.current.remove();
+        measureTempMarkerRef.current = null;
+      }
+      measureStartRef.current = null;
+      if (!engagementModeCuasId && !placingCuasId) {
+        map.getCanvas().style.cursor = '';
+      }
+      return;
+    }
+
+    map.getCanvas().style.cursor = 'crosshair';
+
+    const handleClick = (e: maplibregl.MapMouseEvent) => {
+      const { lat, lng: lon } = e.lngLat;
+      if (!measureStartRef.current) {
+        // First click: set start point, show temp marker
+        measureStartRef.current = { lat, lon };
+        const el = document.createElement('div');
+        el.style.width = '10px';
+        el.style.height = '10px';
+        el.style.borderRadius = '50%';
+        el.style.background = '#f59e0b';
+        el.style.border = '2px solid #fff';
+        const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+          .setLngLat([lon, lat])
+          .addTo(map);
+        measureTempMarkerRef.current = marker;
+      } else {
+        // Second click: compute measurement, draw line + label, reset
+        const start = measureStartRef.current;
+        const dist = haversineDistance(start.lat, start.lon, lat, lon);
+        const brng = bearing(start.lat, start.lon, lat, lon);
+        const mid = midpoint(start.lat, start.lon, lat, lon);
+        const id = `measure-${Date.now()}`;
+
+        // Add GeoJSON source + layers for this measurement
+        const lineGeoJSON: GeoJSON.FeatureCollection = {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: {},
+              geometry: {
+                type: 'LineString',
+                coordinates: [[start.lon, start.lat], [lon, lat]],
+              },
+            },
+            {
+              type: 'Feature',
+              properties: { label: `${formatDistance(dist)}  ${formatBearing(brng)}` },
+              geometry: {
+                type: 'Point',
+                coordinates: [mid.lon, mid.lat],
+              },
+            },
+          ],
+        };
+
+        map.addSource(id, { type: 'geojson', data: lineGeoJSON });
+        map.addLayer({
+          id: `${id}-line`,
+          type: 'line',
+          source: id,
+          filter: ['==', '$type', 'LineString'],
+          paint: {
+            'line-color': '#f59e0b',
+            'line-width': 2,
+            'line-dasharray': [4, 3],
+          },
+        });
+        map.addLayer({
+          id: `${id}-label`,
+          type: 'symbol',
+          source: id,
+          filter: ['==', '$type', 'Point'],
+          layout: {
+            'text-field': ['get', 'label'],
+            'text-size': 12,
+            'text-font': ['Open Sans Bold'],
+            'text-allow-overlap': true,
+          },
+          paint: {
+            'text-color': '#f59e0b',
+            'text-halo-color': 'rgba(0,0,0,0.9)',
+            'text-halo-width': 2,
+          },
+        });
+
+        // Remove temp marker
+        if (measureTempMarkerRef.current) {
+          measureTempMarkerRef.current.remove();
+          measureTempMarkerRef.current = null;
+        }
+        measureStartRef.current = null;
+
+        onMeasurementAdded?.({
+          id,
+          startLat: start.lat,
+          startLon: start.lon,
+          endLat: lat,
+          endLon: lon,
+          distanceM: dist,
+          bearingDeg: brng,
+        });
+      }
+    };
+
+    map.on('click', handleClick);
+    return () => { map.off('click', handleClick); };
+  }, [measureMode, engagementModeCuasId, placingCuasId, onMeasurementAdded]);
+
+  // Imported layers: add/update/remove MapLibre sources+layers for each imported layer
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const currentIds = new Set(importedLayers.map(l => l.id));
+    const IMPORT_COLORS = ['#06b6d4', '#d946ef', '#84cc16', '#f97316', '#a855f7', '#14b8a6', '#f43f5e', '#6366f1'];
+
+    // Remove layers that are no longer in importedLayers
+    for (const oldId of importedSourceIdsRef.current) {
+      if (!currentIds.has(oldId)) {
+        // Remove all layers for this source
+        for (const suffix of ['-fill', '-outline', '-line', '-circle']) {
+          if (map.getLayer(`${oldId}${suffix}`)) map.removeLayer(`${oldId}${suffix}`);
+        }
+        if (map.getSource(oldId)) map.removeSource(oldId);
+        importedSourceIdsRef.current.delete(oldId);
+      }
+    }
+
+    // Add or update each imported layer
+    importedLayers.forEach((layer, idx) => {
+      const color = IMPORT_COLORS[idx % IMPORT_COLORS.length];
+      const visibility = layer.visible ? 'visible' : 'none';
+
+      if (!map.getSource(layer.id)) {
+        // Add new source + layers
+        map.addSource(layer.id, { type: 'geojson', data: layer.geojson });
+
+        // Polygon fill + outline
+        map.addLayer({
+          id: `${layer.id}-fill`,
+          type: 'fill',
+          source: layer.id,
+          filter: ['==', '$type', 'Polygon'],
+          layout: { visibility },
+          paint: { 'fill-color': color, 'fill-opacity': 0.15 },
+        });
+        map.addLayer({
+          id: `${layer.id}-outline`,
+          type: 'line',
+          source: layer.id,
+          filter: ['any', ['==', '$type', 'Polygon'], ['==', '$type', 'MultiPolygon']],
+          layout: { visibility },
+          paint: { 'line-color': color, 'line-width': 2, 'line-opacity': 0.8 },
+        });
+
+        // Line
+        map.addLayer({
+          id: `${layer.id}-line`,
+          type: 'line',
+          source: layer.id,
+          filter: ['==', '$type', 'LineString'],
+          layout: { visibility, 'line-join': 'round', 'line-cap': 'round' },
+          paint: { 'line-color': color, 'line-width': 2.5, 'line-opacity': 0.8 },
+        });
+
+        // Point
+        map.addLayer({
+          id: `${layer.id}-circle`,
+          type: 'circle',
+          source: layer.id,
+          filter: ['==', '$type', 'Point'],
+          layout: { visibility },
+          paint: {
+            'circle-radius': 5,
+            'circle-color': color,
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': '#fff',
+          },
+        });
+
+        importedSourceIdsRef.current.add(layer.id);
+      } else {
+        // Update data + visibility
+        const source = map.getSource(layer.id) as maplibregl.GeoJSONSource;
+        if (source) source.setData(layer.geojson);
+
+        for (const suffix of ['-fill', '-outline', '-line', '-circle']) {
+          if (map.getLayer(`${layer.id}${suffix}`)) {
+            map.setLayoutProperty(`${layer.id}${suffix}`, 'visibility', visibility);
+          }
+        }
+      }
+    });
+  }, [importedLayers]);
 
   // Toggle SD Card track visibility
   useEffect(() => {
