@@ -48,6 +48,8 @@ interface SessionSetupWizardProps {
   onCuasPlacementHandled?: () => void;
   // When true, wizard is hidden (user is placing CUAS on map)
   isMinimizedForPlacement?: boolean;
+  // Expose wizard CUAS placements to parent for map rendering
+  onWizardPlacementsChanged?: (placements: Array<{ id: string; cuasProfileId: string; position: { lat: number; lon: number }; orientation: number }>) => void;
 }
 
 const STEP_TITLES = ['Site', 'Drones', 'CUAS', 'Review'];
@@ -65,6 +67,7 @@ export default function SessionSetupWizard({
   pendingCuasPlacement,
   onCuasPlacementHandled,
   isMinimizedForPlacement = false,
+  onWizardPlacementsChanged,
 }: SessionSetupWizardProps) {
   const [state, dispatch] = useReducer(wizardReducer, initialWizardState);
   const { showToast } = useToast();
@@ -99,6 +102,16 @@ export default function SessionSetupWizard({
       }
     }
   }, [isOpen, state.selectedSiteId, sites, selectSite]);
+
+  // Broadcast wizard CUAS placements to parent for map preview
+  useEffect(() => {
+    if (isOpen && onWizardPlacementsChanged) {
+      onWizardPlacementsChanged(state.cuasPlacements);
+    }
+    if (!isOpen && onWizardPlacementsChanged) {
+      onWizardPlacementsChanged([]);
+    }
+  }, [isOpen, state.cuasPlacements, onWizardPlacementsChanged]);
 
   // Handle incoming CUAS placement from map click
   useEffect(() => {

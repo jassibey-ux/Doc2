@@ -11,7 +11,7 @@ interface GeoJSONFeature {
   type: 'Feature';
   properties: Record<string, unknown>;
   geometry: {
-    type: 'Polygon' | 'Point';
+    type: 'Polygon' | 'Point' | 'LineString';
     coordinates: number[][] | number[][][] | number[];
   };
 }
@@ -234,6 +234,69 @@ export function generateCUASMarkersGeoJSON(
 
     const isJamming = jamStates.get(placement.id) || false;
     features.push(generateCUASMarkerFeature(placement, profile, isJamming));
+  }
+
+  return {
+    type: 'FeatureCollection',
+    features,
+  };
+}
+
+/**
+ * Generate a heading indicator line from CUAS position along its orientation.
+ * For directional systems: a single line along the boresight.
+ * For omni systems: no heading line (returns null).
+ */
+export function generateCUASHeadingFeature(
+  placement: CUASPlacement,
+  profile: CUASProfile,
+  isJamming: boolean = false
+): GeoJSONFeature | null {
+  const beamWidth = profile.beam_width_deg || 360;
+  if (beamWidth >= 360) return null; // No heading for omni
+
+  const { position, orientation_deg } = placement;
+  const rangeMeters = profile.effective_range_m || 500;
+  // Heading line extends to 40% of effective range
+  const lineLength = rangeMeters * 0.4;
+
+  const endPoint = destinationPoint(position.lat, position.lon, orientation_deg, lineLength);
+
+  return {
+    type: 'Feature',
+    properties: {
+      id: placement.id,
+      isActive: placement.active,
+      isJamming,
+      color: getCoverageColor(placement.active, isJamming),
+    },
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [position.lon, position.lat],
+        endPoint,
+      ],
+    },
+  };
+}
+
+/**
+ * Generate GeoJSON FeatureCollection for all CUAS heading indicators
+ */
+export function generateCUASHeadingsGeoJSON(
+  placements: CUASPlacement[],
+  profilesMap: Map<string, CUASProfile>,
+  jamStates: Map<string, boolean> = new Map()
+): GeoJSONFeatureCollection {
+  const features: GeoJSONFeature[] = [];
+
+  for (const placement of placements) {
+    const profile = profilesMap.get(placement.cuas_profile_id);
+    if (!profile) continue;
+
+    const isJamming = jamStates.get(placement.id) || false;
+    const feature = generateCUASHeadingFeature(placement, profile, isJamming);
+    if (feature) features.push(feature);
   }
 
   return {

@@ -141,6 +141,8 @@ export default function MapView() {
   // CUAS placement mode state
   const [placingCuasId, setPlacingCuasId] = useState<string | null>(null);
   const [pendingCuasPlacement, setPendingCuasPlacement] = useState<{ placementId: string; lat: number; lon: number } | null>(null);
+  // Wizard CUAS placements for map preview (draggable markers)
+  const [wizardCuasPlacements, setWizardCuasPlacements] = useState<Array<{ id: string; cuasProfileId: string; position: { lat: number; lon: number }; orientation: number }>>([]);
 
   // Fly to center state (triggered after session starts)
   const [flyToCenter, setFlyToCenter] = useState<{ lat: number; lon: number; zoom?: number } | null>(null);
@@ -190,6 +192,10 @@ export default function MapView() {
 
   const handleCuasPlacementHandled = useCallback(() => {
     setPendingCuasPlacement(null);
+  }, []);
+
+  const handleWizardCuasMoved = useCallback((placementId: string, lat: number, lon: number) => {
+    setPendingCuasPlacement({ placementId, lat, lon });
   }, []);
 
   // Cursor move handler for CoordinateBar
@@ -495,6 +501,9 @@ export default function MapView() {
             onDrawingComplete={handleDrawingComplete}
             placingCuasId={placingCuasId}
             onCuasPlaced={handleCuasPlaced}
+            wizardCuasPlacements={wizardCuasPlacements}
+            wizardCuasProfiles={cuasProfiles}
+            onWizardCuasMoved={handleWizardCuasMoved}
             flyToCenter={flyToCenter}
             onFlyToComplete={() => setFlyToCenter(null)}
             sdCardTracks={sdCardTracks}
@@ -787,6 +796,7 @@ export default function MapView() {
           pendingCuasPlacement={pendingCuasPlacement}
           onCuasPlacementHandled={handleCuasPlacementHandled}
           isMinimizedForPlacement={placingCuasId !== null}
+          onWizardPlacementsChanged={setWizardCuasPlacements}
         />
 
         {/* New File Notification Toast */}
