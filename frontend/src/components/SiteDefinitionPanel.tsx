@@ -18,6 +18,7 @@ import {
   Navigation,
   Flag,
   Eye,
+  Building2,
 } from 'lucide-react';
 import { GlassPanel, GlassCard, GlassButton, GlassInput, Badge, GlassDivider } from './ui/GlassUI';
 import { useWorkflow } from '../contexts/WorkflowContext';
@@ -51,8 +52,42 @@ const MARKER_TYPES: { value: MarkerType; label: string; icon: React.ReactNode }[
   { value: 'custom', label: 'Custom', icon: <MapPin size={14} /> },
 ];
 
-// Zone colors for future use
-// const ZONE_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6'];
+// World Cup 2026 venue presets
+const WORLD_CUP_VENUES: {
+  name: string;
+  city: string;
+  center: { lat: number; lon: number };
+  elevation_m: number;
+  environment_type: EnvironmentType;
+  boundary_polygon: { lat: number; lon: number }[];
+}[] = [
+  {
+    name: 'BMO Field',
+    city: 'Toronto',
+    center: { lat: 43.6332, lon: -79.4186 },
+    elevation_m: 76,
+    environment_type: 'urban',
+    boundary_polygon: [
+      { lat: 43.6345, lon: -79.4205 },
+      { lat: 43.6345, lon: -79.4167 },
+      { lat: 43.6319, lon: -79.4167 },
+      { lat: 43.6319, lon: -79.4205 },
+    ],
+  },
+  {
+    name: 'BC Place',
+    city: 'Vancouver',
+    center: { lat: 49.2768, lon: -123.1117 },
+    elevation_m: 5,
+    environment_type: 'urban',
+    boundary_polygon: [
+      { lat: 49.2785, lon: -123.1145 },
+      { lat: 49.2785, lon: -123.1089 },
+      { lat: 49.2751, lon: -123.1089 },
+      { lat: 49.2751, lon: -123.1145 },
+    ],
+  },
+];
 
 export default function SiteDefinitionPanel({ isOpen, onClose }: SiteDefinitionPanelProps) {
   const {
@@ -195,6 +230,24 @@ export default function SiteDefinitionPanel({ isOpen, onClose }: SiteDefinitionP
     setIsDrawingMode(true);
     setDrawingType('zone');
   }, [setIsDrawingMode, setDrawingType]);
+
+  // Import a World Cup venue preset as a new site
+  const handleImportVenue = useCallback(async (venue: typeof WORLD_CUP_VENUES[number]) => {
+    try {
+      const newSite = await createSite({
+        name: `${venue.name} — ${venue.city}`,
+        environment_type: venue.environment_type,
+        boundary_polygon: venue.boundary_polygon,
+        center: venue.center,
+        markers: [],
+        zones: [],
+        rf_notes: `World Cup 2026 venue. Elevation: ${venue.elevation_m}m ASL.`,
+      } as Omit<SiteDefinition, 'id' | 'created_at' | 'updated_at'>);
+      selectSite(newSite);
+    } catch (err) {
+      console.error('Failed to import venue:', err);
+    }
+  }, [createSite, selectSite]);
 
   if (!isOpen) return null;
 
@@ -450,6 +503,27 @@ export default function SiteDefinitionPanel({ isOpen, onClose }: SiteDefinitionP
               <Plus size={16} />
               New Site
             </GlassButton>
+
+            {/* World Cup Venue Quick-Import */}
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                World Cup 2026 Venues
+              </div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {WORLD_CUP_VENUES.map(venue => (
+                  <GlassButton
+                    key={venue.name}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleImportVenue(venue)}
+                    style={{ flex: 1, fontSize: '11px' }}
+                  >
+                    <Building2 size={12} />
+                    {venue.city}
+                  </GlassButton>
+                ))}
+              </div>
+            </div>
 
             {/* Sites List */}
             {sites.length === 0 ? (

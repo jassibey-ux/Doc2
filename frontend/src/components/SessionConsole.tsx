@@ -12,6 +12,7 @@ import { useToast } from '../contexts/ToastContext';
 import { GlassButton, Badge } from './ui/GlassUI';
 import MapComponent from './Map';
 import Map3DViewer from './Map3DViewer';
+import CesiumMap from './CesiumMap';
 import DroneDetailPanel from './DroneDetailPanel';
 import type { TestEvent, CUASPlacement, CUASProfile, JamBurst } from '../types/workflow';
 import {
@@ -195,6 +196,7 @@ export default function SessionConsole() {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [show3DView, setShow3DView] = useState(true); // Default to 3D view
+  const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
   const [mapStyle, setMapStyle] = useState<'dark' | 'satellite' | 'street'>('satellite');
   const [selectedCuasId, setSelectedCuasId] = useState<string | null>(null);
   const [showSDCardPanel, setShowSDCardPanel] = useState(false);
@@ -847,7 +849,7 @@ export default function SessionConsole() {
             />
 
             {/* 3D View Overlay */}
-            {show3DView && (
+            {show3DView && !showCesiumGlobe && (
               <Map3DViewer
                 droneHistory={sessionDroneHistory}
                 currentTime={Date.now()}
@@ -866,6 +868,55 @@ export default function SessionConsole() {
                 showSDCardTracks={showSDCardTracks}
               />
             )}
+
+            {/* Cesium Globe Overlay */}
+            {showCesiumGlobe && (
+              <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
+                <CesiumMap
+                  droneHistory={sessionDroneHistory}
+                  currentTime={Date.now()}
+                  timelineStart={Date.now() - 3600000}
+                  site={sessionSite}
+                  cuasPlacements={cuasPlacements}
+                  cuasProfiles={cuasProfiles}
+                  cuasJamStates={cuasJamStates}
+                  currentDroneData={sessionDrones}
+                  selectedDroneId={selectedDroneId}
+                  onDroneClick={handleDroneClick}
+                  onClose={() => setShowCesiumGlobe(false)}
+                />
+              </div>
+            )}
+
+            {/* Cesium Globe Toggle Button */}
+            <button
+              onClick={() => {
+                setShowCesiumGlobe(prev => !prev);
+                if (!showCesiumGlobe) setShow3DView(false); // Turn off Map3DViewer when switching to Globe
+              }}
+              title={showCesiumGlobe ? 'Close Globe View' : 'Open Cesium Globe'}
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '102px',
+                zIndex: 1000,
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                background: showCesiumGlobe ? 'rgba(0, 200, 255, 0.3)' : 'rgba(20, 20, 35, 0.9)',
+                color: showCesiumGlobe ? '#00c8ff' : 'rgba(255, 255, 255, 0.7)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease',
+                fontSize: '11px',
+                fontWeight: 700,
+              }}
+            >
+              <Globe size={18} />
+            </button>
 
             {/* Map Style Toggle Button */}
             <button
@@ -896,7 +947,10 @@ export default function SessionConsole() {
 
             {/* 3D Toggle Button */}
             <button
-              onClick={() => setShow3DView(prev => !prev)}
+              onClick={() => {
+                setShow3DView(prev => !prev);
+                if (!show3DView) setShowCesiumGlobe(false); // Turn off Globe when switching to Map3DViewer
+              }}
               title={show3DView ? 'Switch to 2D Map' : 'Switch to 3D View'}
               className="sc-3d-toggle"
               style={{

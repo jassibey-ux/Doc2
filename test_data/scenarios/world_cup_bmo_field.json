@@ -1,0 +1,183 @@
+{
+  "scenario": {
+    "name": "World Cup 2026 - BMO Field, Toronto",
+    "description": "Three drones approaching BMO Field from different directions. Drone ALPHA from the north over Exhibition Place, BRAVO from the east over downtown, CHARLIE from the southwest over the lake with GPS denial simulation as it enters the stadium denial zone.",
+    "venue": {
+      "lat": 43.6332,
+      "lon": -79.4186,
+      "name": "BMO Field, Toronto"
+    },
+    "duration_s": 300,
+    "rate_hz": 1.0,
+
+    "denial_zones": [
+      {
+        "lat": 43.6332,
+        "lon": -79.4186,
+        "radius_m": 400,
+        "min_satellites": 0,
+        "max_satellites": 3,
+        "min_hdop": 8.0,
+        "max_hdop": 25.0,
+        "position_drift_m": 20.0
+      }
+    ],
+
+    "drones": [
+      {
+        "id": "ALPHA-01",
+        "description": "North approach over Exhibition Place, 80m AGL, moderate speed",
+        "loop": false,
+        "gps_denial": false,
+        "waypoints": [
+          {
+            "lat": 43.6420,
+            "lon": -79.4180,
+            "alt_m": 80.0,
+            "speed_mps": 18.0
+          },
+          {
+            "lat": 43.6395,
+            "lon": -79.4183,
+            "alt_m": 80.0,
+            "speed_mps": 16.0
+          },
+          {
+            "lat": 43.6370,
+            "lon": -79.4185,
+            "alt_m": 75.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 43.6355,
+            "lon": -79.4186,
+            "alt_m": 60.0,
+            "speed_mps": 8.0,
+            "loiter_s": 15.0
+          },
+          {
+            "lat": 43.6340,
+            "lon": -79.4186,
+            "alt_m": 50.0,
+            "speed_mps": 5.0,
+            "loiter_s": 30.0
+          },
+          {
+            "lat": 43.6332,
+            "lon": -79.4186,
+            "alt_m": 40.0,
+            "speed_mps": 3.0,
+            "loiter_s": 60.0
+          }
+        ]
+      },
+      {
+        "id": "BRAVO-02",
+        "description": "East approach from downtown Toronto, high altitude reconnaissance, descending",
+        "loop": false,
+        "gps_denial": false,
+        "waypoints": [
+          {
+            "lat": 43.6450,
+            "lon": -79.3900,
+            "alt_m": 200.0,
+            "speed_mps": 25.0
+          },
+          {
+            "lat": 43.6420,
+            "lon": -79.3980,
+            "alt_m": 180.0,
+            "speed_mps": 22.0
+          },
+          {
+            "lat": 43.6390,
+            "lon": -79.4050,
+            "alt_m": 150.0,
+            "speed_mps": 18.0
+          },
+          {
+            "lat": 43.6365,
+            "lon": -79.4120,
+            "alt_m": 120.0,
+            "speed_mps": 14.0,
+            "loiter_s": 10.0
+          },
+          {
+            "lat": 43.6345,
+            "lon": -79.4160,
+            "alt_m": 100.0,
+            "speed_mps": 10.0,
+            "loiter_s": 20.0
+          },
+          {
+            "lat": 43.6335,
+            "lon": -79.4180,
+            "alt_m": 80.0,
+            "speed_mps": 6.0,
+            "loiter_s": 45.0
+          },
+          {
+            "lat": 43.6332,
+            "lon": -79.4186,
+            "alt_m": 60.0,
+            "speed_mps": 3.0,
+            "loiter_s": 30.0
+          }
+        ]
+      },
+      {
+        "id": "CHARLIE-03",
+        "description": "Southwest approach from Lake Ontario, GPS denial active. As it enters the denial zone around the stadium, satellites drop and HDOP spikes.",
+        "loop": false,
+        "gps_denial": true,
+        "waypoints": [
+          {
+            "lat": 43.6260,
+            "lon": -79.4280,
+            "alt_m": 60.0,
+            "speed_mps": 20.0
+          },
+          {
+            "lat": 43.6275,
+            "lon": -79.4260,
+            "alt_m": 65.0,
+            "speed_mps": 18.0
+          },
+          {
+            "lat": 43.6290,
+            "lon": -79.4240,
+            "alt_m": 70.0,
+            "speed_mps": 15.0
+          },
+          {
+            "lat": 43.6305,
+            "lon": -79.4220,
+            "alt_m": 75.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 43.6318,
+            "lon": -79.4200,
+            "alt_m": 70.0,
+            "speed_mps": 8.0,
+            "loiter_s": 20.0
+          },
+          {
+            "lat": 43.6330,
+            "lon": -79.4190,
+            "alt_m": 55.0,
+            "speed_mps": 5.0,
+            "loiter_s": 40.0
+          },
+          {
+            "lat": 43.6332,
+            "lon": -79.4186,
+            "alt_m": 45.0,
+            "speed_mps": 2.0,
+            "loiter_s": 60.0
+          }
+        ]
+      }
+    ]
+  }
+}

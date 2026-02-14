@@ -11,6 +11,7 @@ import { useToast } from '../contexts/ToastContext';
 import { GlassButton, Badge } from './ui/GlassUI';
 import MapComponent from './Map';
 import Map3DViewer from './Map3DViewer';
+import CesiumMap from './CesiumMap';
 import DroneDetailPanel from './DroneDetailPanel';
 import type { CUASPlacement, CUASProfile, SiteDefinition } from '../types/workflow';
 import {
@@ -114,6 +115,7 @@ export default function ReplayConsole() {
   // UI state
   const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
   const [show3DView, setShow3DView] = useState(true);
+  const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
   const [mapStyle, setMapStyle] = useState<'dark' | 'satellite' | 'street'>('satellite');
   const [selectedCuasId, setSelectedCuasId] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -565,7 +567,7 @@ export default function ReplayConsole() {
             />
 
             {/* 3D View Overlay */}
-            {show3DView && (
+            {show3DView && !showCesiumGlobe && (
               <Map3DViewer
                 droneHistory={droneHistory}
                 currentTime={mapCurrentTime}
@@ -580,6 +582,53 @@ export default function ReplayConsole() {
                 currentDroneData={drones}
               />
             )}
+
+            {/* Cesium Globe Overlay */}
+            {showCesiumGlobe && (
+              <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
+                <CesiumMap
+                  droneHistory={droneHistory}
+                  currentTime={mapCurrentTime}
+                  timelineStart={mapTimelineStart}
+                  site={sessionSite}
+                  cuasPlacements={cuasPlacements}
+                  cuasProfiles={cuasProfiles}
+                  cuasJamStates={new Map()}
+                  currentDroneData={drones}
+                  selectedDroneId={selectedDroneId}
+                  onDroneClick={handleDroneClick}
+                  onClose={() => setShowCesiumGlobe(false)}
+                />
+              </div>
+            )}
+
+            {/* Cesium Globe Toggle */}
+            <button
+              onClick={() => {
+                setShowCesiumGlobe(prev => !prev);
+                if (!showCesiumGlobe) setShow3DView(false);
+              }}
+              title={showCesiumGlobe ? 'Close Globe View' : 'Open Cesium Globe'}
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '102px',
+                zIndex: 1000,
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                background: showCesiumGlobe ? 'rgba(0, 200, 255, 0.3)' : 'rgba(20, 20, 35, 0.9)',
+                color: showCesiumGlobe ? '#00c8ff' : 'rgba(255, 255, 255, 0.7)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <Globe size={18} />
+            </button>
 
             {/* Map Style Toggle */}
             <button
@@ -610,7 +659,10 @@ export default function ReplayConsole() {
 
             {/* 3D Toggle */}
             <button
-              onClick={() => setShow3DView(prev => !prev)}
+              onClick={() => {
+                setShow3DView(prev => !prev);
+                if (!show3DView) setShowCesiumGlobe(false);
+              }}
               title={show3DView ? 'Switch to 2D Map' : 'Switch to 3D View'}
               style={{
                 position: 'absolute',

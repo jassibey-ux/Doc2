@@ -98,8 +98,8 @@ export default function AnomalyAlertToast({
     <div
       style={{
         position: 'fixed',
-        top: '80px',
-        right: '20px',
+        top: '16px',
+        right: '16px',
         zIndex: 9999,
         minWidth: '320px',
         maxWidth: '400px',

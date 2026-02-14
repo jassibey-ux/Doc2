@@ -1,0 +1,165 @@
+{
+  "scenario": {
+    "name": "World Cup 2026 - BC Place, Vancouver",
+    "description": "Two-drone scenario at BC Place. Drone DELTA orbits the stadium in a clockwise pattern at 120m AGL. Drone ECHO approaches from the False Creek harbor area on a direct intercept course.",
+    "venue": {
+      "lat": 49.2768,
+      "lon": -123.1117,
+      "name": "BC Place, Vancouver"
+    },
+    "duration_s": 360,
+    "rate_hz": 1.0,
+
+    "denial_zones": [],
+
+    "drones": [
+      {
+        "id": "DELTA-01",
+        "description": "Clockwise orbit around BC Place at 120m AGL. Looping flight path traces a roughly circular pattern around the stadium perimeter.",
+        "loop": true,
+        "gps_denial": false,
+        "waypoints": [
+          {
+            "lat": 49.2790,
+            "lon": -123.1117,
+            "alt_m": 120.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 49.2785,
+            "lon": -123.1085,
+            "alt_m": 120.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 49.2775,
+            "lon": -123.1065,
+            "alt_m": 120.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 49.2765,
+            "lon": -123.1060,
+            "alt_m": 120.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 49.2752,
+            "lon": -123.1070,
+            "alt_m": 120.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 49.2746,
+            "lon": -123.1090,
+            "alt_m": 120.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 49.2748,
+            "lon": -123.1117,
+            "alt_m": 120.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 49.2752,
+            "lon": -123.1140,
+            "alt_m": 120.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 49.2760,
+            "lon": -123.1158,
+            "alt_m": 120.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 49.2772,
+            "lon": -123.1165,
+            "alt_m": 120.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 49.2783,
+            "lon": -123.1155,
+            "alt_m": 120.0,
+            "speed_mps": 12.0
+          },
+          {
+            "lat": 49.2790,
+            "lon": -123.1135,
+            "alt_m": 120.0,
+            "speed_mps": 12.0
+          }
+        ]
+      },
+      {
+        "id": "ECHO-02",
+        "description": "Harbor approach from False Creek / Granville Island area. Low and fast initial approach, slowing and climbing as it reaches the stadium.",
+        "loop": false,
+        "gps_denial": false,
+        "waypoints": [
+          {
+            "lat": 49.2710,
+            "lon": -123.1340,
+            "alt_m": 30.0,
+            "speed_mps": 22.0
+          },
+          {
+            "lat": 49.2718,
+            "lon": -123.1300,
+            "alt_m": 35.0,
+            "speed_mps": 22.0
+          },
+          {
+            "lat": 49.2725,
+            "lon": -123.1260,
+            "alt_m": 45.0,
+            "speed_mps": 20.0
+          },
+          {
+            "lat": 49.2732,
+            "lon": -123.1220,
+            "alt_m": 55.0,
+            "speed_mps": 18.0
+          },
+          {
+            "lat": 49.2740,
+            "lon": -123.1185,
+            "alt_m": 70.0,
+            "speed_mps": 15.0,
+            "loiter_s": 10.0
+          },
+          {
+            "lat": 49.2750,
+            "lon": -123.1155,
+            "alt_m": 85.0,
+            "speed_mps": 10.0,
+            "loiter_s": 15.0
+          },
+          {
+            "lat": 49.2758,
+            "lon": -123.1135,
+            "alt_m": 95.0,
+            "speed_mps": 8.0,
+            "loiter_s": 20.0
+          },
+          {
+            "lat": 49.2765,
+            "lon": -123.1120,
+            "alt_m": 105.0,
+            "speed_mps": 5.0,
+            "loiter_s": 30.0
+          },
+          {
+            "lat": 49.2768,
+            "lon": -123.1117,
+            "alt_m": 110.0,
+            "speed_mps": 3.0,
+            "loiter_s": 60.0
+          }
+        ]
+      }
+    ]
+  }
+}

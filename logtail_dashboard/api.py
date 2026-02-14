@@ -31,7 +31,7 @@ from .session_scanner import SessionScanner
 from .replay import SessionLoader, ReplayEngine
 from .kml_export import generate_kml
 from .kml_import import KMLImporter
-from .api_v2 import router as v2_router
+from .api_v2 import router as v2_router, set_ws_broadcast_fn
 from .database import init_database
 
 logger = logging.getLogger(__name__)
@@ -1630,6 +1630,9 @@ def create_app(config: Config) -> tuple[FastAPI, DashboardApp]:
         Tuple of (FastAPI app, DashboardApp instance).
     """
     dashboard = DashboardApp(config)
+
+    # Wire up WebSocket broadcast for telemetry ingest endpoint
+    set_ws_broadcast_fn(dashboard._broadcast_message)
 
     # Register startup/shutdown events
     @dashboard.app.on_event("startup")

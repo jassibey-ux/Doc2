@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -619,6 +619,408 @@ def cuas_to_dict(profile: CUASProfile) -> Dict[str, Any]:
         "created_at": profile.created_at.isoformat() if profile.created_at else None,
         "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
     }
+
+
+# =============================================================================
+# Telemetry Ingest Endpoint (bridge + electron cloud-sync)
+# =============================================================================
+
+class TelemetryRecordInput(BaseModel):
+    """A single telemetry record from bridge or Electron cloud-sync."""
+    tracker_id: str
+    time_local: Optional[str] = None  # ISO-8601 timestamp
+    timestamp: Optional[str] = None   # Alias used by some clients
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    alt_m: Optional[float] = None
+    speed_mps: Optional[float] = None
+    course_deg: Optional[float] = None
+    hdop: Optional[float] = None
+    satellites: Optional[int] = None
+    sat_count: Optional[int] = None   # Alias
+    fix_valid: Optional[bool] = None
+    fix_type: Optional[str] = None    # Alias ("3d", "2d", "none")
+    rssi_dbm: Optional[float] = None
+    battery_mv: Optional[float] = None
+    speed: Optional[float] = None     # Alias
+    course: Optional[float] = None    # Alias
+
+
+class TelemetryIngestRequest(BaseModel):
+    """Request body for bulk telemetry ingest."""
+    organization_id: str
+    session_id: Optional[str] = None
+    records: List[TelemetryRecordInput]
+
+
+class TelemetryIngestResponse(BaseModel):
+    """Response for telemetry ingest."""
+    accepted: int
+    session_id: Optional[str] = None
+
+
+@router.post("/telemetry/ingest", response_model=TelemetryIngestResponse)
+async def ingest_telemetry(
+    request: TelemetryIngestRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Bulk ingest telemetry records from bridge or Electron cloud-sync.
+
+    Accepts records in the format produced by the bridge CSV parser.
+    Maps field aliases, resolves active session, inserts to DB,
+    and broadcasts via WebSocket for real-time UI updates.
+    """
+    # Resolve session ID: explicit or active
+    session_id = request.session_id or get_active_session_id()
+    if not session_id:
+        raise HTTPException(
+            status_code=422,
+            detail="No session_id provided and no active session running",
+        )
+
+    # Verify session exists
+    repo = SessionRepository(db)
+    session = await repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+
+    # Map records to telemetry format
+    telemetry_rows = []
+    for rec in request.records:
+        # Resolve timestamp: prefer time_local, fall back to timestamp alias
+        time_str = rec.time_local or rec.timestamp
+        if time_str:
+            try:
+                time_val = datetime.fromisoformat(time_str.replace("Z", "+00:00").split("+")[0])
+            except ValueError:
+                time_val = datetime.utcnow()
+        else:
+            time_val = datetime.utcnow()
+
+        # Resolve aliases
+        satellites = rec.satellites if rec.satellites is not None else rec.sat_count
+        speed_mps = rec.speed_mps if rec.speed_mps is not None else rec.speed
+        course_deg = rec.course_deg if rec.course_deg is not None else rec.course
+
+        # Map fix_type string to boolean
+        fix_valid = rec.fix_valid
+        if fix_valid is None and rec.fix_type:
+            fix_valid = rec.fix_type.lower() in ("3d", "2d", "valid", "true", "1")
+
+        # Skip records with no position data
+        if rec.lat is None or rec.lon is None:
+            continue
+
+        telemetry_rows.append({
+            "tracker_id": rec.tracker_id,
+            "time_local_received": time_val,
+            "lat": rec.lat,
+            "lon": rec.lon,
+            "alt_m": rec.alt_m,
+            "speed_mps": speed_mps,
+            "course_deg": course_deg,
+            "hdop": rec.hdop,
+            "satellites": satellites,
+            "fix_valid": fix_valid if fix_valid is not None else False,
+            "rssi_dbm": rec.rssi_dbm,
+            "battery_mv": rec.battery_mv,
+        })
+
+    if not telemetry_rows:
+        return TelemetryIngestResponse(accepted=0, session_id=session_id)
+
+    # Bulk insert
+    telemetry_repo = TelemetryRepository(db)
+    inserted = await telemetry_repo.bulk_insert(session_id, telemetry_rows)
+    await db.commit()
+
+    # Broadcast to WebSocket clients in background
+    background_tasks.add_task(_broadcast_telemetry_batch, telemetry_rows)
+
+    logger.info(
+        f"Telemetry ingest: {inserted} records for session {session_id} "
+        f"(org={request.organization_id})"
+    )
+
+    return TelemetryIngestResponse(accepted=inserted, session_id=session_id)
+
+
+# Module-level broadcast callback (set by DashboardApp on startup)
+_ws_broadcast_fn = None
+
+
+def set_ws_broadcast_fn(fn):
+    """Register a WebSocket broadcast function for telemetry ingest."""
+    global _ws_broadcast_fn
+    _ws_broadcast_fn = fn
+
+
+async def _broadcast_telemetry_batch(rows: List[Dict[str, Any]]) -> None:
+    """Broadcast ingested telemetry to WebSocket clients."""
+    if _ws_broadcast_fn is None:
+        return
+
+    try:
+        from .models import WebSocketMessage
+
+        for row in rows:
+            msg = WebSocketMessage(
+                type="tracker_updated",
+                data={
+                    "tracker_id": row["tracker_id"],
+                    "lat": row.get("lat"),
+                    "lon": row.get("lon"),
+                    "alt_m": row.get("alt_m"),
+                    "rssi_dbm": row.get("rssi_dbm"),
+                    "hdop": row.get("hdop"),
+                    "satellites": row.get("satellites"),
+                    "fix_valid": row.get("fix_valid", False),
+                    "is_stale": False,
+                    "age_seconds": 0.0,
+                    "last_update": row["time_local_received"].isoformat()
+                        if hasattr(row["time_local_received"], "isoformat")
+                        else row["time_local_received"],
+                },
+            )
+            await _ws_broadcast_fn(msg)
+    except Exception as e:
+        logger.debug(f"WebSocket broadcast skipped: {e}")
+
+
+# =============================================================================
+# Authentication Endpoints (JWT)
+# =============================================================================
+
+class LoginRequest(BaseModel):
+    """Request body for user login."""
+    email: str
+    password: str
+
+
+class UserCreateRequest(BaseModel):
+    """Request body for creating a user (admin only)."""
+    email: str
+    password: str
+    name: Optional[str] = None
+    role: str = "observer"
+    organization_id: str
+
+
+class UserUpdateRequest(BaseModel):
+    """Request body for updating a user (admin only)."""
+    name: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@router.post("/auth/login")
+async def auth_login(
+    request: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Authenticate a user and return a JWT token."""
+    from .middleware.jwt_auth import verify_password, create_access_token
+    from .database.models import User
+    from sqlalchemy import select as sa_select
+
+    result = await db.execute(
+        sa_select(User).where(User.email == request.email)
+    )
+    user = result.scalars().first()
+
+    if not user or not verify_password(request.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is disabled")
+
+    # Update last login
+    user.last_login_at = datetime.utcnow()
+    await db.commit()
+
+    token = create_access_token(
+        user_id=user.id,
+        email=user.email,
+        role=user.role,
+        organization_id=user.organization_id,
+    )
+
+    return {
+        "token": token,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role,
+        "organization_id": user.organization_id,
+    }
+
+
+@router.get("/auth/me")
+async def auth_me(request: Request):
+    """Get current authenticated user info from JWT token."""
+    from .middleware.jwt_auth import get_current_user
+
+    user = await get_current_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    return {
+        "user_id": user.user_id,
+        "email": user.email,
+        "role": user.role,
+        "organization_id": user.organization_id,
+    }
+
+
+@router.get("/auth/users")
+async def list_users(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """List all users (admin only)."""
+    from .middleware.jwt_auth import require_role
+    admin_check = require_role("admin")
+    await admin_check(request)
+
+    from .database.models import User
+    from sqlalchemy import select as sa_select
+
+    result = await db.execute(sa_select(User).order_by(User.created_at.desc()))
+    users = result.scalars().all()
+
+    return [
+        {
+            "id": u.id,
+            "email": u.email,
+            "name": u.name,
+            "role": u.role,
+            "organization_id": u.organization_id,
+            "is_active": u.is_active,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
+        }
+        for u in users
+    ]
+
+
+@router.post("/auth/users")
+async def create_user(
+    request: Request,
+    body: UserCreateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new user (admin only)."""
+    from .middleware.jwt_auth import require_role, hash_password
+    admin_check = require_role("admin")
+    await admin_check(request)
+
+    from .database.models import User, UserRole
+    from sqlalchemy import select as sa_select
+
+    # Check for duplicate email
+    existing = await db.execute(
+        sa_select(User).where(User.email == body.email)
+    )
+    if existing.scalars().first():
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    # Validate role
+    valid_roles = [r.value for r in UserRole]
+    if body.role not in valid_roles:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid role '{body.role}'. Must be one of: {valid_roles}",
+        )
+
+    user = User(
+        email=body.email,
+        password_hash=hash_password(body.password),
+        name=body.name,
+        role=body.role,
+        organization_id=body.organization_id,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role,
+        "organization_id": user.organization_id,
+        "is_active": user.is_active,
+    }
+
+
+@router.put("/auth/users/{user_id}")
+async def update_user(
+    user_id: str,
+    request: Request,
+    body: UserUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a user (admin only)."""
+    from .middleware.jwt_auth import require_role
+    admin_check = require_role("admin")
+    await admin_check(request)
+
+    from .database.models import User, UserRole
+    from sqlalchemy import select as sa_select
+
+    result = await db.execute(sa_select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if body.name is not None:
+        user.name = body.name
+    if body.role is not None:
+        valid_roles = [r.value for r in UserRole]
+        if body.role not in valid_roles:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid role '{body.role}'. Must be one of: {valid_roles}",
+            )
+        user.role = body.role
+    if body.is_active is not None:
+        user.is_active = body.is_active
+
+    await db.commit()
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role,
+        "is_active": user.is_active,
+    }
+
+
+@router.delete("/auth/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Deactivate a user (admin only). Does not permanently delete."""
+    from .middleware.jwt_auth import require_role
+    admin_check = require_role("admin")
+    await admin_check(request)
+
+    from .database.models import User
+    from sqlalchemy import select as sa_select
+
+    result = await db.execute(sa_select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.is_active = False
+    await db.commit()
+
+    return {"message": f"User {user.email} deactivated"}
 
 
 # =============================================================================
@@ -3343,3 +3745,66 @@ async def get_predicted_vs_actual(
         )
 
     return result
+
+
+# ============================================================================
+# DEEP HEALTH CHECK
+# ============================================================================
+
+@router.get("/health")
+async def health_check(db: AsyncSession = Depends(get_db)):
+    """
+    Deep health check — verifies DB and Redis connectivity.
+    Returns structured status for each subsystem.
+    """
+    import time as _time
+
+    checks = {}
+    overall = "healthy"
+
+    # Database check
+    try:
+        from sqlalchemy import select as sa_select, func as sa_func
+
+        t0 = _time.monotonic()
+        result = await db.execute(sa_select(sa_func.count(TestSession.id)))
+        session_count = result.scalar() or 0
+        db_latency = round((_time.monotonic() - t0) * 1000, 1)
+        checks["database"] = {
+            "status": "healthy",
+            "latency_ms": db_latency,
+            "session_count": session_count,
+        }
+    except Exception as e:
+        checks["database"] = {"status": "unhealthy", "error": str(e)}
+        overall = "degraded"
+
+    # Redis check
+    try:
+        import os as _os
+        redis_url = _os.environ.get("REDIS_URL")
+        if redis_url:
+            from redis.asyncio import from_url as redis_from_url
+
+            t0 = _time.monotonic()
+            redis_conn = redis_from_url(redis_url)
+            pong = await redis_conn.ping()
+            redis_latency = round((_time.monotonic() - t0) * 1000, 1)
+            await redis_conn.aclose()
+            checks["redis"] = {
+                "status": "healthy" if pong else "unhealthy",
+                "latency_ms": redis_latency,
+            }
+        else:
+            checks["redis"] = {"status": "not_configured"}
+    except ImportError:
+        checks["redis"] = {"status": "not_available", "note": "redis package not installed"}
+    except Exception as e:
+        checks["redis"] = {"status": "unhealthy", "error": str(e)}
+        overall = "degraded"
+
+    return {
+        "status": overall,
+        "checks": checks,
+        "version": "2.0.0",
+    }

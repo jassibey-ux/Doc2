@@ -1,17 +1,27 @@
 /**
- * CesiumJS Globe Component
+ * CesiumJS Globe Component — Full Feature Parity
  *
- * Full 3D globe view with Google 3D Tiles, track rendering,
- * and CUAS coverage overlays. Used as the "3D mode" alternative
- * to the MapLibre 2D view.
+ * Full 3D globe view with Google 3D Tiles support, Cesium Ion terrain,
+ * track rendering, quality-colored segments, CUAS coverage overlays,
+ * engagement visualization, drone selection/fly-to, and site boundaries.
+ *
+ * Used as the "Globe" mode alternative to the MapLibre 2D/3D views.
  */
 
-import React, { useRef, useEffect, useState } from 'react';
-import type { PositionPoint } from '../types/drone';
-import type { EnhancedPositionPoint, CUASPlacement, CUASProfile, SiteDefinition } from '../types/workflow';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import type { PositionPoint, DroneSummary } from '../types/drone';
+import type {
+  EnhancedPositionPoint,
+  CUASPlacement,
+  CUASProfile,
+  SiteDefinition,
+  Engagement,
+} from '../types/workflow';
+import { QUALITY_COLORS } from '../utils/trackSegmentation';
 
 // Cesium types - lazy loaded
 type CesiumViewer = any;
+type CesiumModule = any;
 
 const CESIUM_TOKEN = import.meta.env.VITE_CESIUM_TOKEN || '';
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || '';
@@ -31,8 +41,10 @@ interface CesiumMapProps {
   cuasPlacements?: CUASPlacement[];
   cuasProfiles?: CUASProfile[];
   cuasJamStates?: Map<string, boolean>;
+  currentDroneData?: Map<string, DroneSummary>;
   selectedDroneId?: string | null;
   onDroneClick?: (droneId: string) => void;
+  engagements?: Engagement[];
   viewshedImageUrl?: string | null;
   viewshedBounds?: [[number, number], [number, number], [number, number], [number, number]] | null;
   rfCoverageImageUrl?: string | null;
@@ -42,31 +54,35 @@ interface CesiumMapProps {
 
 const CesiumMap: React.FC<CesiumMapProps> = ({
   droneHistory,
-  enhancedHistory: _enhancedHistory,
+  enhancedHistory,
   currentTime,
   timelineStart,
   site,
   cuasPlacements,
   cuasProfiles,
   cuasJamStates,
-  selectedDroneId: _selectedDroneId,
-  onDroneClick: _onDroneClick,
-  viewshedImageUrl: _viewshedImageUrl,
-  viewshedBounds: _viewshedBounds,
-  rfCoverageImageUrl: _rfCoverageImageUrl,
-  rfCoverageBounds: _rfCoverageBounds,
+  currentDroneData,
+  selectedDroneId,
+  onDroneClick,
+  engagements,
   onClose,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CesiumViewer>(null);
+  const cesiumRef = useRef<CesiumModule>(null);
   const [cesiumLoaded, setCesiumLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [terrainEnabled, setTerrainEnabled] = useState(true);
+  const [google3DEnabled, setGoogle3DEnabled] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
+  const initialFlyDone = useRef(false);
 
   // Lazy load Cesium
   useEffect(() => {
     const loadCesium = async () => {
       try {
         const Cesium = await import('cesium');
+        cesiumRef.current = Cesium;
         // @ts-ignore
         window.Cesium = Cesium;
 
@@ -77,7 +93,7 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
         if (!containerRef.current) return;
 
         const viewer = new Cesium.Viewer(containerRef.current, {
-          terrain: Cesium.Terrain.fromWorldTerrain(),
+          terrain: CESIUM_TOKEN ? Cesium.Terrain.fromWorldTerrain() : undefined,
           baseLayerPicker: false,
           geocoder: false,
           homeButton: false,
@@ -95,17 +111,19 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
         viewer.scene.globe.enableLighting = true;
         if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = true;
 
-        // Add Google 3D Tiles if API key available
-        if (GOOGLE_MAPS_API_KEY) {
-          try {
-            const tileset = await Cesium.Cesium3DTileset.fromUrl(
-              `https://tile.googleapis.com/v1/3dtiles/root.json?key=${GOOGLE_MAPS_API_KEY}`
-            );
-            viewer.scene.primitives.add(tileset);
-          } catch (e) {
-            console.warn('Google 3D Tiles not available:', e);
+        // Entity click handler for drone selection
+        const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+        handler.setInputAction((click: any) => {
+          const pickedObject = viewer.scene.pick(click.position);
+          if (Cesium.defined(pickedObject) && pickedObject.id) {
+            const entity = pickedObject.id;
+            const name = entity.name || '';
+            if (name.startsWith('drone_') && onDroneClick) {
+              const droneId = name.replace('drone_', '').replace('_marker', '').replace('_track', '');
+              onDroneClick(droneId);
+            }
           }
-        }
+        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
         viewerRef.current = viewer;
         setCesiumLoaded(true);
@@ -124,115 +142,382 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
     };
   }, []);
 
-  // Update tracks when data changes
+  // Toggle Google 3D Tiles
   useEffect(() => {
-    if (!cesiumLoaded || !viewerRef.current) return;
+    if (!cesiumLoaded || !viewerRef.current || !cesiumRef.current) return;
+    const Cesium = cesiumRef.current;
+    const viewer = viewerRef.current;
 
-    const updateTracks = async () => {
-      const Cesium = await import('cesium');
-      const viewer = viewerRef.current;
-      if (!viewer) return;
+    if (google3DEnabled && GOOGLE_MAPS_API_KEY) {
+      (async () => {
+        try {
+          const tileset = await Cesium.Cesium3DTileset.fromUrl(
+            `https://tile.googleapis.com/v1/3dtiles/root.json?key=${GOOGLE_MAPS_API_KEY}`
+          );
+          tileset._cesiumMapGoogle3D = true;
+          viewer.scene.primitives.add(tileset);
+        } catch (e) {
+          console.warn('Google 3D Tiles not available:', e);
+        }
+      })();
+    } else {
+      // Remove Google 3D tiles
+      const primitives = viewer.scene.primitives;
+      for (let i = primitives.length - 1; i >= 0; i--) {
+        const p = primitives.get(i);
+        if (p._cesiumMapGoogle3D) {
+          primitives.remove(p);
+        }
+      }
+    }
+  }, [cesiumLoaded, google3DEnabled]);
 
-      // Remove existing entities
-      viewer.entities.removeAll();
+  // Update entities when data changes
+  useEffect(() => {
+    if (!cesiumLoaded || !viewerRef.current || !cesiumRef.current) return;
 
-      let colorIndex = 0;
-      let hasPositions = false;
+    const Cesium = cesiumRef.current;
+    const viewer = viewerRef.current;
 
-      for (const [trackerId, positions] of droneHistory) {
-        const color = TRACK_COLORS[colorIndex % TRACK_COLORS.length];
-        colorIndex++;
+    // Remove existing entities
+    viewer.entities.removeAll();
 
-        const filtered = positions.filter(
-          (p) => p.timestamp >= timelineStart && p.timestamp <= currentTime
-        );
+    let hasPositions = false;
 
-        if (filtered.length < 2) continue;
-        hasPositions = true;
+    // ── Site Boundary ──
+    if (site?.boundary_polygon && site.boundary_polygon.length >= 3) {
+      const boundaryPositions = site.boundary_polygon.map((p) =>
+        Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0)
+      );
+      // Close the polygon
+      boundaryPositions.push(boundaryPositions[0]);
 
-        // Create polyline positions
-        const cartesians = filtered.map((p) =>
-          Cesium.Cartesian3.fromDegrees(
-            p.lon,
-            p.lat,
-            (p.alt_m || 0) + 1, // Slight offset above terrain
-          )
-        );
-
-        // Track polyline
-        viewer.entities.add({
-          name: trackerId,
-          polyline: {
-            positions: cartesians,
-            width: 3,
-            material: Cesium.Color.fromCssColorString(color),
-            clampToGround: false,
-          },
-        });
-
-        // Current position marker
-        const lastPos = filtered[filtered.length - 1];
-        viewer.entities.add({
-          name: `${trackerId}_marker`,
-          position: Cesium.Cartesian3.fromDegrees(
-            lastPos.lon,
-            lastPos.lat,
-            (lastPos.alt_m || 0) + 2,
+      viewer.entities.add({
+        name: 'site_boundary',
+        polygon: {
+          hierarchy: new Cesium.PolygonHierarchy(
+            site.boundary_polygon.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat))
           ),
-          point: {
-            pixelSize: 10,
-            color: Cesium.Color.fromCssColorString(color),
-            outlineColor: Cesium.Color.WHITE,
-            outlineWidth: 2,
+          material: Cesium.Color.ORANGE.withAlpha(0.1),
+          outline: true,
+          outlineColor: Cesium.Color.ORANGE.withAlpha(0.8),
+          outlineWidth: 2,
+          height: 0,
+          classificationType: Cesium.ClassificationType.BOTH,
+        },
+      });
+
+      // Boundary outline polyline (for visibility)
+      viewer.entities.add({
+        name: 'site_boundary_outline',
+        polyline: {
+          positions: boundaryPositions,
+          width: 2,
+          material: new Cesium.PolylineDashMaterialProperty({
+            color: Cesium.Color.ORANGE.withAlpha(0.8),
+            dashLength: 16.0,
+          }),
+          clampToGround: true,
+        },
+      });
+    }
+
+    // ── CUAS Placements with Coverage Circles ──
+    if (cuasPlacements) {
+      for (const placement of cuasPlacements) {
+        const isJamming = cuasJamStates?.get(placement.id);
+        const profile = cuasProfiles?.find((p) => p.id === placement.cuas_profile_id);
+        const effectiveRange = profile?.effective_range_m || 500;
+        const placementColor = isJamming ? '#ef4444' : '#f97316';
+
+        // CUAS marker
+        viewer.entities.add({
+          name: `cuas_${placement.id}`,
+          position: Cesium.Cartesian3.fromDegrees(
+            placement.position.lon,
+            placement.position.lat,
+            (placement.height_agl_m || 0) + 2,
+          ),
+          billboard: {
+            image: createCUASDataUri(placementColor),
+            width: 28,
+            height: 28,
           },
-          label: {
-            text: trackerId,
-            font: '12px monospace',
-            fillColor: Cesium.Color.WHITE,
+          label: showLabels ? {
+            text: profile?.name || 'CUAS',
+            font: '11px monospace',
+            fillColor: Cesium.Color.fromCssColorString(placementColor),
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 2,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-            pixelOffset: new Cesium.Cartesian2(0, -15),
+            pixelOffset: new Cesium.Cartesian2(0, -20),
+          } : undefined,
+        });
+
+        // Coverage circle (36 points)
+        const circlePositions: any[] = [];
+        for (let deg = 0; deg <= 360; deg += 10) {
+          const rad = (deg * Math.PI) / 180;
+          const lat = placement.position.lat + (effectiveRange / 111320) * Math.cos(rad);
+          const lon =
+            placement.position.lon +
+            (effectiveRange / (111320 * Math.cos((placement.position.lat * Math.PI) / 180))) *
+              Math.sin(rad);
+          circlePositions.push(Cesium.Cartesian3.fromDegrees(lon, lat, 0));
+        }
+
+        viewer.entities.add({
+          name: `cuas_coverage_${placement.id}`,
+          polygon: {
+            hierarchy: new Cesium.PolygonHierarchy(circlePositions),
+            material: Cesium.Color.fromCssColorString(placementColor).withAlpha(isJamming ? 0.15 : 0.05),
+            outline: true,
+            outlineColor: Cesium.Color.fromCssColorString(placementColor).withAlpha(0.4),
+            height: 0,
           },
         });
-      }
 
-      // Add CUAS placements
-      if (cuasPlacements) {
-        for (const placement of cuasPlacements) {
-          const isJamming = cuasJamStates?.get(placement.id);
-          const profile = cuasProfiles?.find((p) => p.id === placement.cuas_profile_id);
+        // Heading cone (beam direction indicator)
+        if (placement.orientation_deg !== undefined && profile?.beam_width_deg) {
+          const beamHalf = (profile.beam_width_deg || 60) / 2;
+          const headingRad = ((placement.orientation_deg - 90) * Math.PI) / 180;
+          const coneRange = effectiveRange * 0.8;
+
+          const conePositions = [
+            Cesium.Cartesian3.fromDegrees(placement.position.lon, placement.position.lat, 1),
+          ];
+          for (let a = -beamHalf; a <= beamHalf; a += 5) {
+            const rad = headingRad + (a * Math.PI) / 180;
+            const lat = placement.position.lat + (coneRange / 111320) * Math.cos(rad);
+            const lon =
+              placement.position.lon +
+              (coneRange / (111320 * Math.cos((placement.position.lat * Math.PI) / 180))) *
+                Math.sin(rad);
+            conePositions.push(Cesium.Cartesian3.fromDegrees(lon, lat, 1));
+          }
 
           viewer.entities.add({
-            name: `cuas_${placement.id}`,
-            position: Cesium.Cartesian3.fromDegrees(
-              placement.position.lon,
-              placement.position.lat,
-              (placement.height_agl_m || 0) + 2,
-            ),
-            billboard: {
-              image: createCUASDataUri(isJamming ? '#ef4444' : '#f97316'),
-              width: 24,
-              height: 24,
-            },
-            label: {
-              text: profile?.name || 'CUAS',
-              font: '11px monospace',
-              fillColor: Cesium.Color.fromCssColorString(isJamming ? '#ef4444' : '#f97316'),
-              outlineColor: Cesium.Color.BLACK,
-              outlineWidth: 2,
-              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-              pixelOffset: new Cesium.Cartesian2(0, -18),
+            name: `cuas_beam_${placement.id}`,
+            polygon: {
+              hierarchy: new Cesium.PolygonHierarchy(conePositions),
+              material: Cesium.Color.fromCssColorString(placementColor).withAlpha(isJamming ? 0.25 : 0.1),
+              height: 0,
             },
           });
         }
       }
+    }
 
-      // Fly to tracks
+    // ── Drone Tracks ──
+    let colorIndex = 0;
+    for (const [trackerId, positions] of droneHistory) {
+      const baseColor = TRACK_COLORS[colorIndex % TRACK_COLORS.length];
+      colorIndex++;
+
+      const filtered = positions.filter(
+        (p) => p.timestamp >= timelineStart && p.timestamp <= currentTime
+      );
+      const displayPositions = filtered.length >= 2 ? filtered : positions;
+
+      if (displayPositions.length < 2) continue;
+      hasPositions = true;
+
+      // Check for enhanced data for quality-colored segments
+      const enhancedPoints = enhancedHistory?.get(trackerId);
+      const hasEnhanced = enhancedPoints && enhancedPoints.length > 0;
+
+      if (hasEnhanced) {
+        // Quality-colored track segments
+        const timeFiltered = enhancedPoints.filter(
+          (p) => p.timestamp_ms >= timelineStart && p.timestamp_ms <= currentTime
+        );
+        const display = timeFiltered.length >= 2 ? timeFiltered : enhancedPoints;
+
+        if (display.length >= 2) {
+          // Group consecutive points by quality
+          let segStart = 0;
+          for (let i = 1; i <= display.length; i++) {
+            const prevQ = display[i - 1].quality;
+            const currQ = i < display.length ? display[i].quality : null;
+
+            if (currQ !== prevQ || i === display.length) {
+              const segPoints = display.slice(segStart, i);
+              if (segPoints.length >= 2) {
+                const qualityColor =
+                  QUALITY_COLORS[prevQ as keyof typeof QUALITY_COLORS] || baseColor;
+                const cartesians = segPoints.map((p) =>
+                  Cesium.Cartesian3.fromDegrees(p.lon, p.lat, (p.alt_m || 0) + 1)
+                );
+
+                viewer.entities.add({
+                  name: `drone_${trackerId}_track`,
+                  polyline: {
+                    positions: cartesians,
+                    width: 3,
+                    material:
+                      prevQ === 'lost'
+                        ? new Cesium.PolylineDashMaterialProperty({
+                            color: Cesium.Color.fromCssColorString(qualityColor),
+                            dashLength: 8.0,
+                          })
+                        : Cesium.Color.fromCssColorString(qualityColor),
+                    clampToGround: false,
+                  },
+                });
+              }
+              segStart = i;
+            }
+          }
+        }
+      } else {
+        // Simple solid-color track
+        const cartesians = displayPositions.map((p) =>
+          Cesium.Cartesian3.fromDegrees(p.lon, p.lat, (p.alt_m || 0) + 1)
+        );
+
+        viewer.entities.add({
+          name: `drone_${trackerId}_track`,
+          polyline: {
+            positions: cartesians,
+            width: 3,
+            material: Cesium.Color.fromCssColorString(baseColor),
+            clampToGround: false,
+          },
+        });
+      }
+
+      // ── Current position marker with altitude pole ──
+      const lastPos = displayPositions[displayPositions.length - 1];
+      const altitude = lastPos.alt_m || 0;
+      const isSelected = selectedDroneId === trackerId;
+      const markerSize = isSelected ? 14 : 10;
+
+      // Altitude pole (vertical line from ground to drone)
+      if (altitude > 5) {
+        viewer.entities.add({
+          name: `drone_${trackerId}_pole`,
+          polyline: {
+            positions: [
+              Cesium.Cartesian3.fromDegrees(lastPos.lon, lastPos.lat, 0),
+              Cesium.Cartesian3.fromDegrees(lastPos.lon, lastPos.lat, altitude),
+            ],
+            width: 1,
+            material: Cesium.Color.fromCssColorString(baseColor).withAlpha(0.4),
+          },
+        });
+      }
+
+      // Drone point marker
+      viewer.entities.add({
+        name: `drone_${trackerId}_marker`,
+        position: Cesium.Cartesian3.fromDegrees(lastPos.lon, lastPos.lat, altitude + 2),
+        point: {
+          pixelSize: markerSize,
+          color: Cesium.Color.fromCssColorString(baseColor),
+          outlineColor: isSelected ? Cesium.Color.WHITE : Cesium.Color.BLACK,
+          outlineWidth: isSelected ? 3 : 1,
+        },
+        label: showLabels ? {
+          text: `${trackerId}\n${altitude.toFixed(0)}m`,
+          font: isSelected ? 'bold 12px monospace' : '11px monospace',
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -(markerSize + 4)),
+          showBackground: isSelected,
+          backgroundColor: Cesium.Color.fromCssColorString(baseColor).withAlpha(0.7),
+        } : undefined,
+      });
+    }
+
+    // ── Engagement Visualization ──
+    if (engagements && cuasPlacements) {
+      for (const engagement of engagements) {
+        if (engagement.status !== 'active' && engagement.status !== 'complete') continue;
+
+        // Find CUAS position
+        const cuasPlacement = cuasPlacements.find(
+          (p) => p.id === engagement.cuas_placement_id
+        );
+        if (!cuasPlacement) continue;
+
+        const cuasPos = Cesium.Cartesian3.fromDegrees(
+          cuasPlacement.position.lon,
+          cuasPlacement.position.lat,
+          (cuasPlacement.height_agl_m || 0) + 2,
+        );
+
+        // Draw lines from CUAS to each target drone
+        for (const target of engagement.targets) {
+          // Find drone's current position
+          const droneData = currentDroneData?.get(target.tracker_id);
+          if (!droneData?.lat || !droneData?.lon) continue;
+
+          const dronePos = Cesium.Cartesian3.fromDegrees(
+            droneData.lon,
+            droneData.lat,
+            (droneData.alt_m || 0) + 2,
+          );
+
+          const engColor =
+            engagement.status === 'active'
+              ? Cesium.Color.RED.withAlpha(0.8)
+              : Cesium.Color.YELLOW.withAlpha(0.5);
+
+          viewer.entities.add({
+            name: `engagement_${engagement.id}_${target.tracker_id}`,
+            polyline: {
+              positions: [cuasPos, dronePos],
+              width: engagement.status === 'active' ? 3 : 1,
+              material: new Cesium.PolylineDashMaterialProperty({
+                color: engColor,
+                dashLength: 12.0,
+              }),
+            },
+          });
+
+          // Distance label at midpoint
+          if (showLabels) {
+            const midLat = (cuasPlacement.position.lat + droneData.lat) / 2;
+            const midLon = (cuasPlacement.position.lon + droneData.lon) / 2;
+            const midAlt =
+              ((cuasPlacement.height_agl_m || 0) + (droneData.alt_m || 0)) / 2;
+
+            // Calculate distance
+            const dLat = (droneData.lat - cuasPlacement.position.lat) * 111320;
+            const dLon =
+              (droneData.lon - cuasPlacement.position.lon) *
+              111320 *
+              Math.cos((cuasPlacement.position.lat * Math.PI) / 180);
+            const dist = Math.sqrt(dLat * dLat + dLon * dLon);
+
+            viewer.entities.add({
+              name: `engagement_dist_${engagement.id}_${target.tracker_id}`,
+              position: Cesium.Cartesian3.fromDegrees(midLon, midLat, midAlt + 10),
+              label: {
+                text: `${dist.toFixed(0)}m`,
+                font: '10px monospace',
+                fillColor: Cesium.Color.RED,
+                outlineColor: Cesium.Color.BLACK,
+                outlineWidth: 2,
+                style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                showBackground: true,
+                backgroundColor: Cesium.Color.BLACK.withAlpha(0.6),
+              },
+            });
+          }
+        }
+      }
+    }
+
+    // ── Initial Camera Position ──
+    if (!initialFlyDone.current) {
       if (hasPositions) {
         viewer.zoomTo(viewer.entities);
+        initialFlyDone.current = true;
       } else if (site) {
         viewer.camera.flyTo({
           destination: Cesium.Cartesian3.fromDegrees(
@@ -240,12 +525,71 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
             site.center.lat,
             5000,
           ),
+          orientation: {
+            heading: Cesium.Math.toRadians(0),
+            pitch: Cesium.Math.toRadians(-45),
+            roll: 0,
+          },
         });
+        initialFlyDone.current = true;
       }
-    };
+    }
+  }, [
+    cesiumLoaded, droneHistory, enhancedHistory, currentTime, timelineStart,
+    cuasPlacements, cuasProfiles, cuasJamStates, site, engagements,
+    currentDroneData, selectedDroneId, showLabels,
+  ]);
 
-    updateTracks();
-  }, [cesiumLoaded, droneHistory, currentTime, timelineStart, cuasPlacements, cuasProfiles, cuasJamStates, site]);
+  // Fly to selected drone
+  useEffect(() => {
+    if (!cesiumLoaded || !viewerRef.current || !cesiumRef.current || !selectedDroneId) return;
+
+    const Cesium = cesiumRef.current;
+    const viewer = viewerRef.current;
+
+    // Find the drone's position
+    const droneData = currentDroneData?.get(selectedDroneId);
+    if (droneData?.lat && droneData?.lon) {
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(
+          droneData.lon,
+          droneData.lat,
+          (droneData.alt_m || 100) + 500,
+        ),
+        orientation: {
+          heading: Cesium.Math.toRadians(0),
+          pitch: Cesium.Math.toRadians(-45),
+          roll: 0,
+        },
+        duration: 1.5,
+      });
+    }
+  }, [cesiumLoaded, selectedDroneId]);
+
+  // Camera reset handler
+  const handleResetCamera = useCallback(() => {
+    if (!viewerRef.current || !cesiumRef.current) return;
+    const Cesium = cesiumRef.current;
+    const viewer = viewerRef.current;
+
+    if (site) {
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(
+          site.center.lon,
+          site.center.lat,
+          5000,
+        ),
+        orientation: {
+          heading: Cesium.Math.toRadians(0),
+          pitch: Cesium.Math.toRadians(-45),
+          roll: 0,
+        },
+        duration: 1.0,
+      });
+    } else {
+      viewer.zoomTo(viewer.entities);
+    }
+  }, [site]);
 
   if (error) {
     return (
@@ -266,16 +610,48 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 
+      {/* Controls Panel */}
+      {cesiumLoaded && (
+        <div style={{
+          position: 'absolute', top: 8, left: 8,
+          display: 'flex', flexDirection: 'column', gap: 4,
+        }}>
+          <ControlButton
+            label={terrainEnabled ? 'Terrain: ON' : 'Terrain: OFF'}
+            active={terrainEnabled}
+            onClick={() => setTerrainEnabled((v) => !v)}
+          />
+          {GOOGLE_MAPS_API_KEY && (
+            <ControlButton
+              label={google3DEnabled ? '3D Buildings: ON' : '3D Buildings: OFF'}
+              active={google3DEnabled}
+              onClick={() => setGoogle3DEnabled((v) => !v)}
+            />
+          )}
+          <ControlButton
+            label={showLabels ? 'Labels: ON' : 'Labels: OFF'}
+            active={showLabels}
+            onClick={() => setShowLabels((v) => !v)}
+          />
+          <ControlButton
+            label="Reset Camera"
+            active={false}
+            onClick={handleResetCamera}
+          />
+        </div>
+      )}
+
       {onClose && (
         <button
           onClick={onClose}
           style={{
             position: 'absolute', top: 8, right: 8,
             background: 'rgba(0,0,0,0.7)', border: '1px solid #444',
-            borderRadius: 4, color: '#fff', padding: '4px 8px', cursor: 'pointer',
+            borderRadius: 4, color: '#fff', padding: '4px 12px', cursor: 'pointer',
+            fontSize: 12,
           }}
         >
-          Exit 3D
+          Exit Globe
         </button>
       )}
 
@@ -292,11 +668,34 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
   );
 };
 
+/** Control button component */
+const ControlButton: React.FC<{
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}> = ({ label, active, onClick }) => (
+  <button
+    onClick={onClick}
+    style={{
+      background: active ? 'rgba(59,130,246,0.7)' : 'rgba(0,0,0,0.7)',
+      border: `1px solid ${active ? '#3b82f6' : '#444'}`,
+      borderRadius: 4,
+      color: '#fff',
+      padding: '3px 8px',
+      cursor: 'pointer',
+      fontSize: 11,
+      whiteSpace: 'nowrap',
+    }}
+  >
+    {label}
+  </button>
+);
+
 /** Create a simple SVG data URI for CUAS markers */
 function createCUASDataUri(color: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-    <circle cx="12" cy="12" r="10" fill="${color}" stroke="#000" stroke-width="2"/>
-    <text x="12" y="16" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">J</text>
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+    <circle cx="14" cy="14" r="12" fill="${color}" stroke="#000" stroke-width="2" opacity="0.9"/>
+    <text x="14" y="19" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">J</text>
   </svg>`;
   return `data:image/svg+xml;base64,${btoa(svg)}`;
 }

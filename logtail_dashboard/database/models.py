@@ -163,6 +163,38 @@ class JamBurstSource(str, Enum):
 
 
 # ============================================================================
+# USER MODEL (RBAC)
+# ============================================================================
+
+class UserRole(str, Enum):
+    """User role for RBAC."""
+    ADMIN = "admin"
+    OPERATOR = "operator"
+    OBSERVER = "observer"
+    ANALYST = "analyst"
+
+
+class User(Base):
+    """User account for cloud authentication and RBAC."""
+
+    __tablename__ = "users"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), nullable=False, index=True)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    name = Column(String(255))
+    role = Column(String(20), nullable=False, default=UserRole.OBSERVER.value)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login_at = Column(DateTime)
+
+    def __repr__(self):
+        return f"<User(email={self.email}, role={self.role})>"
+
+
+# ============================================================================
 # SITE MODEL
 # ============================================================================
 
