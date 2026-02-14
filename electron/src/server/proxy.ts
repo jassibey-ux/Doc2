@@ -102,9 +102,12 @@ export function simplePythonProxy() {
       if (e.name === 'AbortError') {
         res.status(504).json({ error: 'Python backend timeout' });
       } else {
-        log.debug(`[proxy] Python backend unavailable for ${req.path}: ${e.message}`);
-        // Fall through to Express routes if Python backend not available
-        next();
+        log.warn(`[proxy] Python backend unavailable for ${req.path}: ${e.message}`);
+        res.status(502).json({
+          error: 'Python backend unavailable',
+          detail: `Cannot reach backend at ${PYTHON_BACKEND_URL}`,
+          code: 'BACKEND_UNAVAILABLE',
+        });
       }
     }
   };

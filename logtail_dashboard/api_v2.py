@@ -4387,3 +4387,166 @@ async def delete_tracker_alias(
     await db.delete(existing)
     await db.commit()
     return {"success": True}
+
+
+# ============================================================================
+# MOBILE COMPANION ENDPOINTS
+# ============================================================================
+
+
+@router.post("/cuas-placements/{placement_id}/geotag")
+async def geotag_cuas_placement(
+    placement_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Geotag a CUAS placement from a mobile device (GPS position + optional photo)."""
+    body = await request.json()
+    placement = await db.get(CUASPlacement, placement_id)
+    if not placement:
+        raise HTTPException(status_code=404, detail="CUAS placement not found")
+
+    # Update geotag fields
+    if "lat" in body and "lon" in body:
+        placement.lat = body["lat"]
+        placement.lon = body["lon"]
+    if "alt_m" in body:
+        placement.alt_m = body["alt_m"]
+    if "orientation_deg" in body:
+        placement.orientation_deg = body["orientation_deg"]
+    if "photo_url" in body:
+        placement.photo_url = body["photo_url"]
+    if "gps_accuracy_m" in body:
+        placement.gps_accuracy_m = body["gps_accuracy_m"]
+
+    placement.geotagged_at = datetime.utcnow()
+    placement.geotagged_by_actor_id = body.get("actor_id")
+    placement.geotag_method = body.get("method", "gps")
+
+    await db.commit()
+    return {
+        "id": placement.id,
+        "lat": placement.lat,
+        "lon": placement.lon,
+        "geotagged_at": placement.geotagged_at.isoformat(),
+        "geotag_method": placement.geotag_method,
+    }
+
+
+@router.post("/mobile/sync")
+async def mobile_batch_sync(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Batch sync endpoint for mobile companion app offline queue.
+
+    Accepts a list of operations that were queued offline and processes them
+    in order. Each operation has a type and payload matching an existing endpoint.
+    Returns per-operation results so the mobile app can clear its queue.
+    """
+    body = await request.json()
+    operations = body.get("operations", [])
+    results = []
+
+    for i, op in enumerate(operations):
+        op_type = op.get("type")
+        payload = op.get("payload", {})
+        op_id = op.get("id", str(i))
+
+        try:
+            if op_type == "operator_position":
+                session_id = payload.pop("session_id")
+                position = OperatorPosition(
+                    session_id=session_id,
+                    actor_id=payload.get("actor_id"),
+                    timestamp=datetime.fromisoformat(payload["timestamp"]) if payload.get("timestamp") else datetime.utcnow(),
+                    lat=payload["lat"],
+                    lon=payload["lon"],
+                    alt_m=payload.get("alt_m"),
+                    heading_deg=payload.get("heading_deg"),
+                    speed_mps=payload.get("speed_mps"),
+                    gps_accuracy_m=payload.get("gps_accuracy_m"),
+                    source=payload.get("source", "gps"),
+                )
+                db.add(position)
+                results.append({"id": op_id, "status": "ok"})
+
+            elif op_type == "sdr_reading":
+                session_id = payload.pop("session_id")
+                reading = SDRReading(
+                    id=generate_uuid(),
+                    session_id=session_id,
+                    actor_id=payload.get("actor_id"),
+                    timestamp=datetime.fromisoformat(payload["timestamp"]) if payload.get("timestamp") else datetime.utcnow(),
+                    lat=payload.get("lat"),
+                    lon=payload.get("lon"),
+                    alt_m=payload.get("alt_m"),
+                    gps_accuracy_m=payload.get("gps_accuracy_m"),
+                    center_frequency_mhz=payload["center_frequency_mhz"],
+                    bandwidth_mhz=payload.get("bandwidth_mhz"),
+                    sample_rate_mhz=payload.get("sample_rate_mhz"),
+                    gain_db=payload.get("gain_db"),
+                    readings=payload.get("readings"),
+                    device_info=payload.get("device_info"),
+                    notes=payload.get("notes"),
+                )
+                db.add(reading)
+                results.append({"id": op_id, "status": "ok"})
+
+            elif op_type == "cuas_geotag":
+                placement_id = payload.pop("placement_id")
+                placement = await db.get(CUASPlacement, placement_id)
+                if not placement:
+                    results.append({"id": op_id, "status": "error", "detail": "Placement not found"})
+                    continue
+                if "lat" in payload and "lon" in payload:
+                    placement.lat = payload["lat"]
+                    placement.lon = payload["lon"]
+                if "alt_m" in payload:
+                    placement.alt_m = payload["alt_m"]
+                if "orientation_deg" in payload:
+                    placement.orientation_deg = payload["orientation_deg"]
+                if "photo_url" in payload:
+                    placement.photo_url = payload["photo_url"]
+                if "gps_accuracy_m" in payload:
+                    placement.gps_accuracy_m = payload["gps_accuracy_m"]
+                placement.geotagged_at = datetime.utcnow()
+                placement.geotagged_by_actor_id = payload.get("actor_id")
+                placement.geotag_method = payload.get("method", "gps")
+                results.append({"id": op_id, "status": "ok"})
+
+            elif op_type == "media_attachment":
+                attachment = MediaAttachment(
+                    id=generate_uuid(),
+                    session_id=payload.get("session_id"),
+                    site_id=payload.get("site_id"),
+                    entity_type=payload.get("entity_type"),
+                    entity_id=payload.get("entity_id"),
+                    file_path=payload["file_path"],
+                    file_name=payload.get("file_name"),
+                    mime_type=payload.get("mime_type"),
+                    file_size_bytes=payload.get("file_size_bytes"),
+                    thumbnail_path=payload.get("thumbnail_path"),
+                    caption=payload.get("caption"),
+                    lat=payload.get("lat"),
+                    lon=payload.get("lon"),
+                    taken_at=datetime.fromisoformat(payload["taken_at"]) if payload.get("taken_at") else None,
+                    uploaded_by=payload.get("uploaded_by"),
+                )
+                db.add(attachment)
+                results.append({"id": op_id, "status": "ok"})
+
+            else:
+                results.append({"id": op_id, "status": "error", "detail": f"Unknown type: {op_type}"})
+
+        except Exception as e:
+            results.append({"id": op_id, "status": "error", "detail": str(e)})
+
+    await db.commit()
+    succeeded = sum(1 for r in results if r["status"] == "ok")
+    return {
+        "total": len(operations),
+        "succeeded": succeeded,
+        "failed": len(operations) - succeeded,
+        "results": results,
+    }

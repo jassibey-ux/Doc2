@@ -54,6 +54,10 @@ class SessionDataCollector {
   private recordings: Map<string, SessionRecording> = new Map();
   // Track which trackers are assigned to each session for filtering
   private sessionTrackerIds: Map<string, Set<string>> = new Map();
+  // Periodic snapshot intervals per session
+  private snapshotIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
+  // Track last snapshot position count per tracker per session to only write new data
+  private lastSnapshotCounts: Map<string, Map<string, number>> = new Map();
 
   /**
    * Start recording for a session
@@ -82,6 +86,9 @@ class SessionDataCollector {
     } else {
       log.info(`Started recording session: ${sessionId} (no tracker filter - recording all)`);
     }
+
+    // Start periodic disk snapshots (every 60 seconds)
+    this.startSnapshotInterval(sessionId);
   }
 
   /**
@@ -119,6 +126,10 @@ class SessionDataCollector {
 
     recording.endTime = new Date().toISOString();
     recording.isRecording = false;
+
+    // Stop periodic snapshots and write final snapshot
+    this.stopSnapshotInterval(sessionId);
+    this.writeSnapshot(sessionId);
 
     log.info(`Stopped recording session: ${sessionId}`);
   }
@@ -343,9 +354,93 @@ class SessionDataCollector {
   }
 
   /**
+   * Start periodic snapshot interval for a session (every 60 seconds).
+   * Writes in-memory positions to a JSONL file on disk to prevent data loss on crash.
+   */
+  private startSnapshotInterval(sessionId: string): void {
+    // Clear any existing interval
+    this.stopSnapshotInterval(sessionId);
+    this.lastSnapshotCounts.set(sessionId, new Map());
+
+    const interval = setInterval(() => {
+      this.writeSnapshot(sessionId);
+    }, 60000);
+
+    this.snapshotIntervals.set(sessionId, interval);
+    log.info(`[SessionData] Started periodic snapshots for session ${sessionId}`);
+  }
+
+  /**
+   * Stop periodic snapshot interval for a session.
+   */
+  private stopSnapshotInterval(sessionId: string): void {
+    const interval = this.snapshotIntervals.get(sessionId);
+    if (interval) {
+      clearInterval(interval);
+      this.snapshotIntervals.delete(sessionId);
+    }
+    this.lastSnapshotCounts.delete(sessionId);
+  }
+
+  /**
+   * Write a snapshot of new positions to disk as JSONL.
+   * Only appends positions that haven't been written in previous snapshots.
+   */
+  private writeSnapshot(sessionId: string): void {
+    const recording = this.recordings.get(sessionId);
+    if (!recording) return;
+
+    try {
+      const { loadConfig } = require('./config');
+      const config = loadConfig();
+      const snapshotDir = path.join(config.log_root_folder, 'snapshots');
+      if (!fs.existsSync(snapshotDir)) {
+        fs.mkdirSync(snapshotDir, { recursive: true });
+      }
+
+      const snapshotPath = path.join(snapshotDir, `${sessionId}.jsonl`);
+      const lastCounts = this.lastSnapshotCounts.get(sessionId) || new Map();
+
+      let newLines = 0;
+      const lines: string[] = [];
+
+      for (const [trackerId, positions] of recording.positions) {
+        const lastCount = lastCounts.get(trackerId) || 0;
+        const newPositions = positions.slice(lastCount);
+
+        for (const pos of newPositions) {
+          lines.push(JSON.stringify({
+            t: pos.timestamp,
+            id: trackerId,
+            lat: pos.latitude,
+            lon: pos.longitude,
+            alt: pos.altitude_m,
+            spd: pos.speed_ms,
+            hdg: pos.heading_deg,
+            q: pos.gps_quality,
+          }));
+          newLines++;
+        }
+
+        lastCounts.set(trackerId, positions.length);
+      }
+
+      if (newLines > 0) {
+        fs.appendFileSync(snapshotPath, lines.join('\n') + '\n', 'utf-8');
+        log.debug(`[SessionData] Snapshot: wrote ${newLines} positions to ${snapshotPath}`);
+      }
+
+      this.lastSnapshotCounts.set(sessionId, lastCounts);
+    } catch (e: any) {
+      log.warn(`[SessionData] Snapshot write failed for ${sessionId}: ${e.message}`);
+    }
+  }
+
+  /**
    * Clear session data
    */
   clearSession(sessionId: string): void {
+    this.stopSnapshotInterval(sessionId);
     this.recordings.delete(sessionId);
     this.sessionTrackerIds.delete(sessionId);
     log.info(`Cleared session data: ${sessionId}`);

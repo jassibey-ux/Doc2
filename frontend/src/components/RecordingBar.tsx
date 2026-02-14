@@ -183,7 +183,7 @@ export default function RecordingBar({
         duration: 6000,
         action: {
           label: 'View Session',
-          onClick: () => navigate('/monitor'),
+          onClick: () => sessionId ? navigate(`/session/${sessionId}/live`) : navigate('/monitor'),
         },
       });
 
@@ -335,7 +335,7 @@ export default function RecordingBar({
     return null;
   }
 
-  const handleViewInBrowser = () => navigate('/monitor');
+  const handleViewSession = () => sessionId ? navigate(`/session/${sessionId}/live`) : navigate('/monitor');
   const handleViewAnalysis = () => sessionId && navigate(`/session/${sessionId}/analysis`);
 
   return (
@@ -602,7 +602,7 @@ export default function RecordingBar({
             <GlassButton
               variant="ghost"
               size="sm"
-              onClick={handleViewInBrowser}
+              onClick={handleViewSession}
               style={{
                 background: 'rgba(59, 130, 246, 0.1)',
                 borderColor: 'rgba(59, 130, 246, 0.3)',
@@ -613,7 +613,7 @@ export default function RecordingBar({
               }}
             >
               <FolderOpen size={10} />
-              Sessions
+              View Session
             </GlassButton>
 
             {onOpenSDCard && (

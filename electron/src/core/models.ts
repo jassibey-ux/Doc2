@@ -308,7 +308,7 @@ export interface ConfigResponse {
 }
 
 export interface WebSocketMessage {
-  type: 'tracker_updated' | 'tracker_stale' | 'active_event_changed' | 'config_changed' | 'replay_state' | 'new_file_detected' | 'anomaly_alert' | 'demo_mode_changed' | 'gps_health_alert';
+  type: 'tracker_updated' | 'tracker_stale' | 'active_event_changed' | 'config_changed' | 'replay_state' | 'new_file_detected' | 'anomaly_alert' | 'demo_mode_changed' | 'gps_health_alert' | 'operator_updated' | 'cuas_geotagged' | 'sdr_captured';
   data: Record<string, unknown>;
 }
 
