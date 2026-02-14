@@ -16,6 +16,7 @@ import SDCardPanel from './SDCardPanel';
 import AnalysisPanel from './AnalysisPanel';
 import UnifiedWorkspacePanel from './UnifiedWorkspacePanel';
 import ConfigurationWorkspacePanel from './ConfigurationWorkspacePanel';
+import SessionHistoryPanel from './SessionHistoryPanel';
 import RecordingBar from './RecordingBar';
 import { SessionSetupWizard } from './SessionSetupWizard';
 import CUASControlPanel from './CUASControlPanel';
@@ -872,6 +873,12 @@ export default function MapView() {
       {/* Configuration Workspace Panel (Right-docked) - Sites, Drones, CUAS */}
       <ConfigurationWorkspacePanel
         isOpen={activePanel === 'sites' || activePanel === 'drone-profiles' || activePanel === 'cuas-profiles'}
+        onClose={() => setActivePanel(null)}
+      />
+
+      {/* Session History Panel (Right-docked) */}
+      <SessionHistoryPanel
+        isOpen={activePanel === 'session-history'}
         onClose={() => setActivePanel(null)}
       />
     </div>

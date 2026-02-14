@@ -114,6 +114,7 @@ class SessionUpdateRequest(BaseModel):
     weather_notes: Optional[str] = None
     post_test_notes: Optional[str] = None
     classification: Optional[str] = None
+    live_data_path: Optional[str] = None
 
 
 class SessionSearchRequest(BaseModel):
@@ -1613,6 +1614,62 @@ async def compute_metrics(
         raise HTTPException(status_code=404, detail="Session not found or no telemetry data")
 
     return {"metrics": result, "status": "computed"}
+
+
+@router.get("/sessions/{session_id}/telemetry")
+async def get_session_telemetry(
+    session_id: str,
+    downsample: int = Query(2000, ge=10, le=50000),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get downsampled telemetry tracks for a session.
+    Returns all tracker tracks grouped by tracker_id.
+    """
+    repo = TelemetryRepository(db)
+    session_repo = SessionRepository(db)
+
+    # Verify session exists
+    session = await session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Get all tracker IDs for this session
+    tracker_ids = await repo.get_trackers_for_session(session_id)
+
+    if not tracker_ids:
+        return {"session_id": session_id, "tracks": {}, "point_count": 0}
+
+    # Downsample per tracker (divide budget across trackers)
+    points_per_tracker = max(100, downsample // len(tracker_ids))
+    tracks: Dict[str, list] = {}
+    total_points = 0
+
+    for tracker_id in tracker_ids:
+        records = await repo.get_downsampled(
+            session_id, tracker_id=tracker_id, target_points=points_per_tracker
+        )
+        tracks[tracker_id] = [
+            {
+                "lat": r.lat,
+                "lon": r.lon,
+                "alt_m": r.alt_m,
+                "timestamp": r.time_local_received.isoformat() if r.time_local_received else None,
+                "speed_mps": r.speed_mps,
+                "hdop": r.hdop,
+                "satellites": r.satellites,
+                "fix_valid": r.fix_valid,
+            }
+            for r in records
+            if r.lat is not None and r.lon is not None
+        ]
+        total_points += len(tracks[tracker_id])
+
+    return {
+        "session_id": session_id,
+        "tracks": tracks,
+        "point_count": total_points,
+    }
 
 
 # =============================================================================

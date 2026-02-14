@@ -209,15 +209,14 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
       : null;
 
     if (savedSessionId && savedPhase && savedPhase !== 'idle') {
-      // Don't restore 'completed' phase - it's stale on app restart
-      // The user should start fresh without seeing old completion banners
       if (savedPhase === 'completed') {
-        console.log('[TestSessionPhase] Clearing stale completed session on startup');
-        localStorage.removeItem(STORAGE_KEYS.ACTIVE_SESSION_ID);
-        localStorage.removeItem(STORAGE_KEYS.CURRENT_PHASE);
+        // Keep session ID so completed sessions can be revisited,
+        // but reset phase to idle so RecordingBar doesn't show
+        console.log('[TestSessionPhase] Completed session found on startup — keeping ID, resetting phase to idle');
+        setActiveSessionId(savedSessionId);
+        localStorage.setItem(STORAGE_KEYS.CURRENT_PHASE, 'idle');
         localStorage.removeItem(STORAGE_KEYS.PHASE_START_TIME);
         localStorage.removeItem(STORAGE_KEYS.CUAS_JAM_STATES);
-        // Keep phase as 'idle' (the default)
       } else {
         setActiveSessionId(savedSessionId);
         setCurrentPhase(savedPhase);
@@ -240,9 +239,14 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
       setWizardStep(parseInt(savedWizardStep, 10));
     }
 
-    if (savedJamStates) {
+    // Restore jam states from namespaced key (per-session) or legacy key
+    const jamStatesKey = savedSessionId
+      ? `${STORAGE_KEYS.CUAS_JAM_STATES}_${savedSessionId}`
+      : STORAGE_KEYS.CUAS_JAM_STATES;
+    const restoredJamStates = localStorage.getItem(jamStatesKey) || savedJamStates;
+    if (restoredJamStates) {
       try {
-        const parsed = JSON.parse(savedJamStates);
+        const parsed = JSON.parse(restoredJamStates);
         setCuasJamStates(new Map(Object.entries(parsed)));
       } catch (e) {
         console.error('Failed to parse saved jam states:', e);
@@ -336,14 +340,17 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
     localStorage.setItem(STORAGE_KEYS.WIZARD_STEP, String(step));
   }, []);
 
-  // Persist jam states
+  // Persist jam states — namespaced per session to prevent leakage between sessions
   const persistJamStates = useCallback((states: CUASJamStates) => {
     const obj: Record<string, boolean> = {};
     states.forEach((value, key) => {
       obj[key] = value;
     });
-    localStorage.setItem(STORAGE_KEYS.CUAS_JAM_STATES, JSON.stringify(obj));
-  }, []);
+    const key = activeSessionId
+      ? `${STORAGE_KEYS.CUAS_JAM_STATES}_${activeSessionId}`
+      : STORAGE_KEYS.CUAS_JAM_STATES;
+    localStorage.setItem(key, JSON.stringify(obj));
+  }, [activeSessionId]);
 
   // Clear wizard persistence
   const clearWizardPersistence = useCallback(() => {
@@ -433,7 +440,11 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
       persistState(activeSessionId, 'capturing', Date.now());
 
       // Stop the session (this triggers CSV export on the backend)
-      const result = await stopSession(activeSessionId);
+      // 30s timeout prevents UI from hanging on slow backend responses
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Stop session timed out after 30s')), 30_000)
+      );
+      const result = await Promise.race([stopSession(activeSessionId), timeoutPromise]);
 
       // Transition to completed after successful stop
       if (result) {
@@ -444,6 +455,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
         setPhaseStartTime(null);
         persistState(activeSessionId, 'completed', null);
         localStorage.removeItem(STORAGE_KEYS.CUAS_JAM_STATES);
+        localStorage.removeItem(`${STORAGE_KEYS.CUAS_JAM_STATES}_${activeSessionId}`);
       }
     } catch (error) {
       console.error('Failed to stop test:', error);
@@ -499,6 +511,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
     setPhaseStartTime(null);
     persistState(activeSessionId, 'completed', null);
     localStorage.removeItem(STORAGE_KEYS.CUAS_JAM_STATES);
+    if (activeSessionId) localStorage.removeItem(`${STORAGE_KEYS.CUAS_JAM_STATES}_${activeSessionId}`);
   }, [activeSessionId, persistState]);
 
   const clearActiveSession = useCallback(() => {

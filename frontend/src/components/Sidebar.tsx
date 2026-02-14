@@ -190,6 +190,20 @@ export default function Sidebar({
         </button>
       ))}
 
+      {/* Session History Button */}
+      <button
+        className={`control-btn tooltip-btn ${activePanel === 'session-history' ? 'active' : ''}`}
+        data-tooltip="Session History"
+        aria-label="Session History"
+        onClick={() => handleButtonClick('session-history')}
+        style={{
+          background: activePanel === 'session-history' ? 'rgba(255, 140, 0, 0.2)' : undefined,
+          borderColor: activePanel === 'session-history' ? '#ff8c00' : undefined,
+        }}
+      >
+        <History size={20} style={{ color: activePanel === 'session-history' ? '#ff8c00' : undefined }} />
+      </button>
+
       {/* Replay Session Button */}
       <button
         className={`control-btn tooltip-btn replay-btn ${activePanel === 'replay' ? 'active' : ''}`}
