@@ -231,6 +231,86 @@ class TelemetryRepository(BaseRepository[TrackerTelemetry]):
 
         return sampled
 
+    async def get_downsampled_engagement_aware(
+        self,
+        session_id: str,
+        tracker_id: Optional[str] = None,
+        target_points: int = 1000,
+        engagement_windows: Optional[List[tuple]] = None,
+    ) -> List[TrackerTelemetry]:
+        """
+        Smart downsampling: full resolution during engagement windows,
+        aggressive downsampling during transit/idle periods.
+
+        Args:
+            session_id: The session's primary key.
+            tracker_id: Optional filter by specific tracker.
+            target_points: Approximate total points to return.
+            engagement_windows: List of (start_datetime, end_datetime) tuples
+                for engagement periods that should keep full resolution.
+
+        Returns:
+            Downsampled list of telemetry records.
+        """
+        if not engagement_windows:
+            return await self.get_downsampled(session_id, tracker_id, target_points)
+
+        # Fetch all records sorted by time
+        query = select(TrackerTelemetry).where(
+            TrackerTelemetry.session_id == session_id
+        )
+        if tracker_id:
+            query = query.where(TrackerTelemetry.tracker_id == tracker_id)
+        query = query.order_by(TrackerTelemetry.time_local_received.asc())
+
+        result = await self.db.execute(query)
+        all_records = list(result.scalars().all())
+
+        if len(all_records) <= target_points:
+            return all_records
+
+        # Split records into engagement vs idle buckets
+        engagement_records = []
+        idle_records = []
+
+        for r in all_records:
+            if r.time_local_received is None:
+                idle_records.append(r)
+                continue
+            in_engagement = any(
+                start <= r.time_local_received <= end
+                for start, end in engagement_windows
+            )
+            if in_engagement:
+                engagement_records.append(r)
+            else:
+                idle_records.append(r)
+
+        # Engagement points kept at full resolution (capped at 70% of budget)
+        max_engagement_points = int(target_points * 0.7)
+        if len(engagement_records) > max_engagement_points:
+            eng_interval = max(1, len(engagement_records) // max_engagement_points)
+            engagement_records = [engagement_records[i] for i in range(0, len(engagement_records), eng_interval)]
+
+        # Remaining budget for idle periods
+        remaining_budget = max(50, target_points - len(engagement_records))
+        if len(idle_records) > remaining_budget:
+            idle_interval = max(1, len(idle_records) // remaining_budget)
+            idle_sampled = [idle_records[i] for i in range(0, len(idle_records), idle_interval)]
+            # Always include first and last idle points
+            if idle_records and idle_records[-1] not in idle_sampled:
+                idle_sampled.append(idle_records[-1])
+            if idle_records and idle_records[0] not in idle_sampled:
+                idle_sampled.insert(0, idle_records[0])
+        else:
+            idle_sampled = idle_records
+
+        # Merge and sort by time
+        merged = engagement_records + idle_sampled
+        merged.sort(key=lambda r: r.time_local_received or r.id)
+
+        return merged
+
     async def get_bounding_box(
         self,
         session_id: str,

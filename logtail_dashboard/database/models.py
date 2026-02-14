@@ -684,6 +684,7 @@ class Engagement(Base):
 
     # Identification
     name = Column(String(255))
+    run_number = Column(Integer)  # Auto-incremented per session (1, 2, 3...)
     engagement_type = Column(String(20), default=EngagementType.TEST.value)  # test, control, operational
     status = Column(String(20), default=EngagementStatus.PLANNED.value)  # planned, active, complete, aborted
 

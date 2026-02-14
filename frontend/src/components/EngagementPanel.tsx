@@ -8,6 +8,14 @@ import { Badge } from './ui/GlassUI';
 import { Square, AlertTriangle, Plus, Target, User, Radio, Zap } from 'lucide-react';
 import type { Engagement, CUASPlacement, CUASProfile, JamBurst, EmitterType } from '../types/workflow';
 
+interface LiveDronePosition {
+  lat: number | null;
+  lon: number | null;
+  alt_m: number | null;
+  fix_valid: boolean;
+  speed_mps?: number | null;
+}
+
 interface EngagementPanelProps {
   engagements: Engagement[];
   activeEngagements: Map<string, Engagement>;
@@ -18,6 +26,7 @@ interface EngagementPanelProps {
   isActive: boolean; // session is in active phase
   activeBursts?: Map<string, JamBurst>; // active burst state keyed by engagement_id
   sessionActors?: Array<{ id: string; name: string; callsign?: string }>;
+  liveDronePositions?: Map<string, LiveDronePosition>;
 }
 
 function formatElapsed(startIso: string): string {
@@ -35,6 +44,40 @@ function formatMetricValue(val: number | undefined, unit: string): string {
   return String(val);
 }
 
+// Haversine distance in meters (simplified for real-time computation)
+function haversineM(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function computeLiveRange(
+  eng: Engagement,
+  liveDronePositions?: Map<string, LiveDronePosition>,
+): { rangeM: number | null; fixValid: boolean; targetId: string | null } {
+  if (!liveDronePositions || eng.cuas_lat == null || eng.cuas_lon == null) {
+    return { rangeM: null, fixValid: true, targetId: null };
+  }
+  // Use first primary target
+  const primaryTarget = eng.targets.find(t => t.role === 'primary_target') || eng.targets[0];
+  if (!primaryTarget) return { rangeM: null, fixValid: true, targetId: null };
+
+  const pos = liveDronePositions.get(primaryTarget.tracker_id);
+  if (!pos || pos.lat == null || pos.lon == null) {
+    return { rangeM: null, fixValid: false, targetId: primaryTarget.tracker_id };
+  }
+
+  return {
+    rangeM: haversineM(eng.cuas_lat, eng.cuas_lon, pos.lat, pos.lon),
+    fixValid: pos.fix_valid,
+    targetId: primaryTarget.tracker_id,
+  };
+}
+
 export default function EngagementPanel({
   engagements,
   activeEngagements,
@@ -45,6 +88,7 @@ export default function EngagementPanel({
   isActive,
   activeBursts,
   sessionActors,
+  liveDronePositions,
 }: EngagementPanelProps) {
   // Tick for live elapsed timers
   const [, setTick] = useState(0);
@@ -113,42 +157,86 @@ export default function EngagementPanel({
               <EngagementStatusBadge status={eng.status} />
             </div>
 
-            {/* Active engagement: timer + live range */}
-            {eng.status === 'active' && eng.engage_timestamp && (
-              <div className="eng-card-active">
-                <div className="eng-card-timer">
-                  <span className="eng-timer-dot" />
-                  <span className="eng-timer-value">{formatElapsed(eng.engage_timestamp)}</span>
-                </div>
-                {eng.targets[0]?.initial_range_m && (
-                  <span className="eng-card-range">
-                    {Math.round(eng.targets[0].initial_range_m)}m
-                  </span>
-                )}
-                {isActive && (
-                  <button
-                    className="eng-disengage-btn"
-                    onClick={(e) => { e.stopPropagation(); onDisengage(eng.id); }}
-                    title="Disengage"
-                  >
-                    <Square size={10} />
-                    STOP
-                  </button>
-                )}
-              </div>
-            )}
+            {/* Active engagement: timer + live range + GPS feedback */}
+            {eng.status === 'active' && eng.engage_timestamp && (() => {
+              const live = computeLiveRange(eng, liveDronePositions);
+              const currentBurst = activeBursts?.get(eng.id);
+              const hasActiveBurst = !!currentBurst && !currentBurst.jam_off_at;
+              return (
+                <>
+                  <div className="eng-card-active">
+                    <div className="eng-card-timer">
+                      <span className="eng-timer-dot" />
+                      <span className="eng-timer-value">{formatElapsed(eng.engage_timestamp)}</span>
+                    </div>
+                    {/* Live range (updates every tick) */}
+                    <span className="eng-card-range" style={{ color: live.fixValid ? '#06b6d4' : '#ef4444' }}>
+                      {live.rangeM != null ? `${Math.round(live.rangeM)}m` : eng.targets[0]?.initial_range_m ? `${Math.round(eng.targets[0].initial_range_m)}m` : '--'}
+                    </span>
+                    {/* GPS status indicator */}
+                    {!live.fixValid && (
+                      <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 700 }}>NO FIX</span>
+                    )}
+                    {isActive && (
+                      <button
+                        className="eng-disengage-btn"
+                        onClick={(e) => { e.stopPropagation(); onDisengage(eng.id); }}
+                        title="Disengage"
+                      >
+                        <Square size={10} />
+                        STOP
+                      </button>
+                    )}
+                  </div>
+                  {/* Jam burst denial feedback row */}
+                  {hasActiveBurst && currentBurst && (
+                    <div className="eng-card-burst-feedback">
+                      <Zap size={9} style={{ color: '#f59e0b' }} />
+                      <span>Burst #{currentBurst.burst_seq}</span>
+                      <span className="eng-burst-timer">{formatElapsed(currentBurst.jam_on_at)}</span>
+                      {currentBurst.gps_denial_detected && (
+                        <Badge color="red" size="sm">GPS DENIED</Badge>
+                      )}
+                      {currentBurst.time_to_effect_s != null && (
+                        <span style={{ fontSize: '9px', color: '#22c55e' }}>
+                          TTE {currentBurst.time_to_effect_s.toFixed(1)}s
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
-            {/* Complete engagement: compact metrics or burst summary */}
+            {/* Complete engagement: compact metrics with threshold indicators */}
             {eng.status === 'complete' && eng.metrics && (eng.metrics.time_to_effect_s != null || eng.metrics.effective_range_m != null) && (
               <div className="eng-card-metrics">
-                <span className="eng-metric">
-                  {formatMetricValue(eng.metrics.time_to_effect_s, 's')}
+                <span className="eng-metric" title="Time to Effect">
+                  <span className="eng-metric-label">TTE</span>
+                  <span style={{ color: eng.metrics.time_to_effect_s != null && eng.metrics.time_to_effect_s < 30 ? '#22c55e' : '#ef4444' }}>
+                    {formatMetricValue(eng.metrics.time_to_effect_s, 's')}
+                  </span>
                 </span>
                 <span className="eng-metric-sep">|</span>
-                <span className="eng-metric">
+                <span className="eng-metric" title="Effective Range">
+                  <span className="eng-metric-label">RNG</span>
                   {formatMetricValue(eng.metrics.effective_range_m, 'm')}
                 </span>
+                {eng.metrics.max_drift_m != null && (
+                  <>
+                    <span className="eng-metric-sep">|</span>
+                    <span className="eng-metric" title="Max Drift">
+                      <span className="eng-metric-label">DFT</span>
+                      <span style={{ color: eng.metrics.max_drift_m > 100 ? '#f97316' : '#22c55e' }}>
+                        {formatMetricValue(eng.metrics.max_drift_m, 'm')}
+                      </span>
+                    </span>
+                  </>
+                )}
                 <span className="eng-metric-sep">|</span>
+                {eng.metrics.failsafe_triggered && (
+                  <Badge color="yellow" size="sm">FAILSAFE</Badge>
+                )}
                 {eng.metrics.pass_fail && (
                   <Badge
                     color={eng.metrics.pass_fail === 'pass' ? 'green' : eng.metrics.pass_fail === 'fail' ? 'red' : 'yellow'}
@@ -385,6 +473,18 @@ const engagementStyles = `
     margin-top: 6px;
   }
 
+  .eng-card-burst-feedback {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    padding: 3px 6px;
+    background: rgba(245, 158, 11, 0.08);
+    border-radius: 4px;
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
   .eng-card-timer {
     display: flex;
     align-items: center;
@@ -449,6 +549,14 @@ const engagementStyles = `
   .eng-metric-sep {
     font-size: 10px;
     color: rgba(255, 255, 255, 0.2);
+  }
+
+  .eng-metric-label {
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.35);
+    margin-right: 3px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
   }
 
   .eng-card-aborted {

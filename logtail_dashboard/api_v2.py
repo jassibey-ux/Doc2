@@ -484,6 +484,7 @@ def engagement_to_dict(eng: Engagement) -> Dict[str, Any]:
         "emitter_type": eng.emitter_type,
         "emitter_id": eng.emitter_id,
         "name": eng.name,
+        "run_number": eng.run_number,
         "engagement_type": eng.engagement_type,
         "status": eng.status,
         "engage_timestamp": eng.engage_timestamp.isoformat() if eng.engage_timestamp else None,
@@ -1640,15 +1641,30 @@ async def get_session_telemetry(
     if not tracker_ids:
         return {"session_id": session_id, "tracks": {}, "point_count": 0}
 
+    # Build engagement windows for smart downsampling
+    eng_repo = EngagementRepository(db)
+    engagements = await eng_repo.get_by_session(session_id)
+    engagement_windows = [
+        (e.engage_timestamp, e.disengage_timestamp or datetime.utcnow())
+        for e in engagements
+        if e.engage_timestamp
+    ]
+
     # Downsample per tracker (divide budget across trackers)
     points_per_tracker = max(100, downsample // len(tracker_ids))
     tracks: Dict[str, list] = {}
     total_points = 0
 
     for tracker_id in tracker_ids:
-        records = await repo.get_downsampled(
-            session_id, tracker_id=tracker_id, target_points=points_per_tracker
-        )
+        if engagement_windows:
+            records = await repo.get_downsampled_engagement_aware(
+                session_id, tracker_id=tracker_id, target_points=points_per_tracker,
+                engagement_windows=engagement_windows,
+            )
+        else:
+            records = await repo.get_downsampled(
+                session_id, tracker_id=tracker_id, target_points=points_per_tracker
+            )
         tracks[tracker_id] = [
             {
                 "lat": r.lat,
@@ -1727,12 +1743,14 @@ async def create_engagement(
         cuas_placement_id = resolved_placement_id
         emitter_id = resolved_placement_id
 
-    # Auto-generate name if not provided
-    count_result = await db.execute(
-        sa_select(Engagement).where(Engagement.session_id == session_id)
+    # Auto-generate run_number and name if not provided
+    from sqlalchemy import func as sa_func
+    max_run_result = await db.execute(
+        sa_select(sa_func.coalesce(sa_func.max(Engagement.run_number), 0))
+        .where(Engagement.session_id == session_id)
     )
-    existing_count = len(count_result.scalars().all())
-    name = request.name or f"Run {existing_count + 1}"
+    next_run_number = (max_run_result.scalar() or 0) + 1
+    name = request.name or f"Run {next_run_number}"
 
     engagement = Engagement(
         id=generate_uuid(),
@@ -1741,6 +1759,7 @@ async def create_engagement(
         emitter_type=emitter_type,
         emitter_id=emitter_id,
         name=name,
+        run_number=next_run_number,
         engagement_type=request.engagement_type,
         status=EngagementStatus.PLANNED.value,
         notes=request.notes,
@@ -1798,12 +1817,14 @@ async def quick_engage(
     if not assignments:
         raise HTTPException(status_code=400, detail="No tracker assignments in session")
 
-    # Auto-generate name
-    existing = await db.execute(
-        sa_select(Engagement).where(Engagement.session_id == session_id)
+    # Auto-generate run_number and name
+    from sqlalchemy import func as sa_func
+    max_run_result = await db.execute(
+        sa_select(sa_func.coalesce(sa_func.max(Engagement.run_number), 0))
+        .where(Engagement.session_id == session_id)
     )
-    existing_count = len(existing.scalars().all())
-    name = request.name or f"Run {existing_count + 1}"
+    next_run_number = (max_run_result.scalar() or 0) + 1
+    name = request.name or f"Run {next_run_number}"
 
     # Create engagement
     engagement = Engagement(
@@ -1813,6 +1834,7 @@ async def quick_engage(
         emitter_type=EmitterType.CUAS_SYSTEM.value,
         emitter_id=placement.id,
         name=name,
+        run_number=next_run_number,
         engagement_type=request.engagement_type,
         status=EngagementStatus.PLANNED.value,
     )
@@ -1902,6 +1924,62 @@ async def list_engagements(
     eng_repo = EngagementRepository(db)
     engagements = await eng_repo.get_by_session(session_id)
     return {"engagements": [engagement_to_dict(e) for e in engagements]}
+
+
+@router.get("/sessions/{session_id}/engagement-summary")
+async def get_engagement_summary(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Aggregated engagement summary for a session.
+    Returns all engagements with metrics plus session-level stats.
+    """
+    session_repo = SessionRepository(db)
+    session = await session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    eng_repo = EngagementRepository(db)
+    engagements = await eng_repo.get_by_session(session_id)
+
+    runs = []
+    total_tte = []
+    total_range = []
+    pass_count = 0
+    fail_count = 0
+
+    for eng in engagements:
+        run_data = engagement_to_dict(eng)
+        m = eng.metrics
+        if m:
+            if m.time_to_effect_s is not None:
+                total_tte.append(m.time_to_effect_s)
+            if m.effective_range_m is not None:
+                total_range.append(m.effective_range_m)
+            if m.pass_fail == "pass":
+                pass_count += 1
+            elif m.pass_fail == "fail":
+                fail_count += 1
+        runs.append(run_data)
+
+    total_runs = len(engagements)
+    completed_runs = len([e for e in engagements if e.status in ("complete", "aborted")])
+
+    return {
+        "session_id": session_id,
+        "runs": runs,
+        "stats": {
+            "total_runs": total_runs,
+            "completed_runs": completed_runs,
+            "active_runs": total_runs - completed_runs,
+            "pass_count": pass_count,
+            "fail_count": fail_count,
+            "pass_rate": round(pass_count / completed_runs * 100, 1) if completed_runs > 0 else None,
+            "avg_time_to_effect_s": round(sum(total_tte) / len(total_tte), 2) if total_tte else None,
+            "avg_effective_range_m": round(sum(total_range) / len(total_range), 1) if total_range else None,
+        },
+    }
 
 
 @router.get("/engagements/{engagement_id}")

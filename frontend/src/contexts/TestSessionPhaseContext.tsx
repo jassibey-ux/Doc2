@@ -6,6 +6,13 @@ import { useToast } from './ToastContext';
 // Session phases
 export type SessionPhase = 'idle' | 'planning' | 'active' | 'capturing' | 'analyzing' | 'completed';
 
+// Sub-states for the 'active' phase — drives engagement-aware UI behavior
+export type ActiveSubState =
+  | 'no_engagements'       // Session started, no engagement created yet
+  | 'engagement_active'    // At least one engagement in progress
+  | 'between_engagements'  // All engagements paused/complete, session still active
+  | 'all_complete';        // All planned engagements done, ready to stop
+
 // Wizard session data collected during setup
 export interface WizardSessionData {
   name: string;
@@ -33,6 +40,7 @@ export type CUASJamStates = Map<string, boolean>;
 interface TestSessionPhaseContextType {
   // Current phase
   currentPhase: SessionPhase;
+  activeSubState: ActiveSubState;
   activeSessionId: string | null;
   activeSession: TestSession | null;
 
@@ -157,6 +165,17 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
       .forEach(e => map.set(e.id, e));
     return map;
   }, [engagements]);
+
+  // Compute engagement-aware sub-state for the active phase
+  const activeSubState: ActiveSubState = useMemo(() => {
+    if (currentPhase !== 'active') return 'no_engagements';
+    if (engagements.length === 0) return 'no_engagements';
+    if (activeEngagements.size > 0) return 'engagement_active';
+    // All engagements exist but none are active
+    const allDone = engagements.every(e => e.status === 'complete' || e.status === 'aborted');
+    if (allDone) return 'all_complete';
+    return 'between_engagements';
+  }, [currentPhase, engagements, activeEngagements]);
 
   // Timer ref for phase duration
   const durationTimerRef = useRef<number | null>(null);
@@ -972,6 +991,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
 
   const value: TestSessionPhaseContextType = {
     currentPhase,
+    activeSubState,
     activeSessionId,
     activeSession: activeSession || null,
     phaseStartTime,

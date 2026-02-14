@@ -404,6 +404,7 @@ export interface Engagement {
   emitter_type: EmitterType;
   emitter_id: string;
   name?: string;
+  run_number?: number;
   engagement_type: EngagementType;
   status: EngagementStatus;
   engage_timestamp?: string;

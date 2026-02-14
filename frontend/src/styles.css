@@ -2027,6 +2027,38 @@ body {
   box-shadow: 0 4px 16px rgba(99, 102, 241, 0.5);
 }
 
+/* Engagement Segments on Timeline */
+.timeline-segment {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 3px;
+  opacity: 0.35;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  z-index: 1;
+}
+
+.timeline-segment:hover {
+  opacity: 0.65;
+}
+
+.timeline-segment--engagement {
+  /* Base engagement spans — color set inline */
+}
+
+.timeline-segment--jam_burst {
+  top: -2px;
+  height: calc(100% + 4px);
+  opacity: 0.55;
+  border-radius: 2px;
+  z-index: 2;
+}
+
+.timeline-segment--jam_burst:hover {
+  opacity: 0.8;
+}
+
 /* Current Time Display */
 .current-time-display {
   display: flex;

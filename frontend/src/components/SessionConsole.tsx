@@ -904,6 +904,8 @@ export default function SessionConsole() {
               }
             } : undefined}
             isActive={currentPhase === 'active'}
+            activeBursts={activeBursts}
+            liveDronePositions={sessionDrones as Map<string, { lat: number | null; lon: number | null; alt_m: number | null; fix_valid: boolean; speed_mps?: number | null }>}
           />
 
           {/* Event Log - Enhanced with CUAS names */}

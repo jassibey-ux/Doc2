@@ -1,6 +1,17 @@
 import { useCallback, useRef, useEffect, useState } from 'react';
 import { Play, Pause, SkipBack, Radio } from 'lucide-react';
 import { TimeRange } from '../contexts/WebSocketContext';
+import type { Engagement } from '../types/workflow';
+
+// Engagement segment for rendering on the timeline
+interface EngagementSegment {
+  id: string;
+  name?: string;
+  startMs: number;
+  endMs: number;
+  type: 'engagement' | 'jam_burst' | 'note';
+  color: string;
+}
 
 interface TimelineControlProps {
   isLive: boolean;
@@ -12,6 +23,8 @@ interface TimelineControlProps {
   timelineStart: number;
   timelineEnd: number;
   connectionStatus: 'connected' | 'disconnected' | 'connecting';
+  engagements?: Engagement[];
+  onMarkerClick?: (engagementId: string) => void;
 }
 
 const TIME_RANGES: { value: TimeRange; label: string }[] = [
@@ -52,6 +65,8 @@ export default function TimelineControl({
   timelineStart,
   timelineEnd,
   connectionStatus,
+  engagements,
+  onMarkerClick,
 }: TimelineControlProps) {
   const sliderRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -166,6 +181,31 @@ export default function TimelineControl({
     }
   }, [isLive, setIsLive, setCurrentTime, timelineStart]);
 
+  // Build engagement segments for timeline overlay
+  const segments: EngagementSegment[] = [];
+  if (engagements && duration > 0) {
+    for (const eng of engagements) {
+      if (!eng.engage_timestamp) continue;
+      const startMs = new Date(eng.engage_timestamp).getTime();
+      const endMs = eng.disengage_timestamp ? new Date(eng.disengage_timestamp).getTime() : Date.now();
+
+      // Engagement span (green for complete, cyan for active, orange for aborted)
+      const color = eng.status === 'complete' ? '#22c55e'
+        : eng.status === 'aborted' ? '#f97316'
+        : '#06b6d4';
+      segments.push({ id: eng.id, name: eng.name, startMs, endMs, type: 'engagement', color });
+
+      // Jam burst sub-segments (yellow/red overlay)
+      for (const burst of eng.bursts || []) {
+        if (!burst.jam_on_at) continue;
+        const burstStart = new Date(burst.jam_on_at).getTime();
+        const burstEnd = burst.jam_off_at ? new Date(burst.jam_off_at).getTime() : Date.now();
+        const burstColor = burst.gps_denial_detected ? '#ef4444' : '#eab308';
+        segments.push({ id: burst.id, name: `Burst ${burst.burst_seq}`, startMs: burstStart, endMs: burstEnd, type: 'jam_burst', color: burstColor });
+      }
+    }
+  }
+
   // Get connection status styling
   const getConnectionClass = (): string => {
     switch (connectionStatus) {
@@ -233,6 +273,33 @@ export default function TimelineControl({
           tabIndex={0}
         >
           <div className="timeline-track">
+            {/* Engagement segments overlay */}
+            {segments.map(seg => {
+              const leftPct = Math.max(0, ((seg.startMs - timelineStart) / duration) * 100);
+              const widthPct = Math.max(0.5, Math.min(100 - leftPct, ((seg.endMs - seg.startMs) / duration) * 100));
+              return (
+                <div
+                  key={seg.id}
+                  className={`timeline-segment timeline-segment--${seg.type}`}
+                  style={{
+                    left: `${leftPct}%`,
+                    width: `${widthPct}%`,
+                    background: seg.color,
+                  }}
+                  title={seg.name || seg.type}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (seg.type === 'engagement' && onMarkerClick) {
+                      onMarkerClick(seg.id);
+                    }
+                    // Jump to segment start
+                    setCurrentTime(seg.startMs);
+                    setIsLive(false);
+                    setIsPlaying(false);
+                  }}
+                />
+              );
+            })}
             <div
               className="timeline-progress"
               style={{ width: `${position}%` }}
