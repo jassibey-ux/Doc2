@@ -455,6 +455,13 @@ class CUASPlacement(Base):
     active = Column(Boolean, default=True)
     notes = Column(Text)
 
+    # Geotagging (populated from mobile companion or field visit)
+    geotagged_at = Column(DateTime)
+    geotagged_by_actor_id = Column(String(36), ForeignKey("session_actors.id"))
+    photo_url = Column(String(500))
+    gps_accuracy_m = Column(Float)
+    geotag_method = Column(String(20))  # gps, manual, photo, cot
+
     # Relationships
     session = relationship("TestSession", back_populates="cuas_placements")
     cuas_profile = relationship("CUASProfile", back_populates="placements")
@@ -501,6 +508,8 @@ class TrackerTelemetry(Base):
 
     # Additional
     battery_mv = Column(Float)
+    baro_alt_m = Column(Float)  # Barometric altitude (if available)
+    time_gps = Column(DateTime)  # GPS-reported timestamp (vs local receive time)
 
     # Relationships
     session = relationship("TestSession", back_populates="telemetry")
@@ -829,6 +838,7 @@ class SessionActor(Base):
     session_id = Column(String(36), ForeignKey("test_sessions.id"), nullable=False)
     name = Column(String(255), nullable=False)
     callsign = Column(String(50))
+    cot_uid = Column(String(100), unique=True)  # Cursor-on-Target UID for CoT listener mapping
 
     # Position (manual or tracker-derived)
     lat = Column(Float)
@@ -903,6 +913,188 @@ class EngagementJamBurst(Base):
 
     def __repr__(self):
         return f"<EngagementJamBurst(engagement={self.engagement_id}, seq={self.burst_seq})>"
+
+
+# ============================================================================
+# SDR READINGS MODEL
+# ============================================================================
+
+class SDRReading(Base):
+    """Spectrum data from HackRF or other SDR devices captured in the field."""
+
+    __tablename__ = "sdr_readings"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    session_id = Column(String(36), ForeignKey("test_sessions.id"), nullable=False)
+    actor_id = Column(String(36), ForeignKey("session_actors.id"))
+    timestamp = Column(DateTime, nullable=False)
+
+    # Position at capture time
+    lat = Column(Float)
+    lon = Column(Float)
+    alt_m = Column(Float)
+    gps_accuracy_m = Column(Float)
+
+    # SDR configuration
+    center_frequency_mhz = Column(Float, nullable=False)
+    bandwidth_mhz = Column(Float)
+    sample_rate_mhz = Column(Float)
+    gain_db = Column(Float)
+
+    # Readings data: [{frequency_mhz, power_dbm}]
+    readings = Column(JSONType)
+    device_info = Column(JSONType)  # {device, serial, firmware}
+    notes = Column(Text)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    session = relationship("TestSession")
+
+    __table_args__ = (
+        Index("idx_sdr_session", "session_id"),
+        Index("idx_sdr_timestamp", "timestamp"),
+        Index("idx_sdr_frequency", "center_frequency_mhz"),
+    )
+
+    def __repr__(self):
+        return f"<SDRReading(session={self.session_id}, freq={self.center_frequency_mhz}MHz)>"
+
+
+# ============================================================================
+# MEDIA ATTACHMENTS MODEL
+# ============================================================================
+
+class MediaAttachment(Base):
+    """Photos, files, and media attached to sessions or entities."""
+
+    __tablename__ = "media_attachments"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    session_id = Column(String(36), ForeignKey("test_sessions.id"))
+    site_id = Column(String(36), ForeignKey("sites.id"))
+
+    # Polymorphic entity reference (e.g., cuas_placement, engagement)
+    entity_type = Column(String(50))
+    entity_id = Column(String(36))
+
+    # File info
+    file_path = Column(String(500), nullable=False)
+    file_name = Column(String(255), nullable=False)
+    mime_type = Column(String(100))
+    file_size_bytes = Column(Integer)
+    thumbnail_path = Column(String(500))
+
+    # Content metadata
+    caption = Column(Text)
+    lat = Column(Float)
+    lon = Column(Float)
+    taken_at = Column(DateTime)
+
+    # Provenance
+    uploaded_by = Column(String(255))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    session = relationship("TestSession")
+
+    __table_args__ = (
+        Index("idx_media_session", "session_id"),
+        Index("idx_media_entity", "entity_type", "entity_id"),
+    )
+
+    def __repr__(self):
+        return f"<MediaAttachment(id={self.id}, file={self.file_name})>"
+
+
+# ============================================================================
+# OPERATOR POSITIONS MODEL
+# ============================================================================
+
+class OperatorPosition(Base):
+    """Time-series position data for field operators (from GPS, CoT, or manual entry)."""
+
+    __tablename__ = "operator_positions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(36), ForeignKey("test_sessions.id"), nullable=False)
+    actor_id = Column(String(36), ForeignKey("session_actors.id"), nullable=False)
+
+    # Position
+    timestamp = Column(DateTime, nullable=False)
+    lat = Column(Float, nullable=False)
+    lon = Column(Float, nullable=False)
+    alt_m = Column(Float)
+    heading_deg = Column(Float)
+    speed_mps = Column(Float)
+    gps_accuracy_m = Column(Float)
+
+    # Source
+    source = Column(String(20), default="gps")  # gps, cot, manual
+
+    __table_args__ = (
+        Index("idx_oppos_session_actor_time", "session_id", "actor_id", "timestamp"),
+        Index("idx_oppos_session", "session_id"),
+    )
+
+    def __repr__(self):
+        return f"<OperatorPosition(actor={self.actor_id}, time={self.timestamp})>"
+
+
+# ============================================================================
+# WORKSPACE LAYERS MODEL
+# ============================================================================
+
+class WorkspaceLayer(Base):
+    """User-imported or generated map layers (GeoJSON, KML, annotations)."""
+
+    __tablename__ = "workspace_layers"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    session_id = Column(String(36), ForeignKey("test_sessions.id"))
+    site_id = Column(String(36), ForeignKey("sites.id"))
+
+    # Layer info
+    name = Column(String(255), nullable=False)
+    layer_type = Column(String(20), nullable=False)  # geojson, kml, annotation, reference
+    geojson_data = Column(JSONType)
+    style = Column(JSONType)  # {color, opacity, lineWidth, fillColor, ...}
+
+    # Display
+    visible = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("idx_layers_session", "session_id"),
+        Index("idx_layers_site", "site_id"),
+    )
+
+    def __repr__(self):
+        return f"<WorkspaceLayer(id={self.id}, name={self.name}, type={self.layer_type})>"
+
+
+# ============================================================================
+# TRACKER ALIASES MODEL
+# ============================================================================
+
+class TrackerAlias(Base):
+    """Persistent tracker ID aliases (replaces Express JSON file)."""
+
+    __tablename__ = "tracker_aliases"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tracker_id = Column(String(100), nullable=False, unique=True, index=True)
+    alias = Column(String(255), nullable=False)
+    notes = Column(Text)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<TrackerAlias(tracker={self.tracker_id}, alias={self.alias})>"
 
 
 # ============================================================================

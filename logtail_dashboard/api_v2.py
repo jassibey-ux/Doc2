@@ -42,6 +42,11 @@ from .database.models import (
     generate_uuid,
     EngagementStatus,
     EmitterType,
+    SDRReading,
+    MediaAttachment,
+    OperatorPosition,
+    WorkspaceLayer,
+    TrackerAlias,
 )
 from .database.repositories import (
     SessionRepository,
@@ -4001,3 +4006,384 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "checks": checks,
         "version": "2.0.0",
     }
+
+
+# ============================================================================
+# SDR READINGS ENDPOINTS
+# ============================================================================
+
+@router.post("/sessions/{session_id}/sdr-readings")
+async def create_sdr_reading(
+    session_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create an SDR reading for a session."""
+    body = await request.json()
+    reading = SDRReading(
+        id=generate_uuid(),
+        session_id=session_id,
+        actor_id=body.get("actor_id"),
+        timestamp=datetime.fromisoformat(body["timestamp"]) if body.get("timestamp") else datetime.utcnow(),
+        lat=body.get("lat"),
+        lon=body.get("lon"),
+        alt_m=body.get("alt_m"),
+        gps_accuracy_m=body.get("gps_accuracy_m"),
+        center_frequency_mhz=body["center_frequency_mhz"],
+        bandwidth_mhz=body.get("bandwidth_mhz"),
+        sample_rate_mhz=body.get("sample_rate_mhz"),
+        gain_db=body.get("gain_db"),
+        readings=body.get("readings"),
+        device_info=body.get("device_info"),
+        notes=body.get("notes"),
+    )
+    db.add(reading)
+    await db.commit()
+    await db.refresh(reading)
+    return {"id": reading.id, "session_id": session_id}
+
+
+@router.get("/sessions/{session_id}/sdr-readings")
+async def list_sdr_readings(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """List SDR readings for a session."""
+    from sqlalchemy import select
+    result = await db.execute(
+        select(SDRReading)
+        .where(SDRReading.session_id == session_id)
+        .order_by(SDRReading.timestamp.asc())
+    )
+    readings = list(result.scalars().all())
+    return [
+        {
+            "id": r.id,
+            "actor_id": r.actor_id,
+            "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+            "lat": r.lat,
+            "lon": r.lon,
+            "center_frequency_mhz": r.center_frequency_mhz,
+            "bandwidth_mhz": r.bandwidth_mhz,
+            "gain_db": r.gain_db,
+            "readings": r.readings,
+            "device_info": r.device_info,
+            "notes": r.notes,
+        }
+        for r in readings
+    ]
+
+
+# ============================================================================
+# OPERATOR POSITIONS ENDPOINTS
+# ============================================================================
+
+@router.post("/sessions/{session_id}/operator-positions")
+async def create_operator_positions(
+    session_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Bulk insert operator positions (from CoT or GPS)."""
+    body = await request.json()
+    records = body if isinstance(body, list) else [body]
+
+    for rec in records:
+        pos = OperatorPosition(
+            session_id=session_id,
+            actor_id=rec["actor_id"],
+            timestamp=datetime.fromisoformat(rec["timestamp"]) if rec.get("timestamp") else datetime.utcnow(),
+            lat=rec["lat"],
+            lon=rec["lon"],
+            alt_m=rec.get("alt_m"),
+            heading_deg=rec.get("heading_deg"),
+            speed_mps=rec.get("speed_mps"),
+            gps_accuracy_m=rec.get("gps_accuracy_m"),
+            source=rec.get("source", "gps"),
+        )
+        db.add(pos)
+
+    await db.commit()
+    return {"inserted": len(records)}
+
+
+@router.get("/sessions/{session_id}/operator-positions")
+async def list_operator_positions(
+    session_id: str,
+    actor_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """List operator positions for a session, optionally filtered by actor."""
+    from sqlalchemy import select
+    query = select(OperatorPosition).where(OperatorPosition.session_id == session_id)
+    if actor_id:
+        query = query.where(OperatorPosition.actor_id == actor_id)
+    query = query.order_by(OperatorPosition.timestamp.asc())
+
+    result = await db.execute(query)
+    positions = list(result.scalars().all())
+    return [
+        {
+            "actor_id": p.actor_id,
+            "timestamp": p.timestamp.isoformat() if p.timestamp else None,
+            "lat": p.lat,
+            "lon": p.lon,
+            "alt_m": p.alt_m,
+            "heading_deg": p.heading_deg,
+            "speed_mps": p.speed_mps,
+            "source": p.source,
+        }
+        for p in positions
+    ]
+
+
+# ============================================================================
+# WORKSPACE LAYERS ENDPOINTS
+# ============================================================================
+
+@router.post("/workspace-layers")
+async def create_workspace_layer(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a workspace layer (GeoJSON, KML, annotation)."""
+    body = await request.json()
+    layer = WorkspaceLayer(
+        id=generate_uuid(),
+        session_id=body.get("session_id"),
+        site_id=body.get("site_id"),
+        name=body["name"],
+        layer_type=body.get("layer_type", "geojson"),
+        geojson_data=body.get("geojson_data"),
+        style=body.get("style"),
+        visible=body.get("visible", True),
+        sort_order=body.get("sort_order", 0),
+    )
+    db.add(layer)
+    await db.commit()
+    await db.refresh(layer)
+    return {
+        "id": layer.id,
+        "name": layer.name,
+        "layer_type": layer.layer_type,
+    }
+
+
+@router.get("/workspace-layers")
+async def list_workspace_layers(
+    session_id: Optional[str] = Query(None),
+    site_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """List workspace layers, filtered by session or site."""
+    from sqlalchemy import select
+    query = select(WorkspaceLayer)
+    if session_id:
+        query = query.where(WorkspaceLayer.session_id == session_id)
+    if site_id:
+        query = query.where(WorkspaceLayer.site_id == site_id)
+    query = query.order_by(WorkspaceLayer.sort_order.asc())
+
+    result = await db.execute(query)
+    layers = list(result.scalars().all())
+    return [
+        {
+            "id": l.id,
+            "session_id": l.session_id,
+            "site_id": l.site_id,
+            "name": l.name,
+            "layer_type": l.layer_type,
+            "geojson_data": l.geojson_data,
+            "style": l.style,
+            "visible": l.visible,
+            "sort_order": l.sort_order,
+        }
+        for l in layers
+    ]
+
+
+@router.put("/workspace-layers/{layer_id}")
+async def update_workspace_layer(
+    layer_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a workspace layer."""
+    from sqlalchemy import select
+    result = await db.execute(select(WorkspaceLayer).where(WorkspaceLayer.id == layer_id))
+    layer = result.scalar_one_or_none()
+    if not layer:
+        raise HTTPException(status_code=404, detail="Layer not found")
+
+    body = await request.json()
+    for field in ["name", "layer_type", "geojson_data", "style", "visible", "sort_order"]:
+        if field in body:
+            setattr(layer, field, body[field])
+
+    await db.commit()
+    return {"id": layer.id, "name": layer.name}
+
+
+@router.delete("/workspace-layers/{layer_id}")
+async def delete_workspace_layer(
+    layer_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a workspace layer."""
+    from sqlalchemy import select, delete as sa_delete
+    result = await db.execute(select(WorkspaceLayer).where(WorkspaceLayer.id == layer_id))
+    layer = result.scalar_one_or_none()
+    if not layer:
+        raise HTTPException(status_code=404, detail="Layer not found")
+
+    await db.delete(layer)
+    await db.commit()
+    return {"success": True}
+
+
+# ============================================================================
+# MEDIA ATTACHMENTS ENDPOINTS
+# ============================================================================
+
+@router.post("/media-attachments")
+async def create_media_attachment(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Register a media attachment (file must already be stored on disk)."""
+    body = await request.json()
+    attachment = MediaAttachment(
+        id=generate_uuid(),
+        session_id=body.get("session_id"),
+        site_id=body.get("site_id"),
+        entity_type=body.get("entity_type"),
+        entity_id=body.get("entity_id"),
+        file_path=body["file_path"],
+        file_name=body["file_name"],
+        mime_type=body.get("mime_type"),
+        file_size_bytes=body.get("file_size_bytes"),
+        thumbnail_path=body.get("thumbnail_path"),
+        caption=body.get("caption"),
+        lat=body.get("lat"),
+        lon=body.get("lon"),
+        taken_at=datetime.fromisoformat(body["taken_at"]) if body.get("taken_at") else None,
+        uploaded_by=body.get("uploaded_by"),
+    )
+    db.add(attachment)
+    await db.commit()
+    await db.refresh(attachment)
+    return {"id": attachment.id, "file_name": attachment.file_name}
+
+
+@router.get("/media-attachments")
+async def list_media_attachments(
+    session_id: Optional[str] = Query(None),
+    entity_type: Optional[str] = Query(None),
+    entity_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """List media attachments filtered by session or entity."""
+    from sqlalchemy import select
+    query = select(MediaAttachment)
+    if session_id:
+        query = query.where(MediaAttachment.session_id == session_id)
+    if entity_type:
+        query = query.where(MediaAttachment.entity_type == entity_type)
+    if entity_id:
+        query = query.where(MediaAttachment.entity_id == entity_id)
+    query = query.order_by(MediaAttachment.created_at.desc())
+
+    result = await db.execute(query)
+    attachments = list(result.scalars().all())
+    return [
+        {
+            "id": a.id,
+            "session_id": a.session_id,
+            "entity_type": a.entity_type,
+            "entity_id": a.entity_id,
+            "file_path": a.file_path,
+            "file_name": a.file_name,
+            "mime_type": a.mime_type,
+            "file_size_bytes": a.file_size_bytes,
+            "caption": a.caption,
+            "lat": a.lat,
+            "lon": a.lon,
+            "taken_at": a.taken_at.isoformat() if a.taken_at else None,
+            "uploaded_by": a.uploaded_by,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in attachments
+    ]
+
+
+# ============================================================================
+# TRACKER ALIASES ENDPOINTS
+# ============================================================================
+
+@router.get("/tracker-aliases")
+async def list_tracker_aliases(
+    db: AsyncSession = Depends(get_db),
+):
+    """List all tracker aliases."""
+    from sqlalchemy import select
+    result = await db.execute(select(TrackerAlias).order_by(TrackerAlias.tracker_id))
+    aliases = list(result.scalars().all())
+    return [
+        {
+            "id": a.id,
+            "tracker_id": a.tracker_id,
+            "alias": a.alias,
+            "notes": a.notes,
+        }
+        for a in aliases
+    ]
+
+
+@router.put("/tracker-aliases/{tracker_id}")
+async def upsert_tracker_alias(
+    tracker_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create or update a tracker alias."""
+    from sqlalchemy import select
+    body = await request.json()
+
+    result = await db.execute(
+        select(TrackerAlias).where(TrackerAlias.tracker_id == tracker_id)
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.alias = body["alias"]
+        if "notes" in body:
+            existing.notes = body["notes"]
+    else:
+        alias = TrackerAlias(
+            tracker_id=tracker_id,
+            alias=body["alias"],
+            notes=body.get("notes"),
+        )
+        db.add(alias)
+
+    await db.commit()
+    return {"tracker_id": tracker_id, "alias": body["alias"]}
+
+
+@router.delete("/tracker-aliases/{tracker_id}")
+async def delete_tracker_alias(
+    tracker_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a tracker alias."""
+    from sqlalchemy import select
+    result = await db.execute(
+        select(TrackerAlias).where(TrackerAlias.tracker_id == tracker_id)
+    )
+    existing = result.scalar_one_or_none()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Alias not found")
+
+    await db.delete(existing)
+    await db.commit()
+    return {"success": True}

@@ -25,6 +25,11 @@ from .models import (
     EngagementMetrics,
     SessionActor,
     EngagementJamBurst,
+    SDRReading,
+    MediaAttachment,
+    OperatorPosition,
+    WorkspaceLayer,
+    TrackerAlias,
 )
 from .csv_importer import CSVImporter
 
@@ -53,6 +58,11 @@ __all__ = [
     "EngagementMetrics",
     "SessionActor",
     "EngagementJamBurst",
+    "SDRReading",
+    "MediaAttachment",
+    "OperatorPosition",
+    "WorkspaceLayer",
+    "TrackerAlias",
     # Utilities
     "CSVImporter",
 ]
