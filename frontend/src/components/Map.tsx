@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import type { DroneSummary, PositionPoint, GPSHealthStatus } from '../types/drone';
-import type { CUASPlacement, CUASProfile, EnhancedPositionPoint, SiteDefinition, GeoPoint, Engagement, SessionActor, JamBurst } from '../types/workflow';
+import type { CUASPlacement, CUASProfile, EnhancedPositionPoint, SiteDefinition, GeoPoint, Engagement, SessionActor, JamBurst, DroneProfile } from '../types/workflow';
 import {
   generateCUASCoverageGeoJSON,
   generateCUASMarkersGeoJSON,
@@ -19,6 +19,7 @@ import {
 import { createQualityTrackGeoJSON } from '../utils/trackSegmentation';
 import { computeEngagementGeometries, engagementGeometriesToGeoJSON } from '../utils/engagementGeometry';
 import { haversineDistance, bearing, midpoint, formatDistance, formatBearing } from '../utils/geo';
+import { getDroneModel } from '../utils/modelRegistry';
 import type { ImportedLayer } from './MapFileDropHandler';
 
 interface MapProps {
@@ -75,6 +76,8 @@ interface MapProps {
   wizardCuasPlacements?: Array<{ id: string; cuasProfileId: string; position: { lat: number; lon: number }; orientation: number }>;
   wizardCuasProfiles?: CUASProfile[];
   onWizardCuasMoved?: (placementId: string, lat: number, lon: number) => void;
+  // Drone profile mapping for model-specific marker thumbnails (tracker_id -> DroneProfile)
+  droneProfileMap?: Map<string, DroneProfile>;
 }
 
 // Color palette for drone tracks (cycle through for different drones)
@@ -104,7 +107,7 @@ const GPS_HEALTH_COLORS: Record<GPSHealthStatus, string> = {
 };
 
 // Custom marker element factory with drone icon
-function createMarkerElement(drone: DroneSummary, isSelected: boolean): HTMLDivElement {
+function createMarkerElement(drone: DroneSummary, isSelected: boolean, droneProfile?: DroneProfile): HTMLDivElement {
   const el = document.createElement('div');
   el.className = 'drone-marker';
 
@@ -177,10 +180,42 @@ function createMarkerElement(drone: DroneSummary, isSelected: boolean): HTMLDivE
     el.appendChild(badge);
   }
 
-  // Add icon (safe - comes from our constant)
+  // Add icon — prefer model-specific top-down thumbnail PNG, fallback to SVG
+  const heading = drone.heading_deg ?? 0;
+  const modelAsset = getDroneModel(droneProfile);
+  const thumbnailUrl = modelAsset?.thumbnailTopPath;
+
   const iconDiv = document.createElement('div');
   iconDiv.className = 'drone-icon';
-  iconDiv.innerHTML = PLANE_SVG;
+
+  if (thumbnailUrl) {
+    // Use model-specific top-down thumbnail image with heading rotation
+    const img = document.createElement('img');
+    img.src = thumbnailUrl;
+    img.style.width = '32px';
+    img.style.height = '32px';
+    img.style.transform = `rotate(${heading}deg)`;
+    img.style.transition = 'transform 0.3s ease';
+    img.style.pointerEvents = 'none';
+    img.draggable = false;
+    img.onerror = () => {
+      // Fallback to SVG if thumbnail not found (files not yet downloaded)
+      img.style.display = 'none';
+      const fallbackDiv = document.createElement('div');
+      fallbackDiv.innerHTML = PLANE_SVG;
+      fallbackDiv.style.transform = `rotate(${heading}deg)`;
+      fallbackDiv.style.transition = 'transform 0.3s ease';
+      iconDiv.appendChild(fallbackDiv);
+    };
+    iconDiv.appendChild(img);
+  } else {
+    // Default SVG marker with heading rotation
+    const svgWrapper = document.createElement('div');
+    svgWrapper.innerHTML = PLANE_SVG;
+    svgWrapper.style.transform = `rotate(${heading}deg)`;
+    svgWrapper.style.transition = 'transform 0.3s ease';
+    iconDiv.appendChild(svgWrapper);
+  }
   el.appendChild(iconDiv);
 
   // Add label (use textContent for safety)
@@ -231,6 +266,7 @@ export default function MapComponent({
   wizardCuasPlacements = [],
   wizardCuasProfiles = [],
   onWizardCuasMoved,
+  droneProfileMap,
 }: MapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -1702,14 +1738,15 @@ export default function MapComponent({
       }
 
       const isSelected = id === selectedDroneId;
+      const profile = droneProfileMap?.get(id);
       const existingMarker = markersRef.current.get(id);
 
       if (existingMarker) {
         // Update existing marker position
         existingMarker.setLngLat([drone.lon, drone.lat]);
 
-        // Update marker element
-        const newEl = createMarkerElement(drone, isSelected);
+        // Update marker element (includes heading rotation via createMarkerElement)
+        const newEl = createMarkerElement(drone, isSelected, profile);
         newEl.addEventListener('click', (e) => {
           e.stopPropagation();
           handleMarkerClick(id);
@@ -1720,7 +1757,7 @@ export default function MapComponent({
         oldEl.innerHTML = newEl.innerHTML;
       } else {
         // Create new marker
-        const el = createMarkerElement(drone, isSelected);
+        const el = createMarkerElement(drone, isSelected, profile);
         el.addEventListener('click', (e) => {
           e.stopPropagation();
           handleMarkerClick(id);
@@ -1736,7 +1773,7 @@ export default function MapComponent({
         markersRef.current.set(id, marker);
       }
     }
-  }, [drones, selectedDroneId, handleMarkerClick]);
+  }, [drones, selectedDroneId, handleMarkerClick, droneProfileMap]);
 
   // Fly to selected drone
   useEffect(() => {

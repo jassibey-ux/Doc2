@@ -29,7 +29,8 @@ import LinkBudgetPanel from './LinkBudgetPanel';
 import CoordinateBar from './CoordinateBar';
 import MapFileDropHandler from './MapFileDropHandler';
 import type { ImportedLayer } from './MapFileDropHandler';
-import { FileText, X, Globe, Map as MapIcon, Signal, Box, Target, MapPin, Globe2, Mountain, AlertTriangle, Radio, Ruler } from 'lucide-react';
+import { FileText, X, Globe, Map as MapIcon, Signal, Box, Target, MapPin, Globe2, Mountain, AlertTriangle, Radio, Ruler, Camera } from 'lucide-react';
+import { SiteReconViewer } from './SiteReconViewer';
 import type { GeoPoint } from '../types/workflow';
 
 export default function MapView() {
@@ -71,6 +72,8 @@ export default function MapView() {
     setIsDrawingMode,
     setDrawingType,
     setPendingDrawingResult,
+    siteReconCaptures,
+    loadSiteRecon,
   } = useWorkflow();
   const {
     currentPhase,
@@ -103,6 +106,22 @@ export default function MapView() {
   // 3D view toggle: 'none' | 'maplibre3d' | 'cesium'
   const [show3DView, setShow3DView] = useState(false);
   const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
+
+  // Site Recon viewer
+  const [showReconViewer, setShowReconViewer] = useState(false);
+
+  // Build tracker_id -> DroneProfile map for 2D marker thumbnails
+  const droneProfileMap = useMemo(() => {
+    const map = new Map<string, import('../types/workflow').DroneProfile>();
+    const assignments = phaseActiveSession?.tracker_assignments;
+    if (assignments && droneProfiles) {
+      for (const a of assignments) {
+        const profile = droneProfiles.find(p => p.id === a.drone_profile_id);
+        if (profile) map.set(a.tracker_id, profile);
+      }
+    }
+    return map;
+  }, [phaseActiveSession?.tracker_assignments, droneProfiles]);
 
   // Terrain/RF tools (use selected drone + first CUAS placement as endpoints)
   const [showTerrainProfile, setShowTerrainProfile] = useState(false);
@@ -277,9 +296,12 @@ export default function MapView() {
     weatherNotes: string;
   }) => {
     try {
+      console.log('[SESSION CREATE] Step 1: Processing wizard data', JSON.stringify(sessionData, null, 2));
+
       // Create new site if needed
       let siteId = sessionData.siteId;
       if (!siteId && sessionData.newSiteName) {
+        console.log('[SESSION CREATE] Step 1b: Creating new site:', sessionData.newSiteName);
         // v2 SiteCreateRequest expects flat center_lat/center_lon
         const newSite = await createSite({
           name: sessionData.newSiteName,
@@ -291,6 +313,7 @@ export default function MapView() {
           zones: [],
         } as any);
         siteId = newSite.id;
+        console.log('[SESSION CREATE] Step 1b: Site created:', siteId);
       }
 
       // Build tracker assignments for v2 API (flat format)
@@ -311,8 +334,7 @@ export default function MapView() {
         active: false,
       }));
 
-      // Create the test session via v2 API with inline relations
-      const testSession = await createTestSession({
+      const createPayload = {
         name: sessionData.name,
         site_id: siteId || null,
         status: 'planning',
@@ -320,18 +342,31 @@ export default function MapView() {
         cuas_placements: cuasPlacements,
         operator_name: sessionData.operatorName,
         weather_notes: sessionData.weatherNotes,
-      } as any);
+      };
+      console.log('[SESSION CREATE] Step 2: Creating session with payload:', JSON.stringify(createPayload, null, 2));
+
+      // Create the test session via v2 API with inline relations
+      const testSession = await createTestSession(createPayload as any);
+      console.log('[SESSION CREATE] Step 3: Session created:', JSON.stringify(testSession, null, 2));
 
       // Start the test session
-      await startTest(testSession.id);
+      console.log('[SESSION CREATE] Step 4: Starting session:', testSession.id);
+      const startedSession = await startTest(testSession.id);
+      if (!startedSession) {
+        throw new Error('Failed to start session — backend returned no session');
+      }
+      console.log('[SESSION CREATE] Step 5: Session started, navigating to live view');
 
       // Navigate to Session Console for focused recording view
       navigate(`/session/${testSession.id}/live`);
     } catch (error) {
-      console.error('Failed to start session:', error);
+      console.error('[SESSION CREATE] FAILED at some step:', error);
+      console.error('[SESSION CREATE] Error name:', (error as any)?.name);
+      console.error('[SESSION CREATE] Error message:', (error as any)?.message);
+      console.error('[SESSION CREATE] Error stack:', (error as any)?.stack);
       throw error;
     }
-  }, [createSite, createTestSession, startTest, navigate]);
+  }, [createSite, createTestSession, startTest, navigate, mapCenter]);
 
   // Auto-dismiss new file alert after 5 seconds
   useEffect(() => {
@@ -512,6 +547,7 @@ export default function MapView() {
             measureMode={measureMode}
             onMeasurementAdded={handleMeasurementAdded}
             importedLayers={importedLayers}
+            droneProfileMap={droneProfileMap}
           />
         </MapFileDropHandler>
 
@@ -543,6 +579,19 @@ export default function MapView() {
               cuasPlacements={phaseActiveSession?.cuas_placements || []}
               cuasProfiles={cuasProfiles}
               onClose={() => setShowCesiumGlobe(false)}
+              initialCameraState3D={selectedSite?.camera_state_3d}
+              droneProfiles={droneProfiles}
+            />
+          </div>
+        )}
+
+        {/* Site Recon Viewer Overlay */}
+        {showReconViewer && selectedSite && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 25 }}>
+            <SiteReconViewer
+              site={selectedSite}
+              captures={siteReconCaptures.get(selectedSite.id) || []}
+              onClose={() => setShowReconViewer(false)}
             />
           </div>
         )}
@@ -596,6 +645,20 @@ export default function MapView() {
           >
             <Globe2 size={18} />
           </button>
+
+          {/* Site Recon Button (visible when site has captured recon) */}
+          {selectedSite?.recon_status === 'captured' && (
+            <button
+              className={`map-control-btn ${showReconViewer ? 'active' : ''}`}
+              onClick={() => {
+                loadSiteRecon(selectedSite.id);
+                setShowReconViewer(true);
+              }}
+              title="Site Recon"
+            >
+              <Camera size={18} />
+            </button>
+          )}
 
           {/* Sites / Places Button */}
           <button

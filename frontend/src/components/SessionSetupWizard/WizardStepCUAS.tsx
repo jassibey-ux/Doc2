@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { Radio, Trash2, RotateCw, Move, ChevronDown, ChevronUp } from 'lucide-react';
+import { lazy, Suspense, useState } from 'react';
+import { Radio, Trash2, RotateCw, Move, ChevronDown, ChevronUp, Box } from 'lucide-react';
 import { GlassCard, GlassButton, GlassSelect, GlassInput } from '../ui/GlassUI';
 import type { WizardState, WizardAction, CUASPlacementData } from './wizardTypes';
-import type { CUASProfile } from '../../types/workflow';
+import type { SiteDefinition, CUASProfile } from '../../types/workflow';
+
+const Site3DViewer = lazy(() => import('../Site3DViewer'));
 
 interface WizardStepCUASProps {
   state: WizardState;
@@ -10,6 +12,8 @@ interface WizardStepCUASProps {
   cuasProfiles: CUASProfile[];
   onPlaceOnMap?: (placementId: string) => void;
   mapCenter?: { lat: number; lon: number };
+  selectedSite?: SiteDefinition;
+  cuasProfilesList?: CUASProfile[];
 }
 
 export default function WizardStepCUAS({
@@ -18,8 +22,12 @@ export default function WizardStepCUAS({
   cuasProfiles,
   onPlaceOnMap,
   mapCenter = { lat: 0, lon: 0 },
+  selectedSite,
+  cuasProfilesList,
 }: WizardStepCUASProps) {
   const [expandedPlacement, setExpandedPlacement] = useState<string | null>(null);
+  const [show3DPlacement, setShow3DPlacement] = useState(false);
+  const [tileMode, _setTileMode] = useState<'osm' | 'google3d'>('osm');
 
   // Generate unique ID for new placement
   const generatePlacementId = () => `cuas-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -217,6 +225,17 @@ export default function WizardStepCUAS({
                         onClick={() => onPlaceOnMap(placement.id)}
                       >
                         <Move size={14} />
+                      </GlassButton>
+                    )}
+
+                    {/* Place in 3D button */}
+                    {selectedSite && (
+                      <GlassButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShow3DPlacement(true)}
+                      >
+                        <Box size={14} />
                       </GlassButton>
                     )}
 
@@ -440,6 +459,47 @@ export default function WizardStepCUAS({
           </span>
         )}
       </div>
+
+      {/* 3D Placement Viewer Overlay */}
+      {show3DPlacement && selectedSite && (
+        <Suspense fallback={<div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>Loading 3D viewer...</div>}>
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 3000,
+          }}>
+            <Site3DViewer
+              site={selectedSite}
+              cuasPlacements={state.cuasPlacements.map(p => ({
+                id: p.id,
+                cuas_profile_id: p.cuasProfileId,
+                position: { lat: p.position.lat, lon: p.position.lon },
+                height_agl_m: p.heightAgl,
+                orientation_deg: p.orientation,
+                active: true,
+              }))}
+              cuasProfiles={cuasProfilesList}
+              mode="interactive"
+              tileMode={tileMode}
+              initialCameraState={selectedSite.camera_state_3d}
+              onCuasPlaced={(position) => {
+                // Find the first placement without a real position, or create a new one
+                const unplacedId = state.cuasPlacements.find(
+                  p => p.position.lat === 0 && p.position.lon === 0
+                )?.id;
+                if (unplacedId) {
+                  dispatch({
+                    type: 'UPDATE_CUAS_PLACEMENT',
+                    placementId: unplacedId,
+                    updates: { position: { lat: position.lat, lon: position.lon } },
+                  });
+                }
+              }}
+              onClose={() => setShow3DPlacement(false)}
+            />
+          </div>
+        </Suspense>
+      )}
     </div>
   );
 }

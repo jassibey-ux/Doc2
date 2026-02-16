@@ -245,6 +245,8 @@ export default function SessionSetupWizard({
             cuasProfiles={cuasProfiles}
             mapCenter={mapCenter}
             onPlaceOnMap={handlePlaceOnMap}
+            selectedSite={state.selectedSiteId ? sites.find(s => s.id === state.selectedSiteId) : undefined}
+            cuasProfilesList={cuasProfiles}
           />
         );
       case 3:

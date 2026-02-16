@@ -17,9 +17,13 @@ import type {
   SiteDefinition,
   Engagement,
   JamBurst,
+  CameraState3D,
+  DroneProfile,
 } from '../types/workflow';
 import { QUALITY_COLORS } from '../utils/trackSegmentation';
 import { computeEngagementGeometries } from '../utils/engagementGeometry';
+import { getDroneModel, getCUASModel } from '../utils/modelRegistry';
+import { createModelGraphicsOptions, createModelOrientation } from '../utils/modelLoader';
 
 // Cesium types - lazy loaded
 type CesiumViewer = any;
@@ -55,6 +59,9 @@ interface CesiumMapProps {
   activeBursts?: Map<string, JamBurst>;
   onCuasClick?: (cuasPlacementId: string) => void;
   engagementModeCuasId?: string | null;
+  initialCameraState3D?: CameraState3D;
+  onCameraStateChange?: (state: CameraState3D) => void;
+  droneProfiles?: DroneProfile[];
 }
 
 const CesiumMap: React.FC<CesiumMapProps> = ({
@@ -74,6 +81,9 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
   activeBursts,
   onCuasClick,
   engagementModeCuasId,
+  initialCameraState3D,
+  onCameraStateChange,
+  droneProfiles,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CesiumViewer>(null);
@@ -136,6 +146,48 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
             }
           }
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+        // Add OSM Buildings for 3D context (free, no API key needed)
+        try {
+          const osmBuildings = await Cesium.createOsmBuildingsAsync();
+          (osmBuildings as any)._site3dOsm = true; // Tag for identification
+          viewer.scene.primitives.add(osmBuildings);
+        } catch (e) {
+          console.warn('[CesiumMap] OSM Buildings not available:', e);
+        }
+
+        // If explicit 3D camera state provided, fly to it
+        if (initialCameraState3D) {
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(
+              initialCameraState3D.longitude,
+              initialCameraState3D.latitude,
+              initialCameraState3D.height,
+            ),
+            orientation: {
+              heading: Cesium.Math.toRadians(initialCameraState3D.heading),
+              pitch: Cesium.Math.toRadians(initialCameraState3D.pitch),
+              roll: Cesium.Math.toRadians(initialCameraState3D.roll),
+            },
+            duration: 2,
+          });
+        }
+
+        // Report camera state changes back to parent
+        if (onCameraStateChange) {
+          viewer.camera.moveEnd.addEventListener(() => {
+            const cam = viewer.camera;
+            const carto = Cesium.Cartographic.fromCartesian(cam.position);
+            onCameraStateChange({
+              longitude: Cesium.Math.toDegrees(carto.longitude),
+              latitude: Cesium.Math.toDegrees(carto.latitude),
+              height: carto.height,
+              heading: Cesium.Math.toDegrees(cam.heading),
+              pitch: Cesium.Math.toDegrees(cam.pitch),
+              roll: Cesium.Math.toDegrees(cam.roll),
+            });
+          });
+        }
 
         viewerRef.current = viewer;
         setCesiumLoaded(true);
@@ -244,19 +296,19 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
 
         // CUAS marker (description stores placement ID for click handler)
         const isSelected = engagementModeCuasId === placement.id;
-        viewer.entities.add({
+        const cuasModelAsset = profile ? getCUASModel(profile.type) : null;
+        const hasCuasModel = cuasModelAsset && cuasModelAsset.glbPath;
+        const cuasAlt = (placement.height_agl_m || 0) + 2;
+        const orientationDeg = placement.orientation_deg ?? 0;
+
+        const cuasMarkerEntity: any = {
           name: `cuas_${placement.id}`,
           description: placement.id,
           position: Cesium.Cartesian3.fromDegrees(
             placement.position.lon,
             placement.position.lat,
-            (placement.height_agl_m || 0) + 2,
+            cuasAlt,
           ),
-          billboard: {
-            image: createCUASDataUri(placementColor),
-            width: isSelected ? 36 : 28,
-            height: isSelected ? 36 : 28,
-          },
           label: showLabels ? {
             text: profile?.name || 'CUAS',
             font: '11px monospace',
@@ -267,7 +319,26 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
             pixelOffset: new Cesium.Cartesian2(0, -20),
           } : undefined,
-        });
+        };
+
+        if (hasCuasModel) {
+          // 3D model entity
+          cuasMarkerEntity.model = new Cesium.ModelGraphics(
+            createModelGraphicsOptions(Cesium, cuasModelAsset, orientationDeg, false)
+          );
+          cuasMarkerEntity.orientation = createModelOrientation(
+            Cesium, placement.position.lon, placement.position.lat, cuasAlt, orientationDeg
+          );
+        } else {
+          // Fallback to billboard/marker (SVG icon)
+          cuasMarkerEntity.billboard = {
+            image: createCUASDataUri(placementColor),
+            width: isSelected ? 36 : 28,
+            height: isSelected ? 36 : 28,
+          };
+        }
+
+        viewer.entities.add(cuasMarkerEntity);
 
         // Coverage circle (36 points)
         const circlePositions: any[] = [];
@@ -422,16 +493,16 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
         });
       }
 
-      // Drone point marker
-      viewer.entities.add({
+      // Try to find a matching drone profile for 3D model
+      const droneProfile = droneProfiles?.find(dp => dp.id === trackerId);
+      const droneModelAsset = droneProfile ? getDroneModel(droneProfile) : null;
+      const hasGlbModel = droneModelAsset && droneModelAsset.glbPath;
+      const droneHeading = currentDroneData?.get(trackerId)?.heading_deg ?? 0;
+
+      // Drone marker — 3D model when available, point fallback otherwise
+      const droneMarkerEntity: any = {
         name: `drone_${trackerId}_marker`,
         position: Cesium.Cartesian3.fromDegrees(lastPos.lon, lastPos.lat, altitude + 2),
-        point: {
-          pixelSize: markerSize,
-          color: Cesium.Color.fromCssColorString(baseColor),
-          outlineColor: isSelected ? Cesium.Color.WHITE : Cesium.Color.BLACK,
-          outlineWidth: isSelected ? 3 : 1,
-        },
         label: showLabels ? {
           text: `${trackerId}\n${altitude.toFixed(0)}m`,
           font: isSelected ? 'bold 12px monospace' : '11px monospace',
@@ -444,7 +515,27 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
           showBackground: isSelected,
           backgroundColor: Cesium.Color.fromCssColorString(baseColor).withAlpha(0.7),
         } : undefined,
-      });
+      };
+
+      if (hasGlbModel) {
+        // 3D model entity
+        droneMarkerEntity.model = new Cesium.ModelGraphics(
+          createModelGraphicsOptions(Cesium, droneModelAsset, droneHeading, isSelected)
+        );
+        droneMarkerEntity.orientation = createModelOrientation(
+          Cesium, lastPos.lon, lastPos.lat, altitude + 2, droneHeading
+        );
+      } else {
+        // Fallback to point entity (existing behavior)
+        droneMarkerEntity.point = {
+          pixelSize: markerSize,
+          color: Cesium.Color.fromCssColorString(baseColor),
+          outlineColor: isSelected ? Cesium.Color.WHITE : Cesium.Color.BLACK,
+          outlineWidth: isSelected ? 3 : 1,
+        };
+      }
+
+      viewer.entities.add(droneMarkerEntity);
     }
 
     // ── Engagement Visualization (shared geometry module) ──
@@ -538,6 +629,7 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
     cesiumLoaded, droneHistory, enhancedHistory, currentTime, timelineStart,
     cuasPlacements, cuasProfiles, cuasJamStates, site, engagements,
     currentDroneData, selectedDroneId, showLabels, activeBursts, engagementModeCuasId,
+    droneProfiles,
   ]);
 
   // Fly to selected drone

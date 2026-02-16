@@ -118,6 +118,21 @@ MIGRATIONS: List[Migration] = [
             DROP TABLE IF EXISTS engagements
         """,
     ),
+    Migration(
+        version=3,
+        name="Add 3D model and recon fields",
+        up_sql="""
+            ALTER TABLE sites ADD COLUMN recon_status VARCHAR(20) DEFAULT 'none';
+            ALTER TABLE sites ADD COLUMN recon_captured_at DATETIME;
+            ALTER TABLE sites ADD COLUMN camera_state_3d TEXT;
+            ALTER TABLE drone_profiles ADD COLUMN model_3d VARCHAR(255);
+            ALTER TABLE cuas_profiles ADD COLUMN model_3d VARCHAR(255);
+        """,
+        down_sql="""
+            -- SQLite doesn't support DROP COLUMN before 3.35.0
+            -- These columns will be ignored if not present
+        """,
+    ),
 ]
 
 

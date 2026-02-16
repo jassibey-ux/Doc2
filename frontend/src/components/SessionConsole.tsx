@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { useNavigate, useParams, useBlocker } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useWorkflow } from '../contexts/WorkflowContext';
 import { useTestSessionPhase } from '../contexts/TestSessionPhaseContext';
@@ -97,6 +97,7 @@ export default function SessionConsole() {
   const {
     selectedSite,
     cuasProfiles,
+    droneProfiles,
     addEvent,
     sites,
     selectSite,
@@ -586,10 +587,38 @@ export default function SessionConsole() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [currentPhase]);
 
-  // React Router in-app navigation blocker
-  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
-    currentPhase === 'active' && currentLocation.pathname !== nextLocation.pathname
-  );
+  // Manual navigation blocker (useBlocker requires data router which we don't use)
+  const [blockerState, setBlockerState] = useState<'unblocked' | 'blocked'>('unblocked');
+  const pendingNavigationRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (currentPhase !== 'active') return;
+    const handler = (_e: PopStateEvent) => {
+      // Push state back to prevent leaving
+      window.history.pushState(null, '', window.location.href);
+      setBlockerState('blocked');
+      pendingNavigationRef.current = () => window.history.back();
+    };
+    // Push an extra history entry so we can catch the back button
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, [currentPhase]);
+
+  const blocker = {
+    state: blockerState,
+    reset: () => {
+      setBlockerState('unblocked');
+      pendingNavigationRef.current = null;
+    },
+    proceed: () => {
+      setBlockerState('unblocked');
+      if (pendingNavigationRef.current) {
+        pendingNavigationRef.current();
+        pendingNavigationRef.current = null;
+      }
+    },
+  };
 
   // If no active session, show loading or redirect
   if (!activeSession) {
@@ -850,7 +879,7 @@ export default function SessionConsole() {
                     >
                       <span className="sc-cuas-name">{profile?.name || `CUAS ${idx + 1}`}</span>
                       <span className="sc-cuas-location">
-                        {placement.position.lat.toFixed(4)}, {placement.position.lon.toFixed(4)}
+                        {placement.position?.lat?.toFixed(4) ?? (placement as any).lat?.toFixed(4) ?? '?'}, {placement.position?.lon?.toFixed(4) ?? (placement as any).lon?.toFixed(4) ?? '?'}
                       </span>
                     </div>
                     {/* Inline engagement/JAM buttons */}
@@ -1058,6 +1087,8 @@ export default function SessionConsole() {
                   activeBursts={activeBursts}
                   onCuasClick={handleCuasClickOnMap}
                   engagementModeCuasId={engagementModeCuasId}
+                  initialCameraState3D={sessionSite?.camera_state_3d}
+                  droneProfiles={droneProfiles}
                 />
               </div>
             )}
@@ -1376,7 +1407,7 @@ export default function SessionConsole() {
                 </div>
                 <div className="cuas-dialog-row">
                   <span>Position:</span>
-                  <span>{placement.position.lat.toFixed(5)}, {placement.position.lon.toFixed(5)}</span>
+                  <span>{placement.position?.lat?.toFixed(5) ?? (placement as any).lat?.toFixed(5) ?? '?'}, {placement.position?.lon?.toFixed(5) ?? (placement as any).lon?.toFixed(5) ?? '?'}</span>
                 </div>
                 <div className="cuas-dialog-row">
                   <span>Height AGL:</span>

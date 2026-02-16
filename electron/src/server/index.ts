@@ -28,6 +28,7 @@ import { crmRoutes } from './routes/crm';
 import { trackerAliasRoutes } from './routes/tracker-aliases';
 import { comparisonRoutes } from './routes/comparison';
 import { cloudSyncRoutes } from './routes/cloud-sync';
+import { siteReconRoutes } from './routes/site-recon';
 // Ops Mode routes
 import { iffRoutes } from './routes/iff';
 import { detectionRoutes } from './routes/detections';
@@ -110,6 +111,9 @@ export async function startServer(port: number): Promise<void> {
 
   // Cloud sync
   app.use('/api', cloudSyncRoutes());
+
+  // Site recon (3D screenshot cache)
+  app.use('/api', siteReconRoutes());
 
   // Engagement analysis routes (range-over-time, GPS quality)
   app.use('/api', analysisRoutes());

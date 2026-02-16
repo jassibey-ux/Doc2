@@ -230,6 +230,11 @@ class Site(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # 3D / Recon
+    recon_status = Column(String(20), default='none')
+    recon_captured_at = Column(DateTime, nullable=True)
+    camera_state_3d = Column(JSONType, nullable=True)
+
     # Relationships
     sessions = relationship("TestSession", back_populates="site")
 
@@ -272,6 +277,7 @@ class DroneProfile(Base):
     # Additional
     notes = Column(Text)
     image_path = Column(String(500))
+    model_3d = Column(String(255), nullable=True)
 
     # Metadata
     is_active = Column(Boolean, default=True)
@@ -319,6 +325,7 @@ class CUASProfile(Base):
     eirp_dbm = Column(Float)  # Effective Isotropic Radiated Power
     min_js_ratio_db = Column(Float)  # Jammer-to-Signal ratio needed for effect
     polarization = Column(String(20))  # RHCP, LHCP, linear, horizontal, vertical
+    model_3d = Column(String(255), nullable=True)
 
     # Additional
     notes = Column(Text)

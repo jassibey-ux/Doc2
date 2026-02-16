@@ -14,6 +14,8 @@ import {
   TrackerAssignment,
   CUASPlacement,
   GeoPoint,
+  SiteReconCapture,
+  CameraState3D,
 } from '../types/workflow';
 
 // Drawing result passed from Map to SiteDefinitionPanel
@@ -88,6 +90,12 @@ interface WorkflowContextType {
   pendingDrawingResult: DrawingResult | null;
   setPendingDrawingResult: (result: DrawingResult | null) => void;
 
+  // Site Recon (3D screenshot cache)
+  siteReconCaptures: Map<string, SiteReconCapture[]>;
+  loadSiteRecon: (siteId: string) => Promise<SiteReconCapture[]>;
+  saveSiteReconImage: (siteId: string, captureId: string, base64: string, label: string, cameraState: CameraState3D) => Promise<void>;
+  deleteSiteRecon: (siteId: string) => Promise<boolean>;
+
   // Loading state
   isLoading: boolean;
   error: string | null;
@@ -121,8 +129,66 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   // Export summary state
   const [lastExportSummary, setLastExportSummary] = useState<SessionExportSummary | null>(null);
 
+  // Site recon captures cache
+  const [siteReconCaptures, setSiteReconCaptures] = useState<Map<string, SiteReconCapture[]>>(new Map());
+
   const clearExportSummary = useCallback(() => {
     setLastExportSummary(null);
+  }, []);
+
+  // ==========================================================================
+  // Site Recon (3D screenshot cache — Express v1 routes)
+  // ==========================================================================
+
+  const loadSiteRecon = useCallback(async (siteId: string): Promise<SiteReconCapture[]> => {
+    try {
+      const res = await fetch(`/api/site-recon/${siteId}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      const captures: SiteReconCapture[] = (data.captures || []).map((c: Record<string, unknown>) => ({
+        id: c.id as string,
+        label: c.label as string,
+        imagePath: `/api/site-recon/${siteId}/images/${c.id}`,
+        cameraState: c.cameraState as CameraState3D,
+      }));
+      setSiteReconCaptures(prev => {
+        const next = new Map(prev);
+        next.set(siteId, captures);
+        return next;
+      });
+      return captures;
+    } catch (err) {
+      console.error('[WorkflowContext] loadSiteRecon failed:', err);
+      return [];
+    }
+  }, []);
+
+  const saveSiteReconImage = useCallback(async (
+    siteId: string,
+    captureId: string,
+    base64: string,
+    label: string,
+    cameraState: CameraState3D,
+  ): Promise<void> => {
+    const res = await fetch(`/api/site-recon/${siteId}/image`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ captureId, base64, label, cameraState }),
+    });
+    if (!res.ok) throw new Error('Failed to save recon image');
+    // Reload captures for this site
+    await loadSiteRecon(siteId);
+  }, [loadSiteRecon]);
+
+  const deleteSiteRecon = useCallback(async (siteId: string): Promise<boolean> => {
+    const res = await fetch(`/api/site-recon/${siteId}`, { method: 'DELETE' });
+    if (!res.ok) return false;
+    setSiteReconCaptures(prev => {
+      const next = new Map(prev);
+      next.delete(siteId);
+      return next;
+    });
+    return true;
   }, []);
 
   // ==========================================================================
@@ -143,10 +209,13 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     const { center, boundary_polygon, ...rest } = site;
     const c = center as { lat?: number; lon?: number } | undefined;
     const bp = boundary_polygon as unknown[];
+    // If center object exists, use it; otherwise preserve flat center_lat/center_lon from rest
+    const centerLat = c?.lat ?? (rest.center_lat as number | undefined) ?? 0;
+    const centerLon = c?.lon ?? (rest.center_lon as number | undefined) ?? 0;
     return {
       ...rest,
-      center_lat: c?.lat ?? 0,
-      center_lon: c?.lon ?? 0,
+      center_lat: centerLat,
+      center_lon: centerLon,
       boundary_polygon: Array.isArray(bp) && bp.length > 0 ? { points: bp } : null,
     };
   };
@@ -171,13 +240,20 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const createSite = useCallback(async (site: Omit<SiteDefinition, 'id' | 'created_at' | 'updated_at'>) => {
+    const apiPayload = siteToApi(site as Record<string, unknown>);
+    console.log('[WorkflowContext] createSite payload:', JSON.stringify(apiPayload, null, 2));
     const res = await fetch(`${API_BASE}/sites`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(siteToApi(site as Record<string, unknown>)),
+      body: JSON.stringify(apiPayload),
     });
-    if (!res.ok) throw new Error('Failed to create site');
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('[WorkflowContext] createSite failed:', res.status, errorText);
+      throw new Error(`Failed to create site: ${res.status} ${errorText}`);
+    }
     const newSite = siteFromApi(await res.json());
+    console.log('[WorkflowContext] createSite success:', newSite.id);
     setSites(prev => [...prev, newSite]);
     return newSite;
   }, []);
@@ -320,8 +396,13 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(session),
     });
-    if (!res.ok) throw new Error('Failed to create test session');
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('[WorkflowContext] createTestSession failed:', res.status, errorText);
+      throw new Error(`Failed to create test session: ${res.status} ${errorText}`);
+    }
     const newSession = await res.json();
+    console.log('[WorkflowContext] createTestSession success:', newSession.id);
     setTestSessions(prev => [newSession, ...prev]);
     return newSession;
   }, []);
@@ -349,13 +430,19 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
 
   // Session operations
   const startSession = useCallback(async (sessionId: string) => {
+    console.log('[WorkflowContext] startSession:', sessionId);
     const res = await fetch(`${API_BASE}/sessions/${sessionId}/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{}',
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('[WorkflowContext] startSession failed:', res.status, errorText);
+      throw new Error(`Failed to start session: ${res.status} ${errorText}`);
+    }
     const data = await res.json();
+    console.log('[WorkflowContext] startSession response:', JSON.stringify(data).substring(0, 500));
     // v2 returns the full session directly (not wrapped in {session: ...})
     const updated = data.session ?? data;
     setTestSessions(prev => prev.map(s => s.id === sessionId ? updated : s));
@@ -514,6 +601,10 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     setDrawingType,
     pendingDrawingResult,
     setPendingDrawingResult,
+    siteReconCaptures,
+    loadSiteRecon,
+    saveSiteReconImage,
+    deleteSiteRecon,
     isLoading,
     error,
     lastExportSummary,

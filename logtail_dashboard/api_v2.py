@@ -253,6 +253,8 @@ class SiteUpdateRequest(BaseModel):
     markers: Optional[List[Dict]] = None
     zones: Optional[List[Dict]] = None
     classification: Optional[str] = None
+    recon_status: Optional[str] = None
+    camera_state_3d: Optional[dict] = None
 
 
 # Drone Profile Models
@@ -270,6 +272,7 @@ class DroneProfileCreateRequest(BaseModel):
     endurance_minutes: Optional[float] = None
     notes: Optional[str] = None
     image_path: Optional[str] = None
+    model_3d: Optional[str] = None
 
 
 class DroneProfileUpdateRequest(BaseModel):
@@ -286,6 +289,7 @@ class DroneProfileUpdateRequest(BaseModel):
     endurance_minutes: Optional[float] = None
     notes: Optional[str] = None
     image_path: Optional[str] = None
+    model_3d: Optional[str] = None
 
 
 # CUAS Profile Models
@@ -305,6 +309,7 @@ class CUASProfileCreateRequest(BaseModel):
     frequency_ranges: Optional[List[Dict]] = None
     notes: Optional[str] = None
     classification: str = "UNCLASSIFIED"
+    model_3d: Optional[str] = None
 
 
 class CUASProfileUpdateRequest(BaseModel):
@@ -324,6 +329,7 @@ class CUASProfileUpdateRequest(BaseModel):
     frequency_ranges: Optional[List[Dict]] = None
     notes: Optional[str] = None
     classification: Optional[str] = None
+    model_3d: Optional[str] = None
 
 
 # Pagination response
@@ -581,6 +587,9 @@ def site_to_dict(site: Site) -> Dict[str, Any]:
         "is_active": site.is_active,
         "created_at": site.created_at.isoformat() if site.created_at else None,
         "updated_at": site.updated_at.isoformat() if site.updated_at else None,
+        "recon_status": site.recon_status,
+        "recon_captured_at": site.recon_captured_at.isoformat() if site.recon_captured_at else None,
+        "camera_state_3d": site.camera_state_3d,
     }
 
 
@@ -603,6 +612,7 @@ def drone_to_dict(profile: DroneProfile) -> Dict[str, Any]:
         "is_active": profile.is_active,
         "created_at": profile.created_at.isoformat() if profile.created_at else None,
         "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+        "model_3d": profile.model_3d,
     }
 
 
@@ -628,6 +638,7 @@ def cuas_to_dict(profile: CUASProfile) -> Dict[str, Any]:
         "is_active": profile.is_active,
         "created_at": profile.created_at.isoformat() if profile.created_at else None,
         "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+        "model_3d": profile.model_3d,
     }
 
 

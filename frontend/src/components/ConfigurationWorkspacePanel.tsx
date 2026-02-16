@@ -6,7 +6,7 @@
  * - CUAS Systems (from CUASProfilePanel)
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import {
   MapPin,
   Plane,
@@ -29,8 +29,11 @@ import {
   Camera,
   Layers,
   Settings,
+  Box,
 } from 'lucide-react';
 import { GlassCard, GlassButton, GlassInput, Badge, GlassDivider } from './ui/GlassUI';
+const Site3DViewer = lazy(() => import('./Site3DViewer'));
+import { SiteReconViewer } from './SiteReconViewer';
 import { useWorkflow } from '../contexts/WorkflowContext';
 import {
   SiteDefinition,
@@ -141,6 +144,10 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
     createCUASProfile,
     updateCUASProfile,
     deleteCUASProfile,
+    // Site Recon
+    siteReconCaptures,
+    loadSiteRecon,
+    saveSiteReconImage,
   } = useWorkflow();
 
   // ===== SITES STATE =====
@@ -157,6 +164,10 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
   const [cuasEditing, setCuasEditing] = useState(false);
   const [editedCuas, setEditedCuas] = useState<Partial<CUASProfile> | null>(null);
   const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
+
+  // ===== 3D / RECON STATE =====
+  const [viewing3DSiteId, setViewing3DSiteId] = useState<string | null>(null);
+  const [showReconViewer, setShowReconViewer] = useState<string | null>(null);
 
   // ===== SITES LOGIC =====
   useEffect(() => {
@@ -676,6 +687,31 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: '4px' }}>
+                          {/* 3D View button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewing3DSiteId(site.id);
+                            }}
+                            title="3D View"
+                            style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px' }}
+                          >
+                            <Box size={14} />
+                          </button>
+                          {/* Recon button */}
+                          {site.recon_status === 'captured' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                loadSiteRecon(site.id);
+                                setShowReconViewer(site.id);
+                              }}
+                              title="View Recon"
+                              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px' }}
+                            >
+                              <Camera size={14} />
+                            </button>
+                          )}
                           <button
                             onClick={(e) => { e.stopPropagation(); handleSiteEdit(site); }}
                             style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px' }}
@@ -1140,6 +1176,52 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
           </div>
         )}
       </div>
+
+      {/* 3D Site Viewer overlay */}
+      {viewing3DSiteId && (() => {
+        const site3d = sites.find(s => s.id === viewing3DSiteId);
+        return site3d ? (
+          <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', color: '#fff' }}>Loading 3D Viewer...</div>}>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 3000 }}>
+              <Site3DViewer
+                site={site3d}
+                mode="preview"
+                tileMode="osm"
+                initialCameraState={site3d.camera_state_3d}
+                onCaptureScreenshots={async (screenshots) => {
+                  for (const ss of screenshots) {
+                    await saveSiteReconImage(site3d.id, crypto.randomUUID(), ss.base64, ss.label, ss.cameraState);
+                  }
+                }}
+                onClose={() => setViewing3DSiteId(null)}
+              />
+            </div>
+          </Suspense>
+        ) : null;
+      })()}
+
+      {/* Recon Viewer overlay */}
+      {showReconViewer && (() => {
+        const siteRecon = sites.find(s => s.id === showReconViewer);
+        const captures = siteReconCaptures.get(showReconViewer) || [];
+        return siteRecon ? (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <SiteReconViewer
+              site={siteRecon}
+              captures={captures}
+              onEnhanceSite={() => {
+                setShowReconViewer(null);
+                setViewing3DSiteId(showReconViewer);
+              }}
+              onOpenLive3D={() => {
+                setShowReconViewer(null);
+                setViewing3DSiteId(showReconViewer);
+              }}
+              onClose={() => setShowReconViewer(null)}
+            />
+          </div>
+        ) : null;
+      })()}
     </div>
   );
 }
