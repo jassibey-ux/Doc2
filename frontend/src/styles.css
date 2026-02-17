@@ -2869,6 +2869,57 @@ input[type="text"]:focus {
   color: #22c55e;
 }
 
+/* 3D View Section — grouped with label */
+.map-controls-3d-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.map-controls-section-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(0, 200, 255, 0.7);
+  line-height: 1;
+}
+
+.map-controls-3d-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+/* Labeled 3D buttons — wider with text beneath icon */
+.map-control-btn.map-control-labeled {
+  width: auto;
+  min-width: 42px;
+  height: auto;
+  padding: 6px 8px 4px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.map-control-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.map-control-btn.map-control-labeled.active .map-control-label {
+  opacity: 1;
+}
+
+/* Divider between 3D section and map tools */
+.map-controls-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 2px 0;
+}
+
 /* Legacy Map Style Toggle (keeping for compatibility) */
 .map-style-toggle {
   position: fixed;

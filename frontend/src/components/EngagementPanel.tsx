@@ -63,7 +63,8 @@ function computeLiveRange(
     return { rangeM: null, fixValid: true, targetId: null };
   }
   // Use first primary target
-  const primaryTarget = eng.targets.find(t => t.role === 'primary_target') || eng.targets[0];
+  const targets = eng.targets || [];
+  const primaryTarget = targets.find(t => t.role === 'primary_target') || targets[0];
   if (!primaryTarget) return { rangeM: null, fixValid: true, targetId: null };
 
   const pos = liveDronePositions.get(primaryTarget.tracker_id);
@@ -114,7 +115,7 @@ export default function EngagementPanel({
   };
 
   const getTargetNames = (eng: Engagement): string => {
-    return eng.targets.map(t => t.tracker_id).join(', ') || 'No targets';
+    return (eng.targets || []).map(t => t.tracker_id).join(', ') || 'No targets';
   };
 
   const getEmitterLabel = (eng: Engagement): string => {
@@ -276,7 +277,7 @@ export default function EngagementPanel({
 
             {/* Active burst: pulsing timer for current burst */}
             {eng.status === 'active' && activeBursts?.has(eng.id) && (
-              <ActiveBurstIndicator burst={activeBursts.get(eng.id)!} />
+              <ActiveBurstIndicator burst={activeBursts.get(eng.id) as JamBurst} />
             )}
 
             {/* Completed engagement: burst timeline + per-burst metrics */}

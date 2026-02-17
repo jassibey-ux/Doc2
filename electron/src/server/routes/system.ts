@@ -13,9 +13,11 @@ import {
 import { sessionDataCollector } from '../../core/session-data-collector';
 import { getLibraryStats } from '../../core/library-store';
 import { DashboardApp } from '../app';
+import { DEMO_SCENARIOS, getScenarioById } from '../../core/demo-scenarios';
 
 // Store demo mode state
 let demoModeEnabled = false;
+let activeDemoScenario: string | null = null;
 let demoModeApp: DashboardApp | null = null;
 
 export function systemRoutes(app: DashboardApp): Router {
@@ -52,7 +54,7 @@ export function systemRoutes(app: DashboardApp): Router {
    * Enable or disable demo mode
    */
   router.post('/system/demo-mode', (req, res) => {
-    const { enabled, siteCenter } = req.body;
+    const { enabled, siteCenter, scenario } = req.body;
 
     if (typeof enabled !== 'boolean') {
       return res.status(400).json({ error: 'enabled must be a boolean' });
@@ -60,11 +62,12 @@ export function systemRoutes(app: DashboardApp): Router {
 
     try {
       if (enabled) {
-        enableDemoMode(siteCenter);
+        enableDemoMode(siteCenter, scenario);
         res.json({
           success: true,
           message: 'Demo mode enabled',
           trackerIds: getMockTrackerProvider().getTrackerIds(),
+          scenario: activeDemoScenario,
         });
       } else {
         disableDemoMode();
@@ -92,7 +95,24 @@ export function systemRoutes(app: DashboardApp): Router {
       running: mockProvider.isRunning(),
       trackerCount: mockProvider.isRunning() ? mockProvider.getTrackerIds().length : 0,
       trackerIds: mockProvider.isRunning() ? mockProvider.getTrackerIds() : [],
+      scenario: activeDemoScenario,
     });
+  });
+
+  /**
+   * GET /api/system/demo-mode/scenarios
+   * List available demo scenarios
+   */
+  router.get('/system/demo-mode/scenarios', (_req, res) => {
+    res.json(
+      DEMO_SCENARIOS.map((s) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        trackerCount: s.trackers.length || 4, // default scenario has 4
+        hasGpsDenial: !!(s.gpsDenialZones && s.gpsDenialZones.length > 0),
+      })),
+    );
   });
 
   /**
@@ -231,18 +251,41 @@ export function systemRoutes(app: DashboardApp): Router {
 /**
  * Enable demo mode with mock trackers
  */
-function enableDemoMode(siteCenter?: [number, number]): void {
+function enableDemoMode(siteCenter?: [number, number], scenarioId?: string): void {
   if (demoModeEnabled) {
     log.info('Demo mode already enabled');
     return;
   }
 
   const mockProvider = getMockTrackerProvider();
+  const scenario = scenarioId ? getScenarioById(scenarioId) : null;
 
-  // Add default demo trackers
-  const defaultTrackers = MockTrackerProvider.getDefaultDemoTrackers(siteCenter);
-  for (const tracker of defaultTrackers) {
-    mockProvider.addMockTracker(tracker);
+  if (scenario && scenario.trackers.length > 0) {
+    // Load scenario trackers with extended waypoints
+    activeDemoScenario = scenario.id;
+    for (const t of scenario.trackers) {
+      mockProvider.addMockTracker({
+        trackerId: t.trackerId,
+        startPosition: t.startPosition,
+        altitude: t.altitude,
+        speed: t.speed,
+        heading: t.heading,
+        pattern: t.pattern,
+        extendedWaypoints: t.extendedWaypoints,
+        gpsDenialAffected: t.gpsDenialAffected,
+        color: t.color,
+      });
+    }
+    if (scenario.gpsDenialZones) {
+      mockProvider.setGpsDenialZones(scenario.gpsDenialZones);
+    }
+  } else {
+    // Fall back to existing default trackers
+    activeDemoScenario = 'default';
+    const defaultTrackers = MockTrackerProvider.getDefaultDemoTrackers(siteCenter);
+    for (const tracker of defaultTrackers) {
+      mockProvider.addMockTracker(tracker);
+    }
   }
 
   // Setup position update handler - route through StateManager for proper GPS health tracking
@@ -308,6 +351,7 @@ function disableDemoMode(): void {
 
   resetMockTrackerProvider();
   demoModeEnabled = false;
+  activeDemoScenario = null;
 
   log.info('Demo mode disabled');
 

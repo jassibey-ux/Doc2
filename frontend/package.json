@@ -22,7 +22,8 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.20.0",
     "resium": "^1.19.3",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "vite-plugin-cesium": "^1.2.23"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",

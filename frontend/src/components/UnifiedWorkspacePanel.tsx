@@ -90,6 +90,9 @@ export default function UnifiedWorkspacePanel({ isOpen, onClose }: UnifiedWorksp
   const [demoModeEnabled, setDemoModeEnabled] = useState(false);
   const [demoTrackerIds, setDemoTrackerIds] = useState<string[]>([]);
   const [isTogglingDemo, setIsTogglingDemo] = useState(false);
+  const [demoScenarios, setDemoScenarios] = useState<{ id: string; name: string; description: string; trackerCount: number; hasGpsDenial: boolean }[]>([]);
+  const [selectedScenario, setSelectedScenario] = useState('default');
+  const [activeScenario, setActiveScenario] = useState<string | null>(null);
 
   // ===== ALERTS LOGIC =====
   useEffect(() => {
@@ -144,11 +147,20 @@ export default function UnifiedWorkspacePanel({ isOpen, onClose }: UnifiedWorksp
   // ===== DEMO MODE LOGIC =====
   const fetchDemoStatus = async () => {
     try {
-      const response = await fetch('/api/system/demo-mode');
-      if (response.ok) {
-        const data = await response.json();
+      const [statusRes, scenariosRes] = await Promise.all([
+        fetch('/api/system/demo-mode'),
+        fetch('/api/system/demo-mode/scenarios'),
+      ]);
+      if (statusRes.ok) {
+        const data = await statusRes.json();
         setDemoModeEnabled(data.enabled);
         setDemoTrackerIds(data.trackerIds || []);
+        setActiveScenario(data.scenario || null);
+        if (data.scenario) setSelectedScenario(data.scenario);
+      }
+      if (scenariosRes.ok) {
+        const scenarios = await scenariosRes.json();
+        setDemoScenarios(scenarios);
       }
     } catch (err) {
       console.error('Failed to fetch demo mode status:', err);
@@ -158,15 +170,17 @@ export default function UnifiedWorkspacePanel({ isOpen, onClose }: UnifiedWorksp
   const toggleDemoMode = async () => {
     setIsTogglingDemo(true);
     try {
+      const newEnabled = !demoModeEnabled;
       const response = await fetch('/api/system/demo-mode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !demoModeEnabled }),
+        body: JSON.stringify({ enabled: newEnabled, scenario: newEnabled ? selectedScenario : undefined }),
       });
       if (response.ok) {
         const data = await response.json();
-        setDemoModeEnabled(!demoModeEnabled);
+        setDemoModeEnabled(newEnabled);
         setDemoTrackerIds(data.trackerIds || []);
+        setActiveScenario(newEnabled ? (data.scenario || selectedScenario) : null);
       }
     } catch (err) {
       console.error('Failed to toggle demo mode:', err);
@@ -864,10 +878,42 @@ export default function UnifiedWorkspacePanel({ isOpen, onClose }: UnifiedWorksp
                   )}
                 </GlassButton>
               </div>
+              {demoScenarios.length > 1 && (
+                <div style={{ marginBottom: '8px' }}>
+                  <select
+                    value={selectedScenario}
+                    onChange={(e) => setSelectedScenario(e.target.value)}
+                    disabled={demoModeEnabled}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      fontSize: '12px',
+                      background: 'rgba(255,255,255,0.08)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: '6px',
+                      color: '#fff',
+                      cursor: demoModeEnabled ? 'not-allowed' : 'pointer',
+                      opacity: demoModeEnabled ? 0.5 : 1,
+                    }}
+                  >
+                    {demoScenarios.map((s) => (
+                      <option key={s.id} value={s.id} style={{ background: '#1a1a2e', color: '#fff' }}>
+                        {s.name} ({s.trackerCount} drones{s.hasGpsDenial ? ' + GPS denial' : ''})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
                 {demoModeEnabled ? (
                   <>
-                    Simulating {demoTrackerIds.length} live trackers with GPS health cycling.
+                    Simulating {demoTrackerIds.length} live trackers
+                    {activeScenario && activeScenario !== 'default' && (
+                      <> &mdash; {demoScenarios.find(s => s.id === activeScenario)?.name || activeScenario}</>
+                    )}
+                    {demoScenarios.find(s => s.id === activeScenario)?.hasGpsDenial && (
+                      <span style={{ color: '#ef4444' }}> (GPS denial zone active)</span>
+                    )}
                     <div style={{ marginTop: '4px', color: 'rgba(255,255,255,0.4)' }}>
                       Trackers: {demoTrackerIds.join(', ')}
                     </div>
