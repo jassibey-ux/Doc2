@@ -3,7 +3,7 @@
  * Allows creating and editing test sites with polygon boundaries, markers, and zones
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import {
   MapPin,
   Hexagon,
@@ -19,8 +19,12 @@ import {
   Flag,
   Eye,
   Building2,
+  Box,
+  Camera,
 } from 'lucide-react';
 import { GlassPanel, GlassCard, GlassButton, GlassInput, Badge, GlassDivider } from './ui/GlassUI';
+const Site3DViewer = lazy(() => import('./Site3DViewer'));
+import { SiteReconViewer } from './SiteReconViewer';
 import { useWorkflow } from '../contexts/WorkflowContext';
 import {
   SiteDefinition,
@@ -103,12 +107,17 @@ export default function SiteDefinitionPanel({ isOpen, onClose }: SiteDefinitionP
     setDrawingType,
     pendingDrawingResult,
     setPendingDrawingResult,
+    siteReconCaptures,
+    loadSiteRecon,
+    saveSiteReconImage,
   } = useWorkflow();
 
   // Local editing state
   const [isEditing, setIsEditing] = useState(false);
   const [editedSite, setEditedSite] = useState<Partial<SiteDefinition> | null>(null);
   const [expandedSection, setExpandedSection] = useState<'sites' | 'markers' | 'zones'>('sites');
+  const [show3DPreview, setShow3DPreview] = useState(false);
+  const [showRecon, setShowRecon] = useState(false);
 
   // Watch for drawing completion and update editedSite
   useEffect(() => {
@@ -347,6 +356,29 @@ export default function SiteDefinitionPanel({ isOpen, onClose }: SiteDefinitionP
                   {editedSite.boundary_polygon.length} vertices
                 </div>
               )}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <GlassButton
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShow3DPreview(true)}
+                >
+                  <Box size={14} style={{ marginRight: '6px' }} />
+                  3D Preview
+                </GlassButton>
+                {editedSite?.recon_status === 'captured' && (
+                  <GlassButton
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      if (editedSite?.id) loadSiteRecon(editedSite.id);
+                      setShowRecon(true);
+                    }}
+                  >
+                    <Camera size={14} style={{ marginRight: '6px' }} />
+                    View Recon
+                  </GlassButton>
+                )}
+              </div>
             </div>
 
             <GlassDivider />
@@ -582,6 +614,45 @@ export default function SiteDefinitionPanel({ isOpen, onClose }: SiteDefinitionP
           </div>
         )}
       </GlassPanel>
+
+      {show3DPreview && editedSite && (
+        <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', color: '#fff' }}>Loading 3D...</div>}>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 3000 }}>
+            <Site3DViewer
+              site={editedSite as any}
+              mode="preview"
+              tileMode="osm"
+              initialCameraState={editedSite.camera_state_3d}
+              onCaptureScreenshots={async (screenshots) => {
+                if (editedSite.id) {
+                  for (const ss of screenshots) {
+                    await saveSiteReconImage(editedSite.id, crypto.randomUUID(), ss.base64, ss.label, ss.cameraState);
+                  }
+                }
+              }}
+              onClose={() => setShow3DPreview(false)}
+            />
+          </div>
+        </Suspense>
+      )}
+
+      {showRecon && editedSite && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <SiteReconViewer
+            site={editedSite as any}
+            captures={siteReconCaptures.get(editedSite.id || '') || []}
+            onEnhanceSite={() => {
+              setShowRecon(false);
+              setShow3DPreview(true);
+            }}
+            onOpenLive3D={() => {
+              setShowRecon(false);
+              setShow3DPreview(true);
+            }}
+            onClose={() => setShowRecon(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }

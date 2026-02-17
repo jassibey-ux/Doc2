@@ -17,28 +17,28 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "ws": "^8.16.0",
+    "better-sqlite3": "^11.10.0",
     "chokidar": "^3.6.0",
-    "fast-xml-parser": "^4.3.4",
-    "multer": "^1.4.5-lts.1",
-    "jszip": "^3.10.1",
     "cors": "^2.8.5",
-    "electron-updater": "^6.1.7",
     "electron-log": "^5.1.1",
-    "better-sqlite3": "^11.0.0"
+    "electron-updater": "^6.1.7",
+    "express": "^4.18.2",
+    "fast-xml-parser": "^4.3.4",
+    "jszip": "^3.10.1",
+    "multer": "^1.4.5-lts.1",
+    "ws": "^8.16.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^1.4.11",
+    "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.10",
     "electron": "^28.1.0",
     "electron-builder": "^24.9.1",
     "electron-vite": "^2.0.0",
     "typescript": "^5.6.3",
-    "vitest": "^1.2.0",
-    "@types/express": "^4.17.21",
-    "@types/ws": "^8.5.10",
-    "@types/cors": "^2.8.17",
-    "@types/multer": "^1.4.11",
-    "@types/node": "^20.11.0",
-    "@types/better-sqlite3": "^7.6.8"
+    "vitest": "^1.2.0"
   }
 }

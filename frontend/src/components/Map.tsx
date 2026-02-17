@@ -3,10 +3,11 @@ import maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import type { DroneSummary, PositionPoint, GPSHealthStatus } from '../types/drone';
-import type { CUASPlacement, CUASProfile, EnhancedPositionPoint, SiteDefinition, GeoPoint, Engagement, SessionActor, JamBurst } from '../types/workflow';
+import type { CUASPlacement, CUASProfile, EnhancedPositionPoint, SiteDefinition, GeoPoint, Engagement, SessionActor, JamBurst, DroneProfile } from '../types/workflow';
 import {
   generateCUASCoverageGeoJSON,
   generateCUASMarkersGeoJSON,
+  generateCUASHeadingsGeoJSON,
   createProfilesMap,
 } from '../utils/cuasCoverage';
 import {
@@ -18,6 +19,7 @@ import {
 import { createQualityTrackGeoJSON } from '../utils/trackSegmentation';
 import { computeEngagementGeometries, engagementGeometriesToGeoJSON } from '../utils/engagementGeometry';
 import { haversineDistance, bearing, midpoint, formatDistance, formatBearing } from '../utils/geo';
+import { getDroneModel } from '../utils/modelRegistry';
 import type { ImportedLayer } from './MapFileDropHandler';
 
 interface MapProps {
@@ -70,6 +72,12 @@ interface MapProps {
   onMeasurementAdded?: (measurement: { id: string; startLat: number; startLon: number; endLat: number; endLon: number; distanceM: number; bearingDeg: number }) => void;
   // Imported GeoJSON/KML layers
   importedLayers?: ImportedLayer[];
+  // Wizard CUAS placements (draggable markers during session setup)
+  wizardCuasPlacements?: Array<{ id: string; cuasProfileId: string; position: { lat: number; lon: number }; orientation: number }>;
+  wizardCuasProfiles?: CUASProfile[];
+  onWizardCuasMoved?: (placementId: string, lat: number, lon: number) => void;
+  // Drone profile mapping for model-specific marker thumbnails (tracker_id -> DroneProfile)
+  droneProfileMap?: Map<string, DroneProfile>;
 }
 
 // Color palette for drone tracks (cycle through for different drones)
@@ -99,7 +107,7 @@ const GPS_HEALTH_COLORS: Record<GPSHealthStatus, string> = {
 };
 
 // Custom marker element factory with drone icon
-function createMarkerElement(drone: DroneSummary, isSelected: boolean): HTMLDivElement {
+function createMarkerElement(drone: DroneSummary, isSelected: boolean, droneProfile?: DroneProfile): HTMLDivElement {
   const el = document.createElement('div');
   el.className = 'drone-marker';
 
@@ -172,10 +180,42 @@ function createMarkerElement(drone: DroneSummary, isSelected: boolean): HTMLDivE
     el.appendChild(badge);
   }
 
-  // Add icon (safe - comes from our constant)
+  // Add icon — prefer model-specific top-down thumbnail PNG, fallback to SVG
+  const heading = drone.heading_deg ?? 0;
+  const modelAsset = getDroneModel(droneProfile);
+  const thumbnailUrl = modelAsset?.thumbnailTopPath;
+
   const iconDiv = document.createElement('div');
   iconDiv.className = 'drone-icon';
-  iconDiv.innerHTML = PLANE_SVG;
+
+  if (thumbnailUrl) {
+    // Use model-specific top-down thumbnail image with heading rotation
+    const img = document.createElement('img');
+    img.src = thumbnailUrl;
+    img.style.width = '32px';
+    img.style.height = '32px';
+    img.style.transform = `rotate(${heading}deg)`;
+    img.style.transition = 'transform 0.3s ease';
+    img.style.pointerEvents = 'none';
+    img.draggable = false;
+    img.onerror = () => {
+      // Fallback to SVG if thumbnail not found (files not yet downloaded)
+      img.style.display = 'none';
+      const fallbackDiv = document.createElement('div');
+      fallbackDiv.innerHTML = PLANE_SVG;
+      fallbackDiv.style.transform = `rotate(${heading}deg)`;
+      fallbackDiv.style.transition = 'transform 0.3s ease';
+      iconDiv.appendChild(fallbackDiv);
+    };
+    iconDiv.appendChild(img);
+  } else {
+    // Default SVG marker with heading rotation
+    const svgWrapper = document.createElement('div');
+    svgWrapper.innerHTML = PLANE_SVG;
+    svgWrapper.style.transform = `rotate(${heading}deg)`;
+    svgWrapper.style.transition = 'transform 0.3s ease';
+    iconDiv.appendChild(svgWrapper);
+  }
   el.appendChild(iconDiv);
 
   // Add label (use textContent for safety)
@@ -223,6 +263,10 @@ export default function MapComponent({
   measureMode = false,
   onMeasurementAdded,
   importedLayers = [],
+  wizardCuasPlacements = [],
+  wizardCuasProfiles = [],
+  onWizardCuasMoved,
+  droneProfileMap,
 }: MapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -237,9 +281,12 @@ export default function MapComponent({
   const actorSourceAddedRef = useRef<boolean>(false);
   const onCuasClickRef = useRef(onCuasClick);
   onCuasClickRef.current = onCuasClick;
+  const onWizardCuasMovedRef = useRef(onWizardCuasMoved);
+  onWizardCuasMovedRef.current = onWizardCuasMoved;
   const measureStartRef = useRef<{ lat: number; lon: number } | null>(null);
   const measureTempMarkerRef = useRef<maplibregl.Marker | null>(null);
   const importedSourceIdsRef = useRef<Set<string>>(new Set());
+  const wizardCuasMarkersRef = useRef<globalThis.Map<string, maplibregl.Marker>>(new globalThis.Map());
 
   // Create a stable mapping of tracker_id to color index
   const droneColorMap = useMemo(() => {
@@ -400,6 +447,10 @@ export default function MapComponent({
     return generateCUASMarkersGeoJSON(cuasPlacements, cuasProfilesMap, cuasJamStates);
   }, [cuasPlacements, cuasProfilesMap, cuasJamStates]);
 
+  const cuasHeadingsGeoJSON = useMemo(() => {
+    return generateCUASHeadingsGeoJSON(cuasPlacements, cuasProfilesMap, cuasJamStates);
+  }, [cuasPlacements, cuasProfilesMap, cuasJamStates]);
+
   // Update track trails when GeoJSON changes
   useEffect(() => {
     const map = mapRef.current;
@@ -425,7 +476,12 @@ export default function MapComponent({
     if (markersSource) {
       markersSource.setData(cuasMarkersGeoJSON as GeoJSON.FeatureCollection);
     }
-  }, [cuasCoverageGeoJSON, cuasMarkersGeoJSON]);
+
+    const headingsSource = map.getSource('cuas-headings') as maplibregl.GeoJSONSource;
+    if (headingsSource) {
+      headingsSource.setData(cuasHeadingsGeoJSON as GeoJSON.FeatureCollection);
+    }
+  }, [cuasCoverageGeoJSON, cuasMarkersGeoJSON, cuasHeadingsGeoJSON]);
 
   // Toggle CUAS coverage visibility
   useEffect(() => {
@@ -445,6 +501,12 @@ export default function MapComponent({
     }
     if (map.getLayer('cuas-markers-inner')) {
       map.setLayoutProperty('cuas-markers-inner', 'visibility', visibility);
+    }
+    if (map.getLayer('cuas-headings-line')) {
+      map.setLayoutProperty('cuas-headings-line', 'visibility', visibility);
+    }
+    if (map.getLayer('cuas-headings-arrow')) {
+      map.setLayoutProperty('cuas-headings-arrow', 'visibility', visibility);
     }
   }, [showCuasCoverage]);
 
@@ -1255,6 +1317,50 @@ export default function MapComponent({
         },
       });
 
+      // CUAS heading indicator source and layers (directional boresight line)
+      map.addSource('cuas-headings', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: [],
+        },
+      });
+
+      // Heading direction line
+      map.addLayer({
+        id: 'cuas-headings-line',
+        type: 'line',
+        source: 'cuas-headings',
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 3,
+          'line-opacity': 0.9,
+        },
+        layout: {
+          'line-cap': 'round',
+        },
+      });
+
+      // Heading arrowhead (triangle at end of line)
+      map.addLayer({
+        id: 'cuas-headings-arrow',
+        type: 'symbol',
+        source: 'cuas-headings',
+        layout: {
+          'symbol-placement': 'line-center',
+          'symbol-spacing': 1,
+          'text-field': '▶',
+          'text-size': 14,
+          'text-rotation-alignment': 'map',
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+          'text-keep-upright': false,
+        },
+        paint: {
+          'text-color': ['get', 'color'],
+        },
+      });
+
       cuasSourceAddedRef.current = true;
 
       // CUAS marker click handler — enters engagement mode
@@ -1510,6 +1616,72 @@ export default function MapComponent({
     };
   }, [placingCuasId, onCuasPlaced]);
 
+  // Wizard CUAS draggable markers — shown during session setup wizard
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const existingIds = new Set(wizardCuasPlacements.map(p => p.id));
+    const markersMap = wizardCuasMarkersRef.current;
+
+    // Remove markers that are no longer in the placements list
+    for (const [id, marker] of markersMap) {
+      if (!existingIds.has(id)) {
+        marker.remove();
+        markersMap.delete(id);
+      }
+    }
+
+    // Create or update markers
+    for (const placement of wizardCuasPlacements) {
+      const profile = wizardCuasProfiles.find(p => p.id === placement.cuasProfileId);
+      const label = profile?.name?.substring(0, 3).toUpperCase() || 'C';
+
+      let marker = markersMap.get(placement.id);
+      if (marker) {
+        // Update position if it moved (e.g., from manual lat/lon edit in wizard)
+        const { lng, lat } = marker.getLngLat();
+        if (Math.abs(lat - placement.position.lat) > 0.000001 || Math.abs(lng - placement.position.lon) > 0.000001) {
+          marker.setLngLat([placement.position.lon, placement.position.lat]);
+        }
+      } else {
+        // Create new draggable marker
+        const el = document.createElement('div');
+        el.style.cssText = `
+          width: 32px; height: 32px; border-radius: 50%;
+          background: rgba(239, 68, 68, 0.3); border: 2px solid #ef4444;
+          display: flex; align-items: center; justify-content: center;
+          color: #fff; font-size: 10px; font-weight: 700; font-family: monospace;
+          cursor: grab; user-select: none;
+          box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+        `;
+        el.textContent = label;
+
+        marker = new maplibregl.Marker({ element: el, draggable: true })
+          .setLngLat([placement.position.lon, placement.position.lat])
+          .addTo(map);
+
+        const placementId = placement.id;
+        marker.on('dragend', () => {
+          const lngLat = marker!.getLngLat();
+          onWizardCuasMovedRef.current?.(placementId, lngLat.lat, lngLat.lng);
+        });
+
+        markersMap.set(placement.id, marker);
+      }
+    }
+
+    return () => {
+      // Clean up all wizard markers on unmount
+      if (wizardCuasPlacements.length === 0) {
+        for (const [, marker] of markersMap) {
+          marker.remove();
+        }
+        markersMap.clear();
+      }
+    };
+  }, [wizardCuasPlacements, wizardCuasProfiles]);
+
   // Handle flyToCenter
   useEffect(() => {
     const map = mapRef.current;
@@ -1566,14 +1738,15 @@ export default function MapComponent({
       }
 
       const isSelected = id === selectedDroneId;
+      const profile = droneProfileMap?.get(id);
       const existingMarker = markersRef.current.get(id);
 
       if (existingMarker) {
         // Update existing marker position
         existingMarker.setLngLat([drone.lon, drone.lat]);
 
-        // Update marker element
-        const newEl = createMarkerElement(drone, isSelected);
+        // Update marker element (includes heading rotation via createMarkerElement)
+        const newEl = createMarkerElement(drone, isSelected, profile);
         newEl.addEventListener('click', (e) => {
           e.stopPropagation();
           handleMarkerClick(id);
@@ -1584,7 +1757,7 @@ export default function MapComponent({
         oldEl.innerHTML = newEl.innerHTML;
       } else {
         // Create new marker
-        const el = createMarkerElement(drone, isSelected);
+        const el = createMarkerElement(drone, isSelected, profile);
         el.addEventListener('click', (e) => {
           e.stopPropagation();
           handleMarkerClick(id);
@@ -1600,7 +1773,7 @@ export default function MapComponent({
         markersRef.current.set(id, marker);
       }
     }
-  }, [drones, selectedDroneId, handleMarkerClick]);
+  }, [drones, selectedDroneId, handleMarkerClick, droneProfileMap]);
 
   // Fly to selected drone
   useEffect(() => {

@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "SCENSUS Companion",
+    "slug": "scensus-companion",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "scensus",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.scensus.companion",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Location is used to track your position during CUAS operations.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Background location tracking for operator position reporting.",
+        "NSCameraUsageDescription": "Camera is used for CUAS placement geotagging photos."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a2e"
+      },
+      "package": "com.scensus.companion",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "CAMERA"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-location",
+      "expo-camera",
+      "expo-sqlite"
+    ]
+  }
+}

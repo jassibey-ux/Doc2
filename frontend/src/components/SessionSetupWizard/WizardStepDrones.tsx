@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Radio, Wifi, WifiOff, Battery, Check, Palette } from 'lucide-react';
-import { GlassCard, GlassSelect } from '../ui/GlassUI';
+import { GlassCard, GlassSelect, GlassInput } from '../ui/GlassUI';
 import type { WizardState, WizardAction, DroneAssignment } from './wizardTypes';
 import { TRACK_COLORS } from './wizardTypes';
 import type { DroneProfile } from '../../types/workflow';
@@ -335,6 +335,23 @@ export default function WizardStepDrones({
                       <strong style={{ color: 'rgba(255, 255, 255, 0.8)' }}>Class:</strong>{' '}
                       {profile.weight_class || 'N/A'}
                     </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+                      <strong style={{ color: 'rgba(255, 255, 255, 0.8)' }}>Target Alt:</strong>
+                      <GlassInput
+                        type="number"
+                        placeholder="m AGL"
+                        value={assignment.targetAltitude ?? ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          dispatch({
+                            type: 'UPDATE_DRONE_ASSIGNMENT',
+                            trackerId: tracker.id,
+                            updates: { targetAltitude: val === '' ? undefined : Number(val) },
+                          });
+                        }}
+                        style={{ width: '80px', fontSize: '12px', padding: '4px 8px' }}
+                      />
+                    </div>
                   </div>
                 )}
               </GlassCard>

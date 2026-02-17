@@ -62,7 +62,8 @@ export type WizardAction =
   | { type: 'SET_SUBMITTING'; isSubmitting: boolean }
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'RESET' }
-  | { type: 'QUICK_START'; siteId: string | null; newSiteName: string; droneAssignments: DroneAssignment[]; sessionName: string };
+  | { type: 'QUICK_START'; siteId: string | null; newSiteName: string; droneAssignments: DroneAssignment[]; sessionName: string }
+  | { type: 'LOAD_TEMPLATE'; siteId: string | null; droneAssignments: DroneAssignment[]; cuasPlacements: CUASPlacementData[]; sessionName: string; weatherNotes: string };
 
 // Track colors for drone assignment
 export const TRACK_COLORS = [

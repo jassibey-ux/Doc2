@@ -42,6 +42,11 @@ from .database.models import (
     generate_uuid,
     EngagementStatus,
     EmitterType,
+    SDRReading,
+    MediaAttachment,
+    OperatorPosition,
+    WorkspaceLayer,
+    TrackerAlias,
 )
 from .database.repositories import (
     SessionRepository,
@@ -114,6 +119,7 @@ class SessionUpdateRequest(BaseModel):
     weather_notes: Optional[str] = None
     post_test_notes: Optional[str] = None
     classification: Optional[str] = None
+    live_data_path: Optional[str] = None
 
 
 class SessionSearchRequest(BaseModel):
@@ -197,6 +203,7 @@ class SessionActorCreateRequest(BaseModel):
     """Request to create a session actor."""
     name: str
     callsign: Optional[str] = None
+    cot_uid: Optional[str] = None
     lat: Optional[float] = None
     lon: Optional[float] = None
     heading_deg: Optional[float] = None
@@ -207,6 +214,7 @@ class SessionActorUpdateRequest(BaseModel):
     """Request to update a session actor."""
     name: Optional[str] = None
     callsign: Optional[str] = None
+    cot_uid: Optional[str] = None
     lat: Optional[float] = None
     lon: Optional[float] = None
     heading_deg: Optional[float] = None
@@ -245,6 +253,8 @@ class SiteUpdateRequest(BaseModel):
     markers: Optional[List[Dict]] = None
     zones: Optional[List[Dict]] = None
     classification: Optional[str] = None
+    recon_status: Optional[str] = None
+    camera_state_3d: Optional[dict] = None
 
 
 # Drone Profile Models
@@ -262,6 +272,7 @@ class DroneProfileCreateRequest(BaseModel):
     endurance_minutes: Optional[float] = None
     notes: Optional[str] = None
     image_path: Optional[str] = None
+    model_3d: Optional[str] = None
 
 
 class DroneProfileUpdateRequest(BaseModel):
@@ -278,6 +289,7 @@ class DroneProfileUpdateRequest(BaseModel):
     endurance_minutes: Optional[float] = None
     notes: Optional[str] = None
     image_path: Optional[str] = None
+    model_3d: Optional[str] = None
 
 
 # CUAS Profile Models
@@ -297,6 +309,7 @@ class CUASProfileCreateRequest(BaseModel):
     frequency_ranges: Optional[List[Dict]] = None
     notes: Optional[str] = None
     classification: str = "UNCLASSIFIED"
+    model_3d: Optional[str] = None
 
 
 class CUASProfileUpdateRequest(BaseModel):
@@ -316,6 +329,7 @@ class CUASProfileUpdateRequest(BaseModel):
     frequency_ranges: Optional[List[Dict]] = None
     notes: Optional[str] = None
     classification: Optional[str] = None
+    model_3d: Optional[str] = None
 
 
 # Pagination response
@@ -446,6 +460,7 @@ def actor_to_dict(a: SessionActor) -> Dict[str, Any]:
         "session_id": a.session_id,
         "name": a.name,
         "callsign": a.callsign,
+        "cot_uid": a.cot_uid,
         "lat": a.lat,
         "lon": a.lon,
         "heading_deg": a.heading_deg,
@@ -483,6 +498,7 @@ def engagement_to_dict(eng: Engagement) -> Dict[str, Any]:
         "emitter_type": eng.emitter_type,
         "emitter_id": eng.emitter_id,
         "name": eng.name,
+        "run_number": eng.run_number,
         "engagement_type": eng.engagement_type,
         "status": eng.status,
         "engage_timestamp": eng.engage_timestamp.isoformat() if eng.engage_timestamp else None,
@@ -571,6 +587,9 @@ def site_to_dict(site: Site) -> Dict[str, Any]:
         "is_active": site.is_active,
         "created_at": site.created_at.isoformat() if site.created_at else None,
         "updated_at": site.updated_at.isoformat() if site.updated_at else None,
+        "recon_status": site.recon_status,
+        "recon_captured_at": site.recon_captured_at.isoformat() if site.recon_captured_at else None,
+        "camera_state_3d": site.camera_state_3d,
     }
 
 
@@ -593,6 +612,7 @@ def drone_to_dict(profile: DroneProfile) -> Dict[str, Any]:
         "is_active": profile.is_active,
         "created_at": profile.created_at.isoformat() if profile.created_at else None,
         "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+        "model_3d": profile.model_3d,
     }
 
 
@@ -618,6 +638,7 @@ def cuas_to_dict(profile: CUASProfile) -> Dict[str, Any]:
         "is_active": profile.is_active,
         "created_at": profile.created_at.isoformat() if profile.created_at else None,
         "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+        "model_3d": profile.model_3d,
     }
 
 
@@ -1251,6 +1272,64 @@ async def delete_session(
     return {"success": True}
 
 
+@router.post("/sessions/{session_id}/clone")
+async def clone_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Clone a session's configuration (site, tracker assignments, CUAS placements).
+
+    Creates a new session in 'planning' status with the same setup as the source.
+    Useful for running repeated tests with the same configuration.
+    """
+    repo = SessionRepository(db)
+    source = await repo.get_with_relations(session_id)
+
+    if not source:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Create the new session
+    new_session = await repo.create({
+        "name": f"{source.name} (Copy)",
+        "site_id": source.site_id,
+        "operator_name": source.operator_name,
+        "weather_notes": source.weather_notes,
+        "classification": source.classification,
+        "status": "planning",
+    })
+
+    # Clone tracker assignments
+    for ta in (source.tracker_assignments or []):
+        db.add(TrackerAssignment(
+            id=generate_uuid(),
+            session_id=new_session.id,
+            tracker_id=ta.tracker_id,
+            drone_profile_id=ta.drone_profile_id,
+            session_color=ta.session_color,
+            target_altitude_m=ta.target_altitude_m,
+        ))
+
+    # Clone CUAS placements
+    for cp in (source.cuas_placements or []):
+        db.add(CUASPlacement(
+            id=generate_uuid(),
+            session_id=new_session.id,
+            cuas_profile_id=cp.cuas_profile_id,
+            lat=cp.lat,
+            lon=cp.lon,
+            height_agl_m=cp.height_agl_m,
+            orientation_deg=cp.orientation_deg,
+            active=cp.active,
+        ))
+
+    new_session_id = new_session.id
+    await db.commit()
+
+    # Re-fetch with relations
+    new_session = await repo.get_with_relations(new_session_id)
+    return session_to_dict_full(new_session)
+
+
 # Session Lifecycle
 @router.post("/sessions/{session_id}/start")
 async def start_session(
@@ -1615,6 +1694,77 @@ async def compute_metrics(
     return {"metrics": result, "status": "computed"}
 
 
+@router.get("/sessions/{session_id}/telemetry")
+async def get_session_telemetry(
+    session_id: str,
+    downsample: int = Query(2000, ge=10, le=50000),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get downsampled telemetry tracks for a session.
+    Returns all tracker tracks grouped by tracker_id.
+    """
+    repo = TelemetryRepository(db)
+    session_repo = SessionRepository(db)
+
+    # Verify session exists
+    session = await session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Get all tracker IDs for this session
+    tracker_ids = await repo.get_trackers_for_session(session_id)
+
+    if not tracker_ids:
+        return {"session_id": session_id, "tracks": {}, "point_count": 0}
+
+    # Build engagement windows for smart downsampling
+    eng_repo = EngagementRepository(db)
+    engagements = await eng_repo.get_by_session(session_id)
+    engagement_windows = [
+        (e.engage_timestamp, e.disengage_timestamp or datetime.utcnow())
+        for e in engagements
+        if e.engage_timestamp
+    ]
+
+    # Downsample per tracker (divide budget across trackers)
+    points_per_tracker = max(100, downsample // len(tracker_ids))
+    tracks: Dict[str, list] = {}
+    total_points = 0
+
+    for tracker_id in tracker_ids:
+        if engagement_windows:
+            records = await repo.get_downsampled_engagement_aware(
+                session_id, tracker_id=tracker_id, target_points=points_per_tracker,
+                engagement_windows=engagement_windows,
+            )
+        else:
+            records = await repo.get_downsampled(
+                session_id, tracker_id=tracker_id, target_points=points_per_tracker
+            )
+        tracks[tracker_id] = [
+            {
+                "lat": r.lat,
+                "lon": r.lon,
+                "alt_m": r.alt_m,
+                "timestamp": r.time_local_received.isoformat() if r.time_local_received else None,
+                "speed_mps": r.speed_mps,
+                "hdop": r.hdop,
+                "satellites": r.satellites,
+                "fix_valid": r.fix_valid,
+            }
+            for r in records
+            if r.lat is not None and r.lon is not None
+        ]
+        total_points += len(tracks[tracker_id])
+
+    return {
+        "session_id": session_id,
+        "tracks": tracks,
+        "point_count": total_points,
+    }
+
+
 # =============================================================================
 # Engagement Endpoints
 # =============================================================================
@@ -1670,12 +1820,14 @@ async def create_engagement(
         cuas_placement_id = resolved_placement_id
         emitter_id = resolved_placement_id
 
-    # Auto-generate name if not provided
-    count_result = await db.execute(
-        sa_select(Engagement).where(Engagement.session_id == session_id)
+    # Auto-generate run_number and name if not provided
+    from sqlalchemy import func as sa_func
+    max_run_result = await db.execute(
+        sa_select(sa_func.coalesce(sa_func.max(Engagement.run_number), 0))
+        .where(Engagement.session_id == session_id)
     )
-    existing_count = len(count_result.scalars().all())
-    name = request.name or f"Run {existing_count + 1}"
+    next_run_number = (max_run_result.scalar() or 0) + 1
+    name = request.name or f"Run {next_run_number}"
 
     engagement = Engagement(
         id=generate_uuid(),
@@ -1684,6 +1836,7 @@ async def create_engagement(
         emitter_type=emitter_type,
         emitter_id=emitter_id,
         name=name,
+        run_number=next_run_number,
         engagement_type=request.engagement_type,
         status=EngagementStatus.PLANNED.value,
         notes=request.notes,
@@ -1741,12 +1894,14 @@ async def quick_engage(
     if not assignments:
         raise HTTPException(status_code=400, detail="No tracker assignments in session")
 
-    # Auto-generate name
-    existing = await db.execute(
-        sa_select(Engagement).where(Engagement.session_id == session_id)
+    # Auto-generate run_number and name
+    from sqlalchemy import func as sa_func
+    max_run_result = await db.execute(
+        sa_select(sa_func.coalesce(sa_func.max(Engagement.run_number), 0))
+        .where(Engagement.session_id == session_id)
     )
-    existing_count = len(existing.scalars().all())
-    name = request.name or f"Run {existing_count + 1}"
+    next_run_number = (max_run_result.scalar() or 0) + 1
+    name = request.name or f"Run {next_run_number}"
 
     # Create engagement
     engagement = Engagement(
@@ -1756,6 +1911,7 @@ async def quick_engage(
         emitter_type=EmitterType.CUAS_SYSTEM.value,
         emitter_id=placement.id,
         name=name,
+        run_number=next_run_number,
         engagement_type=request.engagement_type,
         status=EngagementStatus.PLANNED.value,
     )
@@ -1845,6 +2001,62 @@ async def list_engagements(
     eng_repo = EngagementRepository(db)
     engagements = await eng_repo.get_by_session(session_id)
     return {"engagements": [engagement_to_dict(e) for e in engagements]}
+
+
+@router.get("/sessions/{session_id}/engagement-summary")
+async def get_engagement_summary(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Aggregated engagement summary for a session.
+    Returns all engagements with metrics plus session-level stats.
+    """
+    session_repo = SessionRepository(db)
+    session = await session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    eng_repo = EngagementRepository(db)
+    engagements = await eng_repo.get_by_session(session_id)
+
+    runs = []
+    total_tte = []
+    total_range = []
+    pass_count = 0
+    fail_count = 0
+
+    for eng in engagements:
+        run_data = engagement_to_dict(eng)
+        m = eng.metrics
+        if m:
+            if m.time_to_effect_s is not None:
+                total_tte.append(m.time_to_effect_s)
+            if m.effective_range_m is not None:
+                total_range.append(m.effective_range_m)
+            if m.pass_fail == "pass":
+                pass_count += 1
+            elif m.pass_fail == "fail":
+                fail_count += 1
+        runs.append(run_data)
+
+    total_runs = len(engagements)
+    completed_runs = len([e for e in engagements if e.status in ("complete", "aborted")])
+
+    return {
+        "session_id": session_id,
+        "runs": runs,
+        "stats": {
+            "total_runs": total_runs,
+            "completed_runs": completed_runs,
+            "active_runs": total_runs - completed_runs,
+            "pass_count": pass_count,
+            "fail_count": fail_count,
+            "pass_rate": round(pass_count / completed_runs * 100, 1) if completed_runs > 0 else None,
+            "avg_time_to_effect_s": round(sum(total_tte) / len(total_tte), 2) if total_tte else None,
+            "avg_effective_range_m": round(sum(total_range) / len(total_range), 1) if total_range else None,
+        },
+    }
 
 
 @router.get("/engagements/{engagement_id}")
@@ -2327,6 +2539,7 @@ async def create_actor(
         "session_id": session_id,
         "name": request.name,
         "callsign": request.callsign,
+        "cot_uid": request.cot_uid,
         "lat": request.lat,
         "lon": request.lon,
         "heading_deg": request.heading_deg,
@@ -2361,7 +2574,7 @@ async def update_actor(
         raise HTTPException(status_code=404, detail="Actor not found")
 
     update_data = {}
-    for field in ["name", "callsign", "lat", "lon", "heading_deg", "tracker_unit_id", "is_active"]:
+    for field in ["name", "callsign", "cot_uid", "lat", "lon", "heading_deg", "tracker_unit_id", "is_active"]:
         value = getattr(request, field, None)
         if value is not None:
             update_data[field] = value
@@ -3807,4 +4020,548 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "status": overall,
         "checks": checks,
         "version": "2.0.0",
+    }
+
+
+# ============================================================================
+# SDR READINGS ENDPOINTS
+# ============================================================================
+
+@router.post("/sessions/{session_id}/sdr-readings")
+async def create_sdr_reading(
+    session_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create an SDR reading for a session."""
+    body = await request.json()
+    reading = SDRReading(
+        id=generate_uuid(),
+        session_id=session_id,
+        actor_id=body.get("actor_id"),
+        timestamp=datetime.fromisoformat(body["timestamp"]) if body.get("timestamp") else datetime.utcnow(),
+        lat=body.get("lat"),
+        lon=body.get("lon"),
+        alt_m=body.get("alt_m"),
+        gps_accuracy_m=body.get("gps_accuracy_m"),
+        center_frequency_mhz=body["center_frequency_mhz"],
+        bandwidth_mhz=body.get("bandwidth_mhz"),
+        sample_rate_mhz=body.get("sample_rate_mhz"),
+        gain_db=body.get("gain_db"),
+        readings=body.get("readings"),
+        device_info=body.get("device_info"),
+        notes=body.get("notes"),
+    )
+    db.add(reading)
+    await db.commit()
+    await db.refresh(reading)
+    return {"id": reading.id, "session_id": session_id}
+
+
+@router.get("/sessions/{session_id}/sdr-readings")
+async def list_sdr_readings(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """List SDR readings for a session."""
+    from sqlalchemy import select
+    result = await db.execute(
+        select(SDRReading)
+        .where(SDRReading.session_id == session_id)
+        .order_by(SDRReading.timestamp.asc())
+    )
+    readings = list(result.scalars().all())
+    return [
+        {
+            "id": r.id,
+            "actor_id": r.actor_id,
+            "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+            "lat": r.lat,
+            "lon": r.lon,
+            "center_frequency_mhz": r.center_frequency_mhz,
+            "bandwidth_mhz": r.bandwidth_mhz,
+            "gain_db": r.gain_db,
+            "readings": r.readings,
+            "device_info": r.device_info,
+            "notes": r.notes,
+        }
+        for r in readings
+    ]
+
+
+# ============================================================================
+# OPERATOR POSITIONS ENDPOINTS
+# ============================================================================
+
+@router.post("/sessions/{session_id}/operator-positions")
+async def create_operator_positions(
+    session_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Bulk insert operator positions (from CoT or GPS)."""
+    body = await request.json()
+    records = body if isinstance(body, list) else [body]
+
+    for rec in records:
+        pos = OperatorPosition(
+            session_id=session_id,
+            actor_id=rec["actor_id"],
+            timestamp=datetime.fromisoformat(rec["timestamp"]) if rec.get("timestamp") else datetime.utcnow(),
+            lat=rec["lat"],
+            lon=rec["lon"],
+            alt_m=rec.get("alt_m"),
+            heading_deg=rec.get("heading_deg"),
+            speed_mps=rec.get("speed_mps"),
+            gps_accuracy_m=rec.get("gps_accuracy_m"),
+            source=rec.get("source", "gps"),
+        )
+        db.add(pos)
+
+    await db.commit()
+    return {"inserted": len(records)}
+
+
+@router.get("/sessions/{session_id}/operator-positions")
+async def list_operator_positions(
+    session_id: str,
+    actor_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """List operator positions for a session, optionally filtered by actor."""
+    from sqlalchemy import select
+    query = select(OperatorPosition).where(OperatorPosition.session_id == session_id)
+    if actor_id:
+        query = query.where(OperatorPosition.actor_id == actor_id)
+    query = query.order_by(OperatorPosition.timestamp.asc())
+
+    result = await db.execute(query)
+    positions = list(result.scalars().all())
+    return [
+        {
+            "actor_id": p.actor_id,
+            "timestamp": p.timestamp.isoformat() if p.timestamp else None,
+            "lat": p.lat,
+            "lon": p.lon,
+            "alt_m": p.alt_m,
+            "heading_deg": p.heading_deg,
+            "speed_mps": p.speed_mps,
+            "source": p.source,
+        }
+        for p in positions
+    ]
+
+
+# ============================================================================
+# WORKSPACE LAYERS ENDPOINTS
+# ============================================================================
+
+@router.post("/workspace-layers")
+async def create_workspace_layer(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a workspace layer (GeoJSON, KML, annotation)."""
+    body = await request.json()
+    layer = WorkspaceLayer(
+        id=generate_uuid(),
+        session_id=body.get("session_id"),
+        site_id=body.get("site_id"),
+        name=body["name"],
+        layer_type=body.get("layer_type", "geojson"),
+        geojson_data=body.get("geojson_data"),
+        style=body.get("style"),
+        visible=body.get("visible", True),
+        sort_order=body.get("sort_order", 0),
+    )
+    db.add(layer)
+    await db.commit()
+    await db.refresh(layer)
+    return {
+        "id": layer.id,
+        "name": layer.name,
+        "layer_type": layer.layer_type,
+    }
+
+
+@router.get("/workspace-layers")
+async def list_workspace_layers(
+    session_id: Optional[str] = Query(None),
+    site_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """List workspace layers, filtered by session or site."""
+    from sqlalchemy import select
+    query = select(WorkspaceLayer)
+    if session_id:
+        query = query.where(WorkspaceLayer.session_id == session_id)
+    if site_id:
+        query = query.where(WorkspaceLayer.site_id == site_id)
+    query = query.order_by(WorkspaceLayer.sort_order.asc())
+
+    result = await db.execute(query)
+    layers = list(result.scalars().all())
+    return [
+        {
+            "id": l.id,
+            "session_id": l.session_id,
+            "site_id": l.site_id,
+            "name": l.name,
+            "layer_type": l.layer_type,
+            "geojson_data": l.geojson_data,
+            "style": l.style,
+            "visible": l.visible,
+            "sort_order": l.sort_order,
+        }
+        for l in layers
+    ]
+
+
+@router.put("/workspace-layers/{layer_id}")
+async def update_workspace_layer(
+    layer_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a workspace layer."""
+    from sqlalchemy import select
+    result = await db.execute(select(WorkspaceLayer).where(WorkspaceLayer.id == layer_id))
+    layer = result.scalar_one_or_none()
+    if not layer:
+        raise HTTPException(status_code=404, detail="Layer not found")
+
+    body = await request.json()
+    for field in ["name", "layer_type", "geojson_data", "style", "visible", "sort_order"]:
+        if field in body:
+            setattr(layer, field, body[field])
+
+    await db.commit()
+    return {"id": layer.id, "name": layer.name}
+
+
+@router.delete("/workspace-layers/{layer_id}")
+async def delete_workspace_layer(
+    layer_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a workspace layer."""
+    from sqlalchemy import select, delete as sa_delete
+    result = await db.execute(select(WorkspaceLayer).where(WorkspaceLayer.id == layer_id))
+    layer = result.scalar_one_or_none()
+    if not layer:
+        raise HTTPException(status_code=404, detail="Layer not found")
+
+    await db.delete(layer)
+    await db.commit()
+    return {"success": True}
+
+
+# ============================================================================
+# MEDIA ATTACHMENTS ENDPOINTS
+# ============================================================================
+
+@router.post("/media-attachments")
+async def create_media_attachment(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Register a media attachment (file must already be stored on disk)."""
+    body = await request.json()
+    attachment = MediaAttachment(
+        id=generate_uuid(),
+        session_id=body.get("session_id"),
+        site_id=body.get("site_id"),
+        entity_type=body.get("entity_type"),
+        entity_id=body.get("entity_id"),
+        file_path=body["file_path"],
+        file_name=body["file_name"],
+        mime_type=body.get("mime_type"),
+        file_size_bytes=body.get("file_size_bytes"),
+        thumbnail_path=body.get("thumbnail_path"),
+        caption=body.get("caption"),
+        lat=body.get("lat"),
+        lon=body.get("lon"),
+        taken_at=datetime.fromisoformat(body["taken_at"]) if body.get("taken_at") else None,
+        uploaded_by=body.get("uploaded_by"),
+    )
+    db.add(attachment)
+    await db.commit()
+    await db.refresh(attachment)
+    return {"id": attachment.id, "file_name": attachment.file_name}
+
+
+@router.get("/media-attachments")
+async def list_media_attachments(
+    session_id: Optional[str] = Query(None),
+    entity_type: Optional[str] = Query(None),
+    entity_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """List media attachments filtered by session or entity."""
+    from sqlalchemy import select
+    query = select(MediaAttachment)
+    if session_id:
+        query = query.where(MediaAttachment.session_id == session_id)
+    if entity_type:
+        query = query.where(MediaAttachment.entity_type == entity_type)
+    if entity_id:
+        query = query.where(MediaAttachment.entity_id == entity_id)
+    query = query.order_by(MediaAttachment.created_at.desc())
+
+    result = await db.execute(query)
+    attachments = list(result.scalars().all())
+    return [
+        {
+            "id": a.id,
+            "session_id": a.session_id,
+            "entity_type": a.entity_type,
+            "entity_id": a.entity_id,
+            "file_path": a.file_path,
+            "file_name": a.file_name,
+            "mime_type": a.mime_type,
+            "file_size_bytes": a.file_size_bytes,
+            "caption": a.caption,
+            "lat": a.lat,
+            "lon": a.lon,
+            "taken_at": a.taken_at.isoformat() if a.taken_at else None,
+            "uploaded_by": a.uploaded_by,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in attachments
+    ]
+
+
+# ============================================================================
+# TRACKER ALIASES ENDPOINTS
+# ============================================================================
+
+@router.get("/tracker-aliases")
+async def list_tracker_aliases(
+    db: AsyncSession = Depends(get_db),
+):
+    """List all tracker aliases."""
+    from sqlalchemy import select
+    result = await db.execute(select(TrackerAlias).order_by(TrackerAlias.tracker_id))
+    aliases = list(result.scalars().all())
+    return [
+        {
+            "id": a.id,
+            "tracker_id": a.tracker_id,
+            "alias": a.alias,
+            "notes": a.notes,
+        }
+        for a in aliases
+    ]
+
+
+@router.put("/tracker-aliases/{tracker_id}")
+async def upsert_tracker_alias(
+    tracker_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create or update a tracker alias."""
+    from sqlalchemy import select
+    body = await request.json()
+
+    result = await db.execute(
+        select(TrackerAlias).where(TrackerAlias.tracker_id == tracker_id)
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.alias = body["alias"]
+        if "notes" in body:
+            existing.notes = body["notes"]
+    else:
+        alias = TrackerAlias(
+            tracker_id=tracker_id,
+            alias=body["alias"],
+            notes=body.get("notes"),
+        )
+        db.add(alias)
+
+    await db.commit()
+    return {"tracker_id": tracker_id, "alias": body["alias"]}
+
+
+@router.delete("/tracker-aliases/{tracker_id}")
+async def delete_tracker_alias(
+    tracker_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a tracker alias."""
+    from sqlalchemy import select
+    result = await db.execute(
+        select(TrackerAlias).where(TrackerAlias.tracker_id == tracker_id)
+    )
+    existing = result.scalar_one_or_none()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Alias not found")
+
+    await db.delete(existing)
+    await db.commit()
+    return {"success": True}
+
+
+# ============================================================================
+# MOBILE COMPANION ENDPOINTS
+# ============================================================================
+
+
+@router.post("/cuas-placements/{placement_id}/geotag")
+async def geotag_cuas_placement(
+    placement_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Geotag a CUAS placement from a mobile device (GPS position + optional photo)."""
+    body = await request.json()
+    placement = await db.get(CUASPlacement, placement_id)
+    if not placement:
+        raise HTTPException(status_code=404, detail="CUAS placement not found")
+
+    # Update geotag fields
+    if "lat" in body and "lon" in body:
+        placement.lat = body["lat"]
+        placement.lon = body["lon"]
+    if "alt_m" in body:
+        placement.alt_m = body["alt_m"]
+    if "orientation_deg" in body:
+        placement.orientation_deg = body["orientation_deg"]
+    if "photo_url" in body:
+        placement.photo_url = body["photo_url"]
+    if "gps_accuracy_m" in body:
+        placement.gps_accuracy_m = body["gps_accuracy_m"]
+
+    placement.geotagged_at = datetime.utcnow()
+    placement.geotagged_by_actor_id = body.get("actor_id")
+    placement.geotag_method = body.get("method", "gps")
+
+    await db.commit()
+    return {
+        "id": placement.id,
+        "lat": placement.lat,
+        "lon": placement.lon,
+        "geotagged_at": placement.geotagged_at.isoformat(),
+        "geotag_method": placement.geotag_method,
+    }
+
+
+@router.post("/mobile/sync")
+async def mobile_batch_sync(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Batch sync endpoint for mobile companion app offline queue.
+
+    Accepts a list of operations that were queued offline and processes them
+    in order. Each operation has a type and payload matching an existing endpoint.
+    Returns per-operation results so the mobile app can clear its queue.
+    """
+    body = await request.json()
+    operations = body.get("operations", [])
+    results = []
+
+    for i, op in enumerate(operations):
+        op_type = op.get("type")
+        payload = op.get("payload", {})
+        op_id = op.get("id", str(i))
+
+        try:
+            if op_type == "operator_position":
+                session_id = payload.pop("session_id")
+                position = OperatorPosition(
+                    session_id=session_id,
+                    actor_id=payload.get("actor_id"),
+                    timestamp=datetime.fromisoformat(payload["timestamp"]) if payload.get("timestamp") else datetime.utcnow(),
+                    lat=payload["lat"],
+                    lon=payload["lon"],
+                    alt_m=payload.get("alt_m"),
+                    heading_deg=payload.get("heading_deg"),
+                    speed_mps=payload.get("speed_mps"),
+                    gps_accuracy_m=payload.get("gps_accuracy_m"),
+                    source=payload.get("source", "gps"),
+                )
+                db.add(position)
+                results.append({"id": op_id, "status": "ok"})
+
+            elif op_type == "sdr_reading":
+                session_id = payload.pop("session_id")
+                reading = SDRReading(
+                    id=generate_uuid(),
+                    session_id=session_id,
+                    actor_id=payload.get("actor_id"),
+                    timestamp=datetime.fromisoformat(payload["timestamp"]) if payload.get("timestamp") else datetime.utcnow(),
+                    lat=payload.get("lat"),
+                    lon=payload.get("lon"),
+                    alt_m=payload.get("alt_m"),
+                    gps_accuracy_m=payload.get("gps_accuracy_m"),
+                    center_frequency_mhz=payload["center_frequency_mhz"],
+                    bandwidth_mhz=payload.get("bandwidth_mhz"),
+                    sample_rate_mhz=payload.get("sample_rate_mhz"),
+                    gain_db=payload.get("gain_db"),
+                    readings=payload.get("readings"),
+                    device_info=payload.get("device_info"),
+                    notes=payload.get("notes"),
+                )
+                db.add(reading)
+                results.append({"id": op_id, "status": "ok"})
+
+            elif op_type == "cuas_geotag":
+                placement_id = payload.pop("placement_id")
+                placement = await db.get(CUASPlacement, placement_id)
+                if not placement:
+                    results.append({"id": op_id, "status": "error", "detail": "Placement not found"})
+                    continue
+                if "lat" in payload and "lon" in payload:
+                    placement.lat = payload["lat"]
+                    placement.lon = payload["lon"]
+                if "alt_m" in payload:
+                    placement.alt_m = payload["alt_m"]
+                if "orientation_deg" in payload:
+                    placement.orientation_deg = payload["orientation_deg"]
+                if "photo_url" in payload:
+                    placement.photo_url = payload["photo_url"]
+                if "gps_accuracy_m" in payload:
+                    placement.gps_accuracy_m = payload["gps_accuracy_m"]
+                placement.geotagged_at = datetime.utcnow()
+                placement.geotagged_by_actor_id = payload.get("actor_id")
+                placement.geotag_method = payload.get("method", "gps")
+                results.append({"id": op_id, "status": "ok"})
+
+            elif op_type == "media_attachment":
+                attachment = MediaAttachment(
+                    id=generate_uuid(),
+                    session_id=payload.get("session_id"),
+                    site_id=payload.get("site_id"),
+                    entity_type=payload.get("entity_type"),
+                    entity_id=payload.get("entity_id"),
+                    file_path=payload["file_path"],
+                    file_name=payload.get("file_name"),
+                    mime_type=payload.get("mime_type"),
+                    file_size_bytes=payload.get("file_size_bytes"),
+                    thumbnail_path=payload.get("thumbnail_path"),
+                    caption=payload.get("caption"),
+                    lat=payload.get("lat"),
+                    lon=payload.get("lon"),
+                    taken_at=datetime.fromisoformat(payload["taken_at"]) if payload.get("taken_at") else None,
+                    uploaded_by=payload.get("uploaded_by"),
+                )
+                db.add(attachment)
+                results.append({"id": op_id, "status": "ok"})
+
+            else:
+                results.append({"id": op_id, "status": "error", "detail": f"Unknown type: {op_type}"})
+
+        except Exception as e:
+            results.append({"id": op_id, "status": "error", "detail": str(e)})
+
+    await db.commit()
+    succeeded = sum(1 for r in results if r["status"] == "ok")
+    return {
+        "total": len(operations),
+        "succeeded": succeeded,
+        "failed": len(operations) - succeeded,
+        "results": results,
     }

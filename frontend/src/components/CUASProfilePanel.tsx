@@ -18,6 +18,8 @@ import {
   Layers,
 } from 'lucide-react';
 import { GlassPanel, GlassCard, GlassButton, GlassInput, Badge, GlassDivider } from './ui/GlassUI';
+import { ModelThumbnail } from './ModelThumbnail';
+import { getCUASModelOptions } from '../utils/modelRegistry';
 import { useWorkflow } from '../contexts/WorkflowContext';
 import {
   CUASProfile,
@@ -307,6 +309,32 @@ export default function CUASProfilePanel({ isOpen, onClose }: CUASProfilePanelPr
               </div>
             </div>
 
+            {/* 3D Model */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
+                3D Model
+              </label>
+              <select
+                value={editedProfile?.model_3d || ''}
+                onChange={(e) => setEditedProfile(prev => prev ? { ...prev, model_3d: e.target.value || undefined } : null)}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  color: '#fff',
+                  fontSize: '13px',
+                  outline: 'none',
+                }}
+              >
+                <option value="" style={{ background: '#1a1a2e' }}>Auto-detect by type</option>
+                {getCUASModelOptions().map(opt => (
+                  <option key={opt.id} value={opt.id} style={{ background: '#1a1a2e' }}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
             <GlassDivider />
 
             {/* Capabilities (for jammers) */}
@@ -424,6 +452,14 @@ export default function CUASProfilePanel({ isOpen, onClose }: CUASProfilePanelPr
               cuasProfiles.map(profile => (
                 <GlassCard key={profile.id} style={{ marginBottom: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                    <div style={{ marginRight: '10px', flexShrink: 0 }}>
+                      <ModelThumbnail
+                        type="cuas"
+                        cuasType={profile.type}
+                        size={48}
+                        view="profile"
+                      />
+                    </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                         {getTypeIcon(profile.type)}

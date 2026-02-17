@@ -16,6 +16,7 @@ import SDCardPanel from './SDCardPanel';
 import AnalysisPanel from './AnalysisPanel';
 import UnifiedWorkspacePanel from './UnifiedWorkspacePanel';
 import ConfigurationWorkspacePanel from './ConfigurationWorkspacePanel';
+import SessionHistoryPanel from './SessionHistoryPanel';
 import RecordingBar from './RecordingBar';
 import { SessionSetupWizard } from './SessionSetupWizard';
 import CUASControlPanel from './CUASControlPanel';
@@ -28,7 +29,8 @@ import LinkBudgetPanel from './LinkBudgetPanel';
 import CoordinateBar from './CoordinateBar';
 import MapFileDropHandler from './MapFileDropHandler';
 import type { ImportedLayer } from './MapFileDropHandler';
-import { FileText, X, Globe, Map as MapIcon, Signal, Box, Target, MapPin, Globe2, Mountain, AlertTriangle, Radio, Ruler } from 'lucide-react';
+import { FileText, X, Globe, Map as MapIcon, Signal, Box, Target, MapPin, Globe2, Mountain, AlertTriangle, Radio, Ruler, Camera } from 'lucide-react';
+import { SiteReconViewer } from './SiteReconViewer';
 import type { GeoPoint } from '../types/workflow';
 
 export default function MapView() {
@@ -70,6 +72,8 @@ export default function MapView() {
     setIsDrawingMode,
     setDrawingType,
     setPendingDrawingResult,
+    siteReconCaptures,
+    loadSiteRecon,
   } = useWorkflow();
   const {
     currentPhase,
@@ -102,6 +106,25 @@ export default function MapView() {
   // 3D view toggle: 'none' | 'maplibre3d' | 'cesium'
   const [show3DView, setShow3DView] = useState(false);
   const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
+
+  // Wizard open state (for dual Cesium instance prevention)
+  const [wizardIsOpen, setWizardIsOpen] = useState(false);
+
+  // Site Recon viewer
+  const [showReconViewer, setShowReconViewer] = useState(false);
+
+  // Build tracker_id -> DroneProfile map for 2D marker thumbnails
+  const droneProfileMap = useMemo(() => {
+    const map = new Map<string, import('../types/workflow').DroneProfile>();
+    const assignments = phaseActiveSession?.tracker_assignments;
+    if (assignments && droneProfiles) {
+      for (const a of assignments) {
+        const profile = droneProfiles.find(p => p.id === a.drone_profile_id);
+        if (profile) map.set(a.tracker_id, profile);
+      }
+    }
+    return map;
+  }, [phaseActiveSession?.tracker_assignments, droneProfiles]);
 
   // Terrain/RF tools (use selected drone + first CUAS placement as endpoints)
   const [showTerrainProfile, setShowTerrainProfile] = useState(false);
@@ -140,6 +163,8 @@ export default function MapView() {
   // CUAS placement mode state
   const [placingCuasId, setPlacingCuasId] = useState<string | null>(null);
   const [pendingCuasPlacement, setPendingCuasPlacement] = useState<{ placementId: string; lat: number; lon: number } | null>(null);
+  // Wizard CUAS placements for map preview (draggable markers)
+  const [wizardCuasPlacements, setWizardCuasPlacements] = useState<Array<{ id: string; cuasProfileId: string; position: { lat: number; lon: number }; orientation: number }>>([]);
 
   // Fly to center state (triggered after session starts)
   const [flyToCenter, setFlyToCenter] = useState<{ lat: number; lon: number; zoom?: number } | null>(null);
@@ -189,6 +214,10 @@ export default function MapView() {
 
   const handleCuasPlacementHandled = useCallback(() => {
     setPendingCuasPlacement(null);
+  }, []);
+
+  const handleWizardCuasMoved = useCallback((placementId: string, lat: number, lon: number) => {
+    setPendingCuasPlacement({ placementId, lat, lon });
   }, []);
 
   // Cursor move handler for CoordinateBar
@@ -270,9 +299,12 @@ export default function MapView() {
     weatherNotes: string;
   }) => {
     try {
+      console.log('[SESSION CREATE] Step 1: Processing wizard data', JSON.stringify(sessionData, null, 2));
+
       // Create new site if needed
       let siteId = sessionData.siteId;
       if (!siteId && sessionData.newSiteName) {
+        console.log('[SESSION CREATE] Step 1b: Creating new site:', sessionData.newSiteName);
         // v2 SiteCreateRequest expects flat center_lat/center_lon
         const newSite = await createSite({
           name: sessionData.newSiteName,
@@ -284,6 +316,7 @@ export default function MapView() {
           zones: [],
         } as any);
         siteId = newSite.id;
+        console.log('[SESSION CREATE] Step 1b: Site created:', siteId);
       }
 
       // Build tracker assignments for v2 API (flat format)
@@ -304,8 +337,7 @@ export default function MapView() {
         active: false,
       }));
 
-      // Create the test session via v2 API with inline relations
-      const testSession = await createTestSession({
+      const createPayload = {
         name: sessionData.name,
         site_id: siteId || null,
         status: 'planning',
@@ -313,18 +345,31 @@ export default function MapView() {
         cuas_placements: cuasPlacements,
         operator_name: sessionData.operatorName,
         weather_notes: sessionData.weatherNotes,
-      } as any);
+      };
+      console.log('[SESSION CREATE] Step 2: Creating session with payload:', JSON.stringify(createPayload, null, 2));
+
+      // Create the test session via v2 API with inline relations
+      const testSession = await createTestSession(createPayload as any);
+      console.log('[SESSION CREATE] Step 3: Session created:', JSON.stringify(testSession, null, 2));
 
       // Start the test session
-      await startTest(testSession.id);
+      console.log('[SESSION CREATE] Step 4: Starting session:', testSession.id);
+      const startedSession = await startTest(testSession.id);
+      if (!startedSession) {
+        throw new Error('Failed to start session — backend returned no session');
+      }
+      console.log('[SESSION CREATE] Step 5: Session started, navigating to live view');
 
       // Navigate to Session Console for focused recording view
       navigate(`/session/${testSession.id}/live`);
     } catch (error) {
-      console.error('Failed to start session:', error);
+      console.error('[SESSION CREATE] FAILED at some step:', error);
+      console.error('[SESSION CREATE] Error name:', (error as any)?.name);
+      console.error('[SESSION CREATE] Error message:', (error as any)?.message);
+      console.error('[SESSION CREATE] Error stack:', (error as any)?.stack);
       throw error;
     }
-  }, [createSite, createTestSession, startTest, navigate]);
+  }, [createSite, createTestSession, startTest, navigate, mapCenter]);
 
   // Auto-dismiss new file alert after 5 seconds
   useEffect(() => {
@@ -494,6 +539,9 @@ export default function MapView() {
             onDrawingComplete={handleDrawingComplete}
             placingCuasId={placingCuasId}
             onCuasPlaced={handleCuasPlaced}
+            wizardCuasPlacements={wizardCuasPlacements}
+            wizardCuasProfiles={cuasProfiles}
+            onWizardCuasMoved={handleWizardCuasMoved}
             flyToCenter={flyToCenter}
             onFlyToComplete={() => setFlyToCenter(null)}
             sdCardTracks={sdCardTracks}
@@ -502,6 +550,7 @@ export default function MapView() {
             measureMode={measureMode}
             onMeasurementAdded={handleMeasurementAdded}
             importedLayers={importedLayers}
+            droneProfileMap={droneProfileMap}
           />
         </MapFileDropHandler>
 
@@ -522,8 +571,8 @@ export default function MapView() {
           />
         )}
 
-        {/* CesiumJS Globe Overlay */}
-        {showCesiumGlobe && (
+        {/* CesiumJS Globe Overlay — hidden when wizard is open to prevent dual Cesium instances */}
+        {showCesiumGlobe && !wizardIsOpen && (
           <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
             <CesiumMap
               droneHistory={droneHistory}
@@ -533,6 +582,20 @@ export default function MapView() {
               cuasPlacements={phaseActiveSession?.cuas_placements || []}
               cuasProfiles={cuasProfiles}
               onClose={() => setShowCesiumGlobe(false)}
+              initialCameraState3D={selectedSite?.camera_state_3d}
+              droneProfiles={droneProfiles}
+              droneProfileMap={droneProfileMap}
+            />
+          </div>
+        )}
+
+        {/* Site Recon Viewer Overlay */}
+        {showReconViewer && selectedSite && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 25 }}>
+            <SiteReconViewer
+              site={selectedSite}
+              captures={siteReconCaptures.get(selectedSite.id) || []}
+              onClose={() => setShowReconViewer(false)}
             />
           </div>
         )}
@@ -560,6 +623,33 @@ export default function MapView() {
 
         {/* Map Controls Group - Bottom Right */}
         <div className="map-controls-group">
+          {/* ── 3D View Section ── */}
+          <div className="map-controls-3d-section">
+            <span className="map-controls-section-label">3D View</span>
+            <div className="map-controls-3d-buttons">
+              <button
+                className={`map-control-btn map-control-labeled ${show3DView && !showCesiumGlobe ? 'active' : ''}`}
+                onClick={() => { setShow3DView(prev => !prev); setShowCesiumGlobe(false); }}
+                title={show3DView ? 'Switch to 2D Map' : '3D Terrain View (MapLibre)'}
+              >
+                <Box size={18} />
+                <span className="map-control-label">3D</span>
+              </button>
+
+              <button
+                className={`map-control-btn map-control-labeled ${showCesiumGlobe ? 'active' : ''}`}
+                onClick={() => { setShowCesiumGlobe(prev => !prev); setShow3DView(false); }}
+                title={showCesiumGlobe ? 'Exit Globe View' : 'CesiumJS Globe (3D Tiles + OSM Buildings)'}
+              >
+                <Globe2 size={18} />
+                <span className="map-control-label">Globe</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="map-controls-divider" />
+
+          {/* ── Map Tools ── */}
           {/* Map Style Toggle */}
           <button
             className={`map-control-btn ${mapStyle !== 'dark' ? 'active' : ''}`}
@@ -569,23 +659,19 @@ export default function MapView() {
             {mapStyle === 'dark' ? <Globe size={18} /> : <MapIcon size={18} />}
           </button>
 
-          {/* 3D View Toggle (MapLibre) */}
-          <button
-            className={`map-control-btn ${show3DView && !showCesiumGlobe ? 'active' : ''}`}
-            onClick={() => { setShow3DView(prev => !prev); setShowCesiumGlobe(false); }}
-            title={show3DView ? 'Switch to 2D Map' : 'Switch to 3D View'}
-          >
-            <Box size={18} />
-          </button>
-
-          {/* CesiumJS Globe Toggle */}
-          <button
-            className={`map-control-btn ${showCesiumGlobe ? 'active' : ''}`}
-            onClick={() => { setShowCesiumGlobe(prev => !prev); setShow3DView(false); }}
-            title={showCesiumGlobe ? 'Exit Globe View' : 'CesiumJS Globe (3D Tiles)'}
-          >
-            <Globe2 size={18} />
-          </button>
+          {/* Site Recon Button (visible when site has captured recon) */}
+          {selectedSite?.recon_status === 'captured' && (
+            <button
+              className={`map-control-btn ${showReconViewer ? 'active' : ''}`}
+              onClick={() => {
+                loadSiteRecon(selectedSite.id);
+                setShowReconViewer(true);
+              }}
+              title="Site Recon"
+            >
+              <Camera size={18} />
+            </button>
+          )}
 
           {/* Sites / Places Button */}
           <button
@@ -786,6 +872,8 @@ export default function MapView() {
           pendingCuasPlacement={pendingCuasPlacement}
           onCuasPlacementHandled={handleCuasPlacementHandled}
           isMinimizedForPlacement={placingCuasId !== null}
+          onWizardPlacementsChanged={setWizardCuasPlacements}
+          onWizardOpenChange={setWizardIsOpen}
         />
 
         {/* New File Notification Toast */}
@@ -872,6 +960,12 @@ export default function MapView() {
       {/* Configuration Workspace Panel (Right-docked) - Sites, Drones, CUAS */}
       <ConfigurationWorkspacePanel
         isOpen={activePanel === 'sites' || activePanel === 'drone-profiles' || activePanel === 'cuas-profiles'}
+        onClose={() => setActivePanel(null)}
+      />
+
+      {/* Session History Panel (Right-docked) */}
+      <SessionHistoryPanel
+        isOpen={activePanel === 'session-history'}
         onClose={() => setActivePanel(null)}
       />
     </div>

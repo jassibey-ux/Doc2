@@ -14,6 +14,22 @@ export interface GeoPoint {
   alt_m?: number;
 }
 
+export interface CameraState3D {
+  longitude: number;
+  latitude: number;
+  height: number;
+  heading: number;
+  pitch: number;
+  roll: number;
+}
+
+export interface SiteReconCapture {
+  id: string;
+  label: string;
+  imagePath: string;
+  cameraState: CameraState3D;
+}
+
 // =============================================================================
 // Site Definition (Step 1)
 // =============================================================================
@@ -56,6 +72,10 @@ export interface SiteDefinition {
   rf_notes?: string;
   access_notes?: string;
   photos?: string[];
+  recon_status?: 'none' | 'captured' | 'stale';
+  recon_captured_at?: string;
+  recon_capture_count?: number;
+  camera_state_3d?: CameraState3D;
   created_at: string;
   updated_at: string;
 }
@@ -92,6 +112,7 @@ export interface DroneProfile {
   jam_resistance_category?: JamResistanceCategory;
   icon?: string;
   notes?: string;
+  model_3d?: string;
   created_at: string;
   updated_at: string;
 }
@@ -153,6 +174,7 @@ export interface CUASProfile {
   polarization?: string;
   icon?: string;
   notes?: string;
+  model_3d?: string;
   created_at: string;
   updated_at: string;
 }
@@ -404,6 +426,7 @@ export interface Engagement {
   emitter_type: EmitterType;
   emitter_id: string;
   name?: string;
+  run_number?: number;
   engagement_type: EngagementType;
   status: EngagementStatus;
   engage_timestamp?: string;

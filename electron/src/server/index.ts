@@ -28,6 +28,7 @@ import { crmRoutes } from './routes/crm';
 import { trackerAliasRoutes } from './routes/tracker-aliases';
 import { comparisonRoutes } from './routes/comparison';
 import { cloudSyncRoutes } from './routes/cloud-sync';
+import { siteReconRoutes } from './routes/site-recon';
 // Ops Mode routes
 import { iffRoutes } from './routes/iff';
 import { detectionRoutes } from './routes/detections';
@@ -40,6 +41,7 @@ import { getPythonBackend } from '../core/python-backend';
 // CoT listener + deconfliction (Ops Mode)
 import { CotListener } from '../core/cot-listener';
 import { deconflictionEngine } from '../core/deconfliction';
+import { cotActorBridge } from '../core/cot-actor-bridge';
 
 let cotListener: CotListener | null = null;
 
@@ -68,6 +70,11 @@ export async function startServer(port: number): Promise<void> {
 
   // Setup WebSocket
   setupWebSocket(server, dashboardApp);
+
+  // Wire CoT actor bridge broadcast to DashboardApp WebSocket
+  cotActorBridge.setBroadcast((msg) => {
+    dashboardApp!.broadcastMessage(msg as any);
+  });
 
   // Session bridge: intercept v2 session start/stop to bridge Express data collection
   // Must come before the proxy so it can handle these specific paths
@@ -104,6 +111,9 @@ export async function startServer(port: number): Promise<void> {
 
   // Cloud sync
   app.use('/api', cloudSyncRoutes());
+
+  // Site recon (3D screenshot cache)
+  app.use('/api', siteReconRoutes());
 
   // Engagement analysis routes (range-over-time, GPS quality)
   app.use('/api', analysisRoutes());
@@ -154,6 +164,8 @@ export async function startServer(port: number): Promise<void> {
             for (const event of events) {
               deconflictionEngine.processCotEvent(event);
             }
+            // Forward CoT events to session actor bridge for operator position tracking
+            cotActorBridge.processCotEvents(events);
           },
         );
         deconflictionEngine.updateConfig({

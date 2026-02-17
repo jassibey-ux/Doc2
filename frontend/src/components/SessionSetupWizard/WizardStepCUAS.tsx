@@ -1,15 +1,18 @@
 import { useState } from 'react';
-import { Radio, Trash2, RotateCw, Move, ChevronDown, ChevronUp } from 'lucide-react';
+import { Radio, Trash2, RotateCw, Move, ChevronDown, ChevronUp, Target } from 'lucide-react';
 import { GlassCard, GlassButton, GlassSelect, GlassInput } from '../ui/GlassUI';
 import type { WizardState, WizardAction, CUASPlacementData } from './wizardTypes';
-import type { CUASProfile } from '../../types/workflow';
+import type { SiteDefinition, CUASProfile } from '../../types/workflow';
 
 interface WizardStepCUASProps {
   state: WizardState;
   dispatch: React.Dispatch<WizardAction>;
   cuasProfiles: CUASProfile[];
   onPlaceOnMap?: (placementId: string) => void;
+  onPlaceOn3D?: (placementId: string) => void;
   mapCenter?: { lat: number; lon: number };
+  selectedSite?: SiteDefinition;
+  cuasProfilesList?: CUASProfile[];
 }
 
 export default function WizardStepCUAS({
@@ -17,7 +20,9 @@ export default function WizardStepCUAS({
   dispatch,
   cuasProfiles,
   onPlaceOnMap,
+  onPlaceOn3D,
   mapCenter = { lat: 0, lon: 0 },
+  selectedSite,
 }: WizardStepCUASProps) {
   const [expandedPlacement, setExpandedPlacement] = useState<string | null>(null);
 
@@ -77,7 +82,7 @@ export default function WizardStepCUAS({
             margin: 0,
           }}
         >
-          Add counter-UAS systems and configure their positions. You can drag them on the map after adding.
+          Add counter-UAS systems and place them on the 3D map to the right.
         </p>
       </div>
 
@@ -209,7 +214,7 @@ export default function WizardStepCUAS({
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {/* Place on Map button */}
+                    {/* Place on 2D Map button */}
                     {onPlaceOnMap && (
                       <GlassButton
                         variant="ghost"
@@ -217,6 +222,17 @@ export default function WizardStepCUAS({
                         onClick={() => onPlaceOnMap(placement.id)}
                       >
                         <Move size={14} />
+                      </GlassButton>
+                    )}
+
+                    {/* Place on 3D map button — uses the shared wizard 3D viewer */}
+                    {onPlaceOn3D && selectedSite && (
+                      <GlassButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onPlaceOn3D(placement.id)}
+                      >
+                        <Target size={14} />
                       </GlassButton>
                     )}
 
@@ -344,7 +360,7 @@ export default function WizardStepCUAS({
                             display: 'block',
                           }}
                         >
-                          Orientation (°)
+                          Orientation (deg)
                         </label>
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <GlassInput
@@ -393,7 +409,7 @@ export default function WizardStepCUAS({
                             <strong style={{ color: 'rgba(255, 255, 255, 0.8)' }}>
                               Beam Width:
                             </strong>{' '}
-                            {profile.beam_width_deg}°
+                            {profile.beam_width_deg}deg
                           </span>
                         )}
                         {profile.frequency_ranges && profile.frequency_ranges.length > 0 && (
@@ -432,7 +448,7 @@ export default function WizardStepCUAS({
         }}
       >
         {state.cuasPlacements.length === 0 ? (
-          <span>No CUAS systems placed • This step is optional</span>
+          <span>No CUAS systems placed - This step is optional</span>
         ) : (
           <span>
             {state.cuasPlacements.length} CUAS system

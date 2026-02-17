@@ -15,6 +15,7 @@ import Map3DViewer from './Map3DViewer';
 import CesiumMap from './CesiumMap';
 import DroneDetailPanel from './DroneDetailPanel';
 import type { TestEvent, CUASPlacement, CUASProfile, JamBurst } from '../types/workflow';
+import type { DroneSummary, PositionPoint } from '../types/drone';
 import {
   ArrowLeft,
   Square,
@@ -37,6 +38,7 @@ import {
   Map as MapIcon,
   History,
   Crosshair,
+  Download,
 } from 'lucide-react';
 import SDCardPanel from './SDCardPanel';
 import TrackerSDCardSection from './TrackerSDCardSection';
@@ -95,6 +97,7 @@ export default function SessionConsole() {
   const {
     selectedSite,
     cuasProfiles,
+    droneProfiles,
     addEvent,
     sites,
     selectSite,
@@ -144,6 +147,65 @@ export default function SessionConsole() {
   // Determine if this is a completed session (not live)
   const isCompletedSession = activeSession?.status === 'completed' || activeSession?.status === 'analyzing';
 
+  // Historical telemetry for completed sessions
+  const [historicalDrones, setHistoricalDrones] = useState<Map<string, DroneSummary>>(new Map());
+  const [historicalDroneHistory, setHistoricalDroneHistory] = useState<Map<string, PositionPoint[]>>(new Map());
+  const [historicalDataLoaded, setHistoricalDataLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!isCompletedSession || !activeSession?.id || historicalDataLoaded) return;
+
+    const fetchHistoricalTelemetry = async () => {
+      try {
+        const res = await fetch(`/api/v2/sessions/${activeSession.id}/telemetry?downsample=2000`);
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const tracks: Record<string, Array<{ lat: number; lon: number; alt_m: number | null; timestamp: string | null; speed_mps: number | null; hdop: number | null; satellites: number | null; fix_valid: boolean | null }>> = data.tracks || {};
+
+        const newDrones = new Map<string, DroneSummary>();
+        const newHistory = new Map<string, PositionPoint[]>();
+
+        for (const [trackerId, points] of Object.entries(tracks)) {
+          if (points.length === 0) continue;
+
+          // Build history array
+          const history: PositionPoint[] = points.map(p => ({
+            lat: p.lat,
+            lon: p.lon,
+            alt_m: p.alt_m,
+            timestamp: p.timestamp ? new Date(p.timestamp).getTime() : 0,
+          }));
+          newHistory.set(trackerId, history);
+
+          // Build a DroneSummary from last known point
+          const last = points[points.length - 1];
+          newDrones.set(trackerId, {
+            tracker_id: trackerId,
+            lat: last.lat,
+            lon: last.lon,
+            alt_m: last.alt_m,
+            rssi_dbm: null,
+            fix_valid: last.fix_valid ?? true,
+            is_stale: true,
+            age_seconds: 0,
+            last_update: last.timestamp || '',
+            speed_mps: last.speed_mps,
+          });
+        }
+
+        setHistoricalDrones(newDrones);
+        setHistoricalDroneHistory(newHistory);
+        setHistoricalDataLoaded(true);
+        console.log('[SessionConsole] Loaded historical telemetry:', newHistory.size, 'tracks,', data.point_count, 'points');
+      } catch (err) {
+        console.error('[SessionConsole] Failed to fetch historical telemetry:', err);
+      }
+    };
+
+    fetchHistoricalTelemetry();
+  }, [isCompletedSession, activeSession?.id, historicalDataLoaded]);
+
   // Filter drones and droneHistory by session's tracker_assignments
   // This ensures only assigned trackers appear in the session view
   const sessionTrackerIds = useMemo(() => {
@@ -152,12 +214,10 @@ export default function SessionConsole() {
   }, [activeSession?.tracker_assignments]);
 
   // Filtered drones - only show trackers assigned to this session
-  // For COMPLETED sessions, return empty map - don't show live positions
+  // For COMPLETED sessions, show historical data from the telemetry API
   const sessionDrones = useMemo(() => {
-    // For completed sessions, don't show live tracker data
-    // The session is over - live data would be misleading
     if (isCompletedSession) {
-      return new Map<string, typeof drones extends Map<string, infer V> ? V : never>();
+      return historicalDrones;
     }
 
     // If no tracker assignments, show all drones (backward compatibility)
@@ -170,14 +230,13 @@ export default function SessionConsole() {
       }
     }
     return filtered;
-  }, [drones, sessionTrackerIds, isCompletedSession]);
+  }, [drones, sessionTrackerIds, isCompletedSession, historicalDrones]);
 
   // Filtered droneHistory - only show history for assigned trackers
-  // For COMPLETED sessions, return empty map - don't show live history
+  // For COMPLETED sessions, show historical tracks from the telemetry API
   const sessionDroneHistory = useMemo(() => {
-    // For completed sessions, don't show live track history
     if (isCompletedSession) {
-      return new Map<string, typeof droneHistory extends Map<string, infer V> ? V : never>();
+      return historicalDroneHistory;
     }
 
     // If no tracker assignments, show all history (backward compatibility)
@@ -190,7 +249,7 @@ export default function SessionConsole() {
       }
     }
     return filtered;
-  }, [droneHistory, sessionTrackerIds, isCompletedSession]);
+  }, [droneHistory, sessionTrackerIds, isCompletedSession, historicalDroneHistory]);
 
   // Local state
   const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
@@ -515,6 +574,52 @@ export default function SessionConsole() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentPhase, hasMultipleJammers, cuasPlacements, cuasJamStates, handleMarkEvent, activeEngagements, handleEngage, handleDisengage, handleJamToggle]);
 
+  // --- Navigation Guards ---
+
+  // Browser beforeunload guard (prevents tab close / browser navigation during active session)
+  useEffect(() => {
+    if (currentPhase !== 'active') return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = 'Session is recording. Leave?';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [currentPhase]);
+
+  // Manual navigation blocker (useBlocker requires data router which we don't use)
+  const [blockerState, setBlockerState] = useState<'unblocked' | 'blocked'>('unblocked');
+  const pendingNavigationRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (currentPhase !== 'active') return;
+    const handler = (_e: PopStateEvent) => {
+      // Push state back to prevent leaving
+      window.history.pushState(null, '', window.location.href);
+      setBlockerState('blocked');
+      pendingNavigationRef.current = () => window.history.back();
+    };
+    // Push an extra history entry so we can catch the back button
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, [currentPhase]);
+
+  const blocker = {
+    state: blockerState,
+    reset: () => {
+      setBlockerState('unblocked');
+      pendingNavigationRef.current = null;
+    },
+    proceed: () => {
+      setBlockerState('unblocked');
+      if (pendingNavigationRef.current) {
+        pendingNavigationRef.current();
+        pendingNavigationRef.current = null;
+      }
+    },
+  };
+
   // If no active session, show loading or redirect
   if (!activeSession) {
     return (
@@ -598,6 +703,21 @@ export default function SessionConsole() {
               >
                 <History size={14} />
                 Replay
+              </GlassButton>
+
+              {/* GeoJSON Export button */}
+              <GlassButton
+                variant="secondary"
+                size="sm"
+                onClick={() => window.open(`/api/export/session/${sessionId}/geojson`, '_blank')}
+                style={{
+                  background: 'rgba(6, 182, 212, 0.2)',
+                  borderColor: 'rgba(6, 182, 212, 0.4)',
+                  color: '#06b6d4',
+                }}
+              >
+                <Download size={14} />
+                GeoJSON
               </GlassButton>
 
               {/* SD Card Merge button */}
@@ -759,7 +879,7 @@ export default function SessionConsole() {
                     >
                       <span className="sc-cuas-name">{profile?.name || `CUAS ${idx + 1}`}</span>
                       <span className="sc-cuas-location">
-                        {placement.position.lat.toFixed(4)}, {placement.position.lon.toFixed(4)}
+                        {placement.position?.lat?.toFixed(4) ?? (placement as any).lat?.toFixed(4) ?? '?'}, {placement.position?.lon?.toFixed(4) ?? (placement as any).lon?.toFixed(4) ?? '?'}
                       </span>
                     </div>
                     {/* Inline engagement/JAM buttons */}
@@ -813,6 +933,8 @@ export default function SessionConsole() {
               }
             } : undefined}
             isActive={currentPhase === 'active'}
+            activeBursts={activeBursts}
+            liveDronePositions={sessionDrones as Map<string, { lat: number | null; lon: number | null; alt_m: number | null; fix_valid: boolean; speed_mps?: number | null }>}
           />
 
           {/* Event Log - Enhanced with CUAS names */}
@@ -965,6 +1087,8 @@ export default function SessionConsole() {
                   activeBursts={activeBursts}
                   onCuasClick={handleCuasClickOnMap}
                   engagementModeCuasId={engagementModeCuasId}
+                  initialCameraState3D={sessionSite?.camera_state_3d}
+                  droneProfiles={droneProfiles}
                 />
               </div>
             )}
@@ -1056,7 +1180,8 @@ export default function SessionConsole() {
             </button>
           </div>
 
-          {/* Event Buttons Bar */}
+          {/* Event Buttons Bar — only during active sessions */}
+          {currentPhase === 'active' ? (
           <div className="sc-event-bar">
             {/* ENGAGE / DISENGAGE button */}
             {activeEngagements.size > 0 ? (
@@ -1187,6 +1312,26 @@ export default function SessionConsole() {
               </div>
             )}
           </div>
+          ) : isCompletedSession ? (
+          /* Read-only engagement summary bar for completed sessions */
+          <div className="sc-event-bar sc-event-bar--completed">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 8px' }}>
+              <Check size={14} style={{ color: '#22c55e' }} />
+              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', letterSpacing: '0.5px' }}>
+                SESSION COMPLETE
+              </span>
+              {engagements.length > 0 && (
+                <Badge color="blue" size="sm">{engagements.length} engagement{engagements.length !== 1 ? 's' : ''}</Badge>
+              )}
+              {activeSession?.events && activeSession.events.length > 0 && (
+                <Badge color="gray" size="sm">{activeSession.events.length} event{activeSession.events.length !== 1 ? 's' : ''}</Badge>
+              )}
+              {historicalDataLoaded && (
+                <Badge color="green" size="sm">{sessionDroneHistory.size} track{sessionDroneHistory.size !== 1 ? 's' : ''}</Badge>
+              )}
+            </div>
+          </div>
+          ) : null}
 
           {/* Note input modal */}
           {showNoteInput && (
@@ -1262,7 +1407,7 @@ export default function SessionConsole() {
                 </div>
                 <div className="cuas-dialog-row">
                   <span>Position:</span>
-                  <span>{placement.position.lat.toFixed(5)}, {placement.position.lon.toFixed(5)}</span>
+                  <span>{placement.position?.lat?.toFixed(5) ?? (placement as any).lat?.toFixed(5) ?? '?'}, {placement.position?.lon?.toFixed(5) ?? (placement as any).lon?.toFixed(5) ?? '?'}</span>
                 </div>
                 <div className="cuas-dialog-row">
                   <span>Height AGL:</span>
@@ -1298,6 +1443,45 @@ export default function SessionConsole() {
           isOpen={showSDCardPanel}
           onClose={() => setShowSDCardPanel(false)}
         />
+      )}
+
+      {/* Navigation Blocker Confirmation Dialog */}
+      {blocker.state === 'blocked' && (
+        <div className="cuas-dialog-overlay" onClick={() => blocker.reset()}>
+          <div className="cuas-dialog" onClick={e => e.stopPropagation()}>
+            <div className="cuas-dialog-header">
+              <span>Session Recording</span>
+              <button onClick={() => blocker.reset()}><X size={16} /></button>
+            </div>
+            <div className="cuas-dialog-content" style={{ textAlign: 'center', padding: '16px 0' }}>
+              <AlertTriangle size={32} style={{ color: '#f97316', marginBottom: '12px' }} />
+              <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', margin: '0 0 8px' }}>
+                Session is currently recording.
+              </p>
+              <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>
+                Navigating away will not stop the recording, but you may lose track of the session.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+              <GlassButton
+                variant="primary"
+                size="sm"
+                onClick={() => blocker.reset()}
+                style={{ flex: 1, background: 'rgba(34, 197, 94, 0.2)', borderColor: 'rgba(34, 197, 94, 0.4)', color: '#22c55e' }}
+              >
+                Stay on Session
+              </GlassButton>
+              <GlassButton
+                variant="ghost"
+                size="sm"
+                onClick={() => blocker.proceed()}
+                style={{ flex: 1 }}
+              >
+                Leave Anyway
+              </GlassButton>
+            </div>
+          </div>
+        </div>
       )}
 
       <style>{styles}</style>
@@ -1609,6 +1793,12 @@ const styles = `
     background: rgba(20, 20, 35, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;
+  }
+
+  .sc-event-bar--completed {
+    justify-content: center;
+    background: rgba(20, 25, 35, 0.85);
+    border-color: rgba(34, 197, 94, 0.15);
   }
 
   .sc-event-btn-wrapper {
