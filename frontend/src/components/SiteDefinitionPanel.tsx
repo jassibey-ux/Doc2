@@ -23,7 +23,7 @@ import {
   Camera,
 } from 'lucide-react';
 import { GlassPanel, GlassCard, GlassButton, GlassInput, Badge, GlassDivider } from './ui/GlassUI';
-const Site3DViewer = lazy(() => import('./Site3DViewer'));
+const CesiumGlobeViewer = lazy(() => import('./cesium/CesiumGlobeViewer'));
 import { SiteReconViewer } from './SiteReconViewer';
 import { useWorkflow } from '../contexts/WorkflowContext';
 import {
@@ -661,9 +661,9 @@ export default function SiteDefinitionPanel({ isOpen, onClose }: SiteDefinitionP
       {show3DPreview && editedSite && (
         <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', color: '#fff' }}>Loading 3D...</div>}>
           <div style={{ position: 'fixed', inset: 0, zIndex: 3000 }}>
-            <Site3DViewer
-              site={editedSite as any}
+            <CesiumGlobeViewer
               mode="preview"
+              site={editedSite as any}
               tileMode={editedSite?.enhanced_3d ? 'google3d' : 'osm'}
               initialCameraState={editedSite.camera_state_3d}
               onCaptureScreenshots={async (screenshots) => {
@@ -674,6 +674,7 @@ export default function SiteDefinitionPanel({ isOpen, onClose }: SiteDefinitionP
                 }
               }}
               onClose={() => setShow3DPreview(false)}
+              enableBoundaryClipping
             />
           </div>
         </Suspense>

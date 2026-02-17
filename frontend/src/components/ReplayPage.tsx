@@ -11,6 +11,7 @@ import { useToast } from '../contexts/ToastContext';
 import { GlassButton, Badge } from './ui/GlassUI';
 import MapComponent from './Map';
 import Map3DViewer from './Map3DViewer';
+import CesiumGlobeViewer from './cesium/CesiumGlobeViewer';
 import DroneDetailPanel from './DroneDetailPanel';
 import ReplaySessionBrowserPanel from './ReplaySessionBrowserPanel';
 import PredictedVsActualView from './PredictedVsActualView';
@@ -103,6 +104,7 @@ export default function ReplayPage() {
   // UI state
   const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
   const [show3DView, setShow3DView] = useState(true);
+  const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
   const [showPredictedVsActual, setShowPredictedVsActual] = useState(false);
   const [mapStyle, setMapStyle] = useState<'dark' | 'satellite' | 'street'>('satellite');
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -529,7 +531,7 @@ export default function ReplayPage() {
                   mapStyle={mapStyle}
                 />
 
-                {show3DView && (
+                {show3DView && !showCesiumGlobe && (
                   <Map3DViewer
                     droneHistory={droneHistory}
                     currentTime={mapCurrentTime}
@@ -544,6 +546,26 @@ export default function ReplayPage() {
                   />
                 )}
 
+                {/* Cesium Globe Overlay */}
+                {showCesiumGlobe && (
+                  <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
+                    <CesiumGlobeViewer
+                      mode="replay"
+                      droneHistory={droneHistory}
+                      currentTime={mapCurrentTime}
+                      timelineStart={mapTimelineStart}
+                      site={sessionSite}
+                      cuasPlacements={cuasPlacements}
+                      cuasProfiles={cuasProfiles}
+                      currentDroneData={drones}
+                      selectedDroneId={selectedDroneId}
+                      onDroneClick={(id) => setSelectedDroneId(id)}
+                      enableBoundaryClipping
+                      onClose={() => setShowCesiumGlobe(false)}
+                    />
+                  </div>
+                )}
+
                 {/* Map controls */}
                 <button
                   onClick={() => setMapStyle(prev =>
@@ -551,7 +573,7 @@ export default function ReplayPage() {
                   )}
                   title="Toggle map style"
                   className="rp-map-btn"
-                  style={{ right: '56px' }}
+                  style={{ right: '102px' }}
                 >
                   {mapStyle === 'satellite' ? <Globe size={18} /> : <MapIcon size={18} />}
                 </button>
@@ -560,9 +582,21 @@ export default function ReplayPage() {
                   onClick={() => setShow3DView(prev => !prev)}
                   title={show3DView ? 'Switch to 2D' : 'Switch to 3D'}
                   className={`rp-map-btn ${show3DView ? 'active' : ''}`}
-                  style={{ right: '10px' }}
+                  style={{ right: '56px' }}
                 >
                   <Box size={18} />
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowCesiumGlobe(prev => !prev);
+                    if (!showCesiumGlobe) setShow3DView(false);
+                  }}
+                  title={showCesiumGlobe ? 'Close Globe View' : 'Open Cesium Globe'}
+                  className={`rp-map-btn ${showCesiumGlobe ? 'active' : ''}`}
+                  style={{ right: '10px' }}
+                >
+                  <Globe size={18} />
                 </button>
               </div>
 

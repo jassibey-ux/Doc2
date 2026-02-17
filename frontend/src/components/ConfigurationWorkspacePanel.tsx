@@ -32,7 +32,7 @@ import {
   Box,
 } from 'lucide-react';
 import { GlassCard, GlassButton, GlassInput, Badge, GlassDivider } from './ui/GlassUI';
-const Site3DViewer = lazy(() => import('./Site3DViewer'));
+const CesiumGlobeViewer = lazy(() => import('./cesium/CesiumGlobeViewer'));
 import { SiteReconViewer } from './SiteReconViewer';
 import { useWorkflow } from '../contexts/WorkflowContext';
 import {
@@ -1186,9 +1186,9 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
         return site3d ? (
           <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', color: '#fff' }}>Loading 3D Viewer...</div>}>
             <div style={{ position: 'fixed', inset: 0, zIndex: 3000 }}>
-              <Site3DViewer
-                site={site3d}
+              <CesiumGlobeViewer
                 mode="preview"
+                site={site3d}
                 tileMode={site3d.enhanced_3d ? 'google3d' : 'osm'}
                 initialCameraState={site3d.camera_state_3d}
                 onCaptureScreenshots={async (screenshots) => {
@@ -1197,6 +1197,7 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                   }
                 }}
                 onClose={() => setViewing3DSiteId(null)}
+                enableBoundaryClipping
               />
             </div>
           </Suspense>

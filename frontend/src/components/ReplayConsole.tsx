@@ -11,7 +11,7 @@ import { useToast } from '../contexts/ToastContext';
 import { GlassButton, Badge } from './ui/GlassUI';
 import MapComponent from './Map';
 import Map3DViewer from './Map3DViewer';
-import CesiumMap from './CesiumMap';
+import CesiumGlobeViewer from './cesium/CesiumGlobeViewer';
 import DroneDetailPanel from './DroneDetailPanel';
 import type { CUASPlacement, CUASProfile, SiteDefinition } from '../types/workflow';
 import {
@@ -586,17 +586,18 @@ export default function ReplayConsole() {
             {/* Cesium Globe Overlay */}
             {showCesiumGlobe && (
               <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
-                <CesiumMap
+                <CesiumGlobeViewer
+                  mode="replay"
                   droneHistory={droneHistory}
                   currentTime={mapCurrentTime}
                   timelineStart={mapTimelineStart}
                   site={sessionSite}
                   cuasPlacements={cuasPlacements}
                   cuasProfiles={cuasProfiles}
-                  cuasJamStates={new Map()}
                   currentDroneData={drones}
                   selectedDroneId={selectedDroneId}
                   onDroneClick={handleDroneClick}
+                  enableBoundaryClipping
                   onClose={() => setShowCesiumGlobe(false)}
                 />
               </div>

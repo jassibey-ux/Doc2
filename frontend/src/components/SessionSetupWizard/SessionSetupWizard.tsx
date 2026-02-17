@@ -13,7 +13,7 @@ import { TRACK_COLORS } from './wizardTypes';
 import type { SiteDefinition, DroneProfile, CUASProfile } from '../../types/workflow';
 import type { DroneSummary } from '../../types/drone';
 
-const Site3DViewer = lazy(() => import('../Site3DViewer'));
+const CesiumGlobeViewer = lazy(() => import('../cesium/CesiumGlobeViewer'));
 
 interface SessionSetupWizardProps {
   isOpen: boolean;
@@ -290,8 +290,8 @@ export default function SessionSetupWizard({
     active: true,
   }));
 
-  // 3D viewer mode: interactive on step 2 when placing, preview otherwise
-  const viewer3DMode = (state.currentStep === 2 && activePlacingCuasId) ? 'interactive' : 'preview';
+  // 3D viewer mode: setup (click-to-place) on step 2 when placing, preview otherwise
+  const viewer3DMode = (state.currentStep === 2 && activePlacingCuasId) ? 'setup' : 'preview';
 
   const renderStep = () => {
     switch (state.currentStep) {
@@ -490,14 +490,15 @@ export default function SessionSetupWizard({
             </div>
           }
         >
-          <Site3DViewer
+          <CesiumGlobeViewer
+            mode={viewer3DMode as 'setup' | 'preview'}
             site={currentSite}
             cuasPlacements={viewer3DCuasPlacements}
             cuasProfiles={cuasProfiles}
-            mode={viewer3DMode as 'preview' | 'interactive'}
             tileMode={isEnhancedSite ? 'google3d' : 'osm'}
             initialCameraState={currentSite.camera_state_3d}
             onCuasPlaced={handleCuasPlacedOn3D}
+            enableBoundaryClipping
           />
         </Suspense>
 

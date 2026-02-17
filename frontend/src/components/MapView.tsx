@@ -23,7 +23,7 @@ import CUASControlPanel from './CUASControlPanel';
 import TrackLegend from './TrackLegend';
 import AnomalyAlertToast from './AnomalyAlertToast';
 import Map3DViewer from './Map3DViewer';
-import CesiumMap from './CesiumMap';
+import CesiumGlobeViewer from './cesium/CesiumGlobeViewer';
 import TerrainProfileChart from './TerrainProfileChart';
 import LinkBudgetPanel from './LinkBudgetPanel';
 import CoordinateBar from './CoordinateBar';
@@ -574,7 +574,8 @@ export default function MapView() {
         {/* CesiumJS Globe Overlay — hidden when wizard is open to prevent dual Cesium instances */}
         {showCesiumGlobe && !wizardIsOpen && (
           <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
-            <CesiumMap
+            <CesiumGlobeViewer
+              mode="live"
               droneHistory={droneHistory}
               currentTime={currentTime}
               timelineStart={timelineStart}
@@ -582,9 +583,10 @@ export default function MapView() {
               cuasPlacements={phaseActiveSession?.cuas_placements || []}
               cuasProfiles={cuasProfiles}
               onClose={() => setShowCesiumGlobe(false)}
-              initialCameraState3D={selectedSite?.camera_state_3d}
+              initialCameraState={selectedSite?.camera_state_3d}
               droneProfiles={droneProfiles}
               droneProfileMap={droneProfileMap}
+              enableBoundaryClipping
             />
           </div>
         )}

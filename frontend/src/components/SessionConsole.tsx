@@ -12,7 +12,7 @@ import { useToast } from '../contexts/ToastContext';
 import { GlassButton, Badge } from './ui/GlassUI';
 import MapComponent from './Map';
 import Map3DViewer from './Map3DViewer';
-import CesiumMap from './CesiumMap';
+import CesiumGlobeViewer from './cesium/CesiumGlobeViewer';
 import DroneDetailPanel from './DroneDetailPanel';
 import type { TestEvent, CUASPlacement, CUASProfile, JamBurst } from '../types/workflow';
 import type { DroneSummary, PositionPoint } from '../types/drone';
@@ -1086,7 +1086,8 @@ export default function SessionConsole() {
             {/* Cesium Globe Overlay */}
             {showCesiumGlobe && (
               <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
-                <CesiumMap
+                <CesiumGlobeViewer
+                  mode="live"
                   droneHistory={sessionDroneHistory}
                   currentTime={Date.now()}
                   timelineStart={Date.now() - 3600000}
@@ -1102,8 +1103,9 @@ export default function SessionConsole() {
                   activeBursts={activeBursts}
                   onCuasClick={handleCuasClickOnMap}
                   engagementModeCuasId={engagementModeCuasId}
-                  initialCameraState3D={sessionSite?.camera_state_3d}
+                  initialCameraState={sessionSite?.camera_state_3d}
                   droneProfiles={droneProfiles}
+                  enableBoundaryClipping
                 />
               </div>
             )}

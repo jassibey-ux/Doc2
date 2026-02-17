@@ -29,12 +29,14 @@ import {
   User,
   Cloud,
   Box,
+  Globe,
 } from 'lucide-react';
 import { GlassPanel, GlassCard, GlassButton, Badge } from './ui/GlassUI';
 import { useWorkflow } from '../contexts/WorkflowContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useCRM } from '../contexts/CRMContext';
 import Map3DViewer from './Map3DViewer';
+import CesiumGlobeViewer from './cesium/CesiumGlobeViewer';
 import TrackLegend from './TrackLegend';
 import TagInput from './crm/TagInput';
 import AnnotationList from './crm/AnnotationList';
@@ -58,6 +60,7 @@ export default function SessionAnalysisView() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [detailSession, setDetailSession] = useState<TestSession | null>(null);
   const [show3DView, setShow3DView] = useState(false);
+  const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string>('metrics');
   const [sessionTags, setSessionTags] = useState<string[]>([]);
   const [sessionAnnotations, setSessionAnnotations] = useState<SessionAnnotation[]>([]);
@@ -347,11 +350,15 @@ export default function SessionAnalysisView() {
             <Box size={16} />
             {show3DView ? 'Hide 3D' : 'View 3D'}
           </GlassButton>
+          <GlassButton variant="ghost" onClick={() => { setShowCesiumGlobe(!showCesiumGlobe); if (!showCesiumGlobe) setShow3DView(false); }}>
+            <Globe size={16} />
+            {showCesiumGlobe ? 'Hide Globe' : 'Globe'}
+          </GlassButton>
         </div>
       </div>
 
       {/* 3D View Overlay */}
-      {show3DView && (
+      {show3DView && !showCesiumGlobe && (
         <Map3DViewer
           droneHistory={droneHistory}
           currentTime={timelineInfo.end}
@@ -362,6 +369,24 @@ export default function SessionAnalysisView() {
           cuasPlacements={session?.cuas_placements || []}
           cuasProfiles={cuasProfiles}
         />
+      )}
+
+      {/* Cesium Globe Overlay */}
+      {showCesiumGlobe && (
+        <div style={{ position: 'relative', height: '400px', marginBottom: '20px', borderRadius: '12px', overflow: 'hidden' }}>
+          <CesiumGlobeViewer
+            mode="analysis"
+            droneHistory={droneHistory}
+            currentTime={timelineInfo.end}
+            timelineStart={timelineInfo.start}
+            site={site}
+            cuasPlacements={session?.cuas_placements || []}
+            cuasProfiles={cuasProfiles}
+            engagements={sessionEngagements}
+            enableBoundaryClipping
+            onClose={() => setShowCesiumGlobe(false)}
+          />
+        </div>
       )}
 
       {/* Main Content Grid */}
