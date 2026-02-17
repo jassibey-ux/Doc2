@@ -15,7 +15,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import type { CesiumGlobeViewerProps, ViewerMode } from './types';
 import { useCesiumViewer } from './hooks/useCesiumViewer';
-import { useTileManager } from './hooks/useTileManager';
+import { useTileManager, type TileStats } from './hooks/useTileManager';
 import { useCameraController } from './hooks/useCameraController';
 import { useClickHandler } from './hooks/useClickHandler';
 import { renderSiteBoundary } from './layers/SiteBoundaryLayer';
@@ -80,7 +80,7 @@ const CesiumGlobeViewer: React.FC<CesiumGlobeViewerProps> = (props) => {
   const { containerRef, viewerRef, cesiumRef, cesiumLoaded, error, getCameraState } = useCesiumViewer();
 
   // Tile management (Google 3D / OSM + boundary clipping)
-  const { google3DEnabled, terrainEnabled, toggleGoogle3D, toggleTerrain, hasGoogleKey } = useTileManager({
+  const { google3DEnabled, terrainEnabled, toggleGoogle3D, toggleTerrain, hasGoogleKey, tileStats } = useTileManager({
     cesiumRef,
     viewerRef,
     cesiumLoaded,
@@ -338,6 +338,11 @@ const CesiumGlobeViewer: React.FC<CesiumGlobeViewerProps> = (props) => {
         </button>
       )}
 
+      {/* Dev overlay — tile stats (only in dev mode) */}
+      {tileStats && cesiumLoaded && (
+        <DevTileOverlay stats={tileStats} mode={mode} />
+      )}
+
       {/* Loading overlay */}
       {!cesiumLoaded && (
         <div style={{
@@ -351,6 +356,59 @@ const CesiumGlobeViewer: React.FC<CesiumGlobeViewerProps> = (props) => {
     </div>
   );
 };
+
+/** Dev-only tile stats overlay */
+const DevTileOverlay: React.FC<{ stats: TileStats; mode: ViewerMode }> = ({ stats, mode }) => (
+  <div style={{
+    position: 'absolute',
+    bottom: mode === 'setup' || mode === 'preview' ? 70 : 8,
+    right: 8,
+    background: 'rgba(0, 0, 0, 0.85)',
+    border: '1px solid rgba(0, 255, 136, 0.3)',
+    borderRadius: 6,
+    padding: '6px 10px',
+    fontFamily: 'monospace',
+    fontSize: 10,
+    lineHeight: 1.6,
+    color: '#00ff88',
+    pointerEvents: 'none',
+    zIndex: 20,
+    minWidth: 220,
+  }}>
+    <div style={{ color: '#888', fontSize: 9, marginBottom: 2, letterSpacing: 1 }}>
+      DEV TILE MONITOR
+    </div>
+    <div>
+      Source: <span style={{ color: stats.tileSource === 'google3d' ? '#f59e0b' : '#3b82f6' }}>
+        {stats.tileSource === 'google3d' ? 'Google 3D Tiles' : stats.tileSource === 'osm' ? 'OSM Buildings' : 'None'}
+      </span>
+    </div>
+    {stats.tileSource === 'google3d' && (
+      <>
+        <div>
+          Tiles loaded: <span style={{ color: '#fff' }}>{stats.google3DTilesLoaded}</span>
+          {stats.google3DRequestsFailed > 0 && (
+            <span style={{ color: '#ef4444' }}> ({stats.google3DRequestsFailed} failed)</span>
+          )}
+        </div>
+        <div>
+          Clipping: <span style={{ color: stats.clippingEnabled ? '#00ff88' : '#ef4444' }}>
+            {stats.clippingEnabled ? 'ON' : 'OFF'}
+          </span>
+          {stats.clippingEnabled && (
+            <span style={{ color: '#888' }}> ({stats.clippingPlaneCount} planes)</span>
+          )}
+        </div>
+      </>
+    )}
+    <div style={{ color: '#555', fontSize: 9, marginTop: 2 }}>
+      Mode: {mode}
+      {stats.lastTileLoadTime && (
+        <> | Last: {new Date(stats.lastTileLoadTime).toLocaleTimeString()}</>
+      )}
+    </div>
+  </div>
+);
 
 /** Reusable control button */
 const ControlButton: React.FC<{
