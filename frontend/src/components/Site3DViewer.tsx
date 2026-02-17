@@ -13,6 +13,8 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import type { SiteDefinition, CUASPlacement, CUASProfile, CameraState3D } from '../types/workflow';
 import { GlassPanel, GlassButton, Badge } from './ui/GlassUI';
+import { getCUASModel } from '../utils/modelRegistry';
+import { isModelCached, createModelGraphicsOptions, createModelOrientation } from '../utils/modelLoader';
 
 // Cesium types — lazy loaded
 type CesiumViewer = any;
@@ -58,6 +60,7 @@ const Site3DViewer: React.FC<Site3DViewerProps> = ({
   const [tileMode, setTileMode] = useState<'osm' | 'google3d'>(initialTileMode);
   const [capturing, setCapturing] = useState(false);
   const initialFlyDone = useRef(false);
+  const prevSiteIdRef = useRef<string | null>(null);
 
   // --------------------------------------------------------------------------
   // Helper: read current camera state from the Cesium viewer
@@ -248,32 +251,78 @@ const Site3DViewer: React.FC<Site3DViewerProps> = ({
       for (const placement of cuasPlacements) {
         const profile = cuasProfiles?.find((p) => p.id === placement.cuas_profile_id);
         const effectiveRange = profile?.effective_range_m || 500;
+        const cuasAlt = (placement.height_agl_m || 0) + 2;
+        const orientationDeg = placement.orientation_deg ?? 0;
+        const cuasModelAsset = profile ? getCUASModel(profile.type) : null;
+        const glbExists = cuasModelAsset ? isModelCached(cuasModelAsset.glbPath) === true : false;
+        const isSensor = profile?.type === 'rf_sensor' || profile?.type === 'radar' || profile?.type === 'eo_ir_camera' || profile?.type === 'acoustic';
+        const cuasColor = Cesium.Color.fromCssColorString('#f97316');
 
         // CUAS marker
-        viewer.entities.add({
+        const cuasEntity: any = {
           name: `cuas_${placement.id}`,
           description: placement.id,
           position: Cesium.Cartesian3.fromDegrees(
             placement.position.lon,
             placement.position.lat,
-            (placement.height_agl_m || 0) + 2
+            cuasAlt,
           ),
-          billboard: {
-            image: createCUASDataUri('#f97316'),
-            width: 28,
-            height: 28,
-          },
           label: {
             text: profile?.name || 'CUAS',
             font: '11px monospace',
-            fillColor: Cesium.Color.fromCssColorString('#f97316'),
+            fillColor: cuasColor,
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 2,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
             pixelOffset: new Cesium.Cartesian2(0, -20),
           },
-        });
+        };
+
+        if (cuasModelAsset && glbExists) {
+          cuasEntity.model = new Cesium.ModelGraphics(
+            createModelGraphicsOptions(Cesium, cuasModelAsset, orientationDeg, false)
+          );
+          cuasEntity.orientation = createModelOrientation(
+            Cesium, placement.position.lon, placement.position.lat, cuasAlt, orientationDeg
+          );
+        } else if (isSensor) {
+          cuasEntity.ellipsoid = {
+            radii: new Cesium.Cartesian3(1.0, 1.0, 1.5),
+            material: cuasColor.withAlpha(0.8),
+            outline: true,
+            outlineColor: cuasColor,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          };
+          cuasEntity.billboard = {
+            image: createCUASDataUri('#f97316'),
+            width: 28,
+            height: 28,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          };
+        } else {
+          cuasEntity.cylinder = {
+            length: 2.0,
+            topRadius: 1.5,
+            bottomRadius: 1.5,
+            material: cuasColor.withAlpha(0.8),
+            outline: true,
+            outlineColor: cuasColor,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+          };
+          cuasEntity.billboard = {
+            image: createCUASDataUri('#f97316'),
+            width: 28,
+            height: 28,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          };
+        }
+
+        viewer.entities.add(cuasEntity);
 
         // Coverage circle (36 segments)
         const circlePositions: any[] = [];
@@ -331,17 +380,23 @@ const Site3DViewer: React.FC<Site3DViewerProps> = ({
   }, [cesiumLoaded, site, cuasPlacements, cuasProfiles]);
 
   // --------------------------------------------------------------------------
-  // 4. Camera fly-to on load (initial camera state or bounding rectangle)
+  // 4. Camera fly-to on load AND on site change
   // --------------------------------------------------------------------------
   useEffect(() => {
-    if (!cesiumLoaded || !viewerRef.current || !cesiumRef.current || initialFlyDone.current) return;
+    if (!cesiumLoaded || !viewerRef.current || !cesiumRef.current) return;
+
+    // Skip if initial fly already done AND site hasn't changed
+    const siteChanged = prevSiteIdRef.current !== null && prevSiteIdRef.current !== site.id;
+    if (initialFlyDone.current && !siteChanged) return;
+
+    prevSiteIdRef.current = site.id;
+    initialFlyDone.current = true;
+
     const Cesium = cesiumRef.current;
     const viewer = viewerRef.current;
 
-    initialFlyDone.current = true;
-
-    // If an initial camera state was provided, restore it
-    if (initialCameraState) {
+    // If an initial camera state was provided (and not a site change), restore it
+    if (initialCameraState && !siteChanged) {
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(
           initialCameraState.longitude,
@@ -433,11 +488,23 @@ const Site3DViewer: React.FC<Site3DViewerProps> = ({
     if (mode === 'interactive' && onCuasPlaced) {
       const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
       handler.setInputAction((click: any) => {
-        // Attempt to pick terrain/tileset position
-        const ray = viewer.camera.getPickRay(click.position);
-        if (!ray) return;
+        // Try scene.pick first — hits 3D Tiles/buildings (rooftop-aware)
+        const pickedObject = viewer.scene.pick(click.position);
+        let cartesian: any = null;
 
-        const cartesian = viewer.scene.globe.pick(ray, viewer.scene);
+        if (Cesium.defined(pickedObject)) {
+          // Picked a 3D tileset or primitive — get the exact position on its surface
+          cartesian = viewer.scene.pickPosition(click.position);
+        }
+
+        // Fallback: pick the globe terrain
+        if (!cartesian) {
+          const ray = viewer.camera.getPickRay(click.position);
+          if (ray) {
+            cartesian = viewer.scene.globe.pick(ray, viewer.scene);
+          }
+        }
+
         if (!cartesian) return;
 
         const carto = Cesium.Cartographic.fromCartesian(cartesian);

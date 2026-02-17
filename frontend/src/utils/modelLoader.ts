@@ -1,11 +1,69 @@
 import type { ModelAsset } from './modelRegistry';
+import { DRONE_MODELS, CUAS_MODELS } from './modelRegistry';
 
-/** Preload model files into browser cache */
+// ---------------------------------------------------------------------------
+// GLB existence cache — avoids 404s in the render loop
+// ---------------------------------------------------------------------------
+
+/** Cache: glbPath -> exists (true/false). undefined = not yet checked. */
+const modelExistsCache = new Map<string, boolean>();
+
+/** Async check whether a GLB file exists (HEAD request, cached). */
+export async function checkModelExists(glbPath: string): Promise<boolean> {
+  const cached = modelExistsCache.get(glbPath);
+  if (cached !== undefined) return cached;
+
+  try {
+    const resp = await fetch(glbPath, { method: 'HEAD' });
+    const exists = resp.ok;
+    modelExistsCache.set(glbPath, exists);
+    return exists;
+  } catch {
+    modelExistsCache.set(glbPath, false);
+    return false;
+  }
+}
+
+/** Synchronous lookup — returns true/false if already cached, undefined if not yet checked. */
+export function isModelCached(glbPath: string): boolean | undefined {
+  return modelExistsCache.get(glbPath);
+}
+
+/** Batch-check all registered drone + CUAS models on Cesium init. */
+export async function precheckAllModels(): Promise<void> {
+  const allPaths = [
+    ...Object.values(DRONE_MODELS).map(m => m.glbPath),
+    ...Object.values(CUAS_MODELS).map(m => m.glbPath),
+  ];
+
+  await Promise.allSettled(allPaths.map(p => checkModelExists(p)));
+
+  // Log summary
+  let available = 0;
+  let missing = 0;
+  for (const [path, exists] of modelExistsCache) {
+    if (exists) available++;
+    else {
+      missing++;
+      console.warn(`[modelLoader] GLB not found: ${path}`);
+    }
+  }
+  console.log(`[modelLoader] Model precheck: ${available} available, ${missing} missing`);
+}
+
+// ---------------------------------------------------------------------------
+// Preload model files into browser cache
+// ---------------------------------------------------------------------------
+
 export async function preloadModels(assets: ModelAsset[]): Promise<void> {
   await Promise.allSettled(
     assets.map(asset => fetch(asset.glbPath, { method: 'HEAD' }).catch(() => {}))
   );
 }
+
+// ---------------------------------------------------------------------------
+// Cesium helpers
+// ---------------------------------------------------------------------------
 
 /**
  * Create Cesium ModelGraphics config for an entity.

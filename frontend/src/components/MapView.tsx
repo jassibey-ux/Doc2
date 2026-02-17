@@ -107,6 +107,9 @@ export default function MapView() {
   const [show3DView, setShow3DView] = useState(false);
   const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
 
+  // Wizard open state (for dual Cesium instance prevention)
+  const [wizardIsOpen, setWizardIsOpen] = useState(false);
+
   // Site Recon viewer
   const [showReconViewer, setShowReconViewer] = useState(false);
 
@@ -568,8 +571,8 @@ export default function MapView() {
           />
         )}
 
-        {/* CesiumJS Globe Overlay */}
-        {showCesiumGlobe && (
+        {/* CesiumJS Globe Overlay — hidden when wizard is open to prevent dual Cesium instances */}
+        {showCesiumGlobe && !wizardIsOpen && (
           <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
             <CesiumMap
               droneHistory={droneHistory}
@@ -581,6 +584,7 @@ export default function MapView() {
               onClose={() => setShowCesiumGlobe(false)}
               initialCameraState3D={selectedSite?.camera_state_3d}
               droneProfiles={droneProfiles}
+              droneProfileMap={droneProfileMap}
             />
           </div>
         )}
@@ -619,6 +623,33 @@ export default function MapView() {
 
         {/* Map Controls Group - Bottom Right */}
         <div className="map-controls-group">
+          {/* ── 3D View Section ── */}
+          <div className="map-controls-3d-section">
+            <span className="map-controls-section-label">3D View</span>
+            <div className="map-controls-3d-buttons">
+              <button
+                className={`map-control-btn map-control-labeled ${show3DView && !showCesiumGlobe ? 'active' : ''}`}
+                onClick={() => { setShow3DView(prev => !prev); setShowCesiumGlobe(false); }}
+                title={show3DView ? 'Switch to 2D Map' : '3D Terrain View (MapLibre)'}
+              >
+                <Box size={18} />
+                <span className="map-control-label">3D</span>
+              </button>
+
+              <button
+                className={`map-control-btn map-control-labeled ${showCesiumGlobe ? 'active' : ''}`}
+                onClick={() => { setShowCesiumGlobe(prev => !prev); setShow3DView(false); }}
+                title={showCesiumGlobe ? 'Exit Globe View' : 'CesiumJS Globe (3D Tiles + OSM Buildings)'}
+              >
+                <Globe2 size={18} />
+                <span className="map-control-label">Globe</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="map-controls-divider" />
+
+          {/* ── Map Tools ── */}
           {/* Map Style Toggle */}
           <button
             className={`map-control-btn ${mapStyle !== 'dark' ? 'active' : ''}`}
@@ -626,24 +657,6 @@ export default function MapView() {
             title={mapStyle === 'dark' ? 'Switch to Satellite' : mapStyle === 'satellite' ? 'Switch to Street' : 'Switch to Dark Map'}
           >
             {mapStyle === 'dark' ? <Globe size={18} /> : <MapIcon size={18} />}
-          </button>
-
-          {/* 3D View Toggle (MapLibre) */}
-          <button
-            className={`map-control-btn ${show3DView && !showCesiumGlobe ? 'active' : ''}`}
-            onClick={() => { setShow3DView(prev => !prev); setShowCesiumGlobe(false); }}
-            title={show3DView ? 'Switch to 2D Map' : 'Switch to 3D View'}
-          >
-            <Box size={18} />
-          </button>
-
-          {/* CesiumJS Globe Toggle */}
-          <button
-            className={`map-control-btn ${showCesiumGlobe ? 'active' : ''}`}
-            onClick={() => { setShowCesiumGlobe(prev => !prev); setShow3DView(false); }}
-            title={showCesiumGlobe ? 'Exit Globe View' : 'CesiumJS Globe (3D Tiles)'}
-          >
-            <Globe2 size={18} />
           </button>
 
           {/* Site Recon Button (visible when site has captured recon) */}
@@ -860,6 +873,7 @@ export default function MapView() {
           onCuasPlacementHandled={handleCuasPlacementHandled}
           isMinimizedForPlacement={placingCuasId !== null}
           onWizardPlacementsChanged={setWizardCuasPlacements}
+          onWizardOpenChange={setWizardIsOpen}
         />
 
         {/* New File Notification Toast */}
