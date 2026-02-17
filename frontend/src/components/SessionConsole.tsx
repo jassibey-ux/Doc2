@@ -720,6 +720,21 @@ export default function SessionConsole() {
                 GeoJSON
               </GlassButton>
 
+              {/* CZML 3D Replay Export button */}
+              <GlassButton
+                variant="secondary"
+                size="sm"
+                onClick={() => window.open(`/api/export/session/${sessionId}/czml`, '_blank')}
+                style={{
+                  background: 'rgba(34, 197, 94, 0.2)',
+                  borderColor: 'rgba(34, 197, 94, 0.4)',
+                  color: '#22c55e',
+                }}
+              >
+                <Download size={14} />
+                3D Replay
+              </GlassButton>
+
               {/* SD Card Merge button */}
               <GlassButton
                 variant="secondary"

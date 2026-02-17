@@ -674,6 +674,9 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                             <Badge color="blue" size="sm">
                               {site.environment_type.replace('_', ' ')}
                             </Badge>
+                            {site.enhanced_3d && (
+                              <Badge color="green" size="sm">3D</Badge>
+                            )}
                             {site.markers && site.markers.length > 0 && (
                               <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>
                                 {site.markers.length} markers
@@ -1186,7 +1189,7 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
               <Site3DViewer
                 site={site3d}
                 mode="preview"
-                tileMode="osm"
+                tileMode={site3d.enhanced_3d ? 'google3d' : 'osm'}
                 initialCameraState={site3d.camera_state_3d}
                 onCaptureScreenshots={async (screenshots) => {
                   for (const ss of screenshots) {
@@ -1210,6 +1213,9 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
               site={siteRecon}
               captures={captures}
               onEnhanceSite={() => {
+                if (showReconViewer) {
+                  updateSite(showReconViewer, { enhanced_3d: true });
+                }
                 setShowReconViewer(null);
                 setViewing3DSiteId(showReconViewer);
               }}

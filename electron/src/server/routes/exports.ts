@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { DashboardApp } from '../app';
 import { generateKML } from '../../core/kml-export';
+import { generateCZML } from '../../core/czml-generator';
 import { sessionDataCollector } from '../../core/session-data-collector';
 import { getTestSessionById, getSiteById, getCUASProfileById } from '../../core/library-store';
 
@@ -291,6 +292,50 @@ export function exportRoutes(app: DashboardApp): Router {
       res.json(featureCollection);
     } catch (error) {
       res.status(500).json({ error: 'GeoJSON export failed' });
+    }
+  });
+
+  /**
+   * GET /api/export/session/:id/czml
+   * Export session as CZML (Cesium Language) for 3D replay
+   */
+  router.get('/export/session/:id/czml', (req, res) => {
+    try {
+      const sessionId = req.params.id;
+      const session = getTestSessionById(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      const telemetry = sessionDataCollector.getPositionsByTracker(sessionId);
+
+      // Gather site
+      const site = session.site_id ? getSiteById(session.site_id) : undefined;
+
+      // Gather CUAS profiles for placements
+      const cuasPlacements = session.cuas_placements || [];
+      const cuasProfileIds = new Set(cuasPlacements.map(p => p.cuas_profile_id));
+      const cuasProfiles = Array.from(cuasProfileIds)
+        .map(id => getCUASProfileById(id))
+        .filter((p): p is NonNullable<typeof p> => p != null);
+
+      const czml = generateCZML({
+        session,
+        telemetry,
+        site,
+        cuasPlacements,
+        cuasProfiles,
+      });
+
+      const safeName = session.name.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 30);
+      const filename = `${safeName}_3d_replay.czml`;
+
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.json(czml);
+    } catch (error) {
+      console.error('[CZML Export] Failed:', error);
+      res.status(500).json({ error: 'CZML export failed' });
     }
   });
 

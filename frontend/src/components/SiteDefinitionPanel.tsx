@@ -379,6 +379,46 @@ export default function SiteDefinitionPanel({ isOpen, onClose }: SiteDefinitionP
                   </GlassButton>
                 )}
               </div>
+
+              {/* Enhanced 3D Toggle */}
+              <div style={{ marginTop: '8px' }}>
+                <button
+                  onClick={() => {
+                    if ((editedSite?.boundary_polygon?.length ?? 0) < 3) return;
+                    setEditedSite(prev => prev ? { ...prev, enhanced_3d: !prev.enhanced_3d } : null);
+                  }}
+                  disabled={(editedSite?.boundary_polygon?.length ?? 0) < 3}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    border: editedSite?.enhanced_3d
+                      ? '1px solid rgba(34, 197, 94, 0.5)'
+                      : '1px solid rgba(255, 255, 255, 0.1)',
+                    background: editedSite?.enhanced_3d
+                      ? 'rgba(34, 197, 94, 0.15)'
+                      : 'rgba(255, 255, 255, 0.03)',
+                    color: editedSite?.enhanced_3d ? '#22c55e' : 'rgba(255, 255, 255, 0.5)',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: (editedSite?.boundary_polygon?.length ?? 0) < 3 ? 'not-allowed' : 'pointer',
+                    opacity: (editedSite?.boundary_polygon?.length ?? 0) < 3 ? 0.4 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <Box size={14} />
+                  {editedSite?.enhanced_3d ? 'Enhanced 3D Enabled' : 'Enable Enhanced 3D'}
+                </button>
+                {(editedSite?.boundary_polygon?.length ?? 0) < 3 && (
+                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: '4px', textAlign: 'center' }}>
+                    Draw a boundary polygon first
+                  </div>
+                )}
+              </div>
             </div>
 
             <GlassDivider />
@@ -581,6 +621,9 @@ export default function SiteDefinitionPanel({ isOpen, onClose }: SiteDefinitionP
                         <Badge color="blue" size="sm">
                           {site.environment_type.replace('_', ' ')}
                         </Badge>
+                        {site.enhanced_3d && (
+                          <Badge color="green" size="sm">3D</Badge>
+                        )}
                         {site.markers.length > 0 && (
                           <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>
                             {site.markers.length} markers
@@ -621,7 +664,7 @@ export default function SiteDefinitionPanel({ isOpen, onClose }: SiteDefinitionP
             <Site3DViewer
               site={editedSite as any}
               mode="preview"
-              tileMode="osm"
+              tileMode={editedSite?.enhanced_3d ? 'google3d' : 'osm'}
               initialCameraState={editedSite.camera_state_3d}
               onCaptureScreenshots={async (screenshots) => {
                 if (editedSite.id) {
@@ -642,6 +685,7 @@ export default function SiteDefinitionPanel({ isOpen, onClose }: SiteDefinitionP
             site={editedSite as any}
             captures={siteReconCaptures.get(editedSite.id || '') || []}
             onEnhanceSite={() => {
+              setEditedSite(prev => prev ? { ...prev, enhanced_3d: true } : null);
               setShowRecon(false);
               setShow3DPreview(true);
             }}

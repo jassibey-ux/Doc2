@@ -93,7 +93,9 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
   const [cesiumLoaded, setCesiumLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [terrainEnabled, setTerrainEnabled] = useState(true);
-  const [google3DEnabled, setGoogle3DEnabled] = useState(false);
+  const [google3DEnabled, setGoogle3DEnabled] = useState(
+    !!(site?.enhanced_3d && GOOGLE_MAPS_API_KEY)
+  );
   const [showLabels, setShowLabels] = useState(true);
   const initialFlyDone = useRef(false);
 
@@ -210,6 +212,13 @@ const CesiumMap: React.FC<CesiumMapProps> = ({
       }
     };
   }, []);
+
+  // Auto-enable Google 3D for enhanced sites
+  useEffect(() => {
+    if (site?.enhanced_3d && GOOGLE_MAPS_API_KEY && !google3DEnabled) {
+      setGoogle3DEnabled(true);
+    }
+  }, [site?.enhanced_3d]);
 
   // Toggle Google 3D Tiles
   useEffect(() => {

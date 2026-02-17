@@ -1,5 +1,5 @@
 import { useReducer, useEffect, useCallback, useState, lazy, Suspense } from 'react';
-import { X, Zap, Target } from 'lucide-react';
+import { X, Zap, Target, Box } from 'lucide-react';
 import { GlassPanel, GlassButton } from '../ui/GlassUI';
 import { wizardReducer, initialWizardState, validateStep, generateSessionName, getValidationMessage } from './wizardReducer';
 import { useToast } from '../../contexts/ToastContext';
@@ -277,6 +277,9 @@ export default function SessionSetupWizard({
     ? sites.find(s => s.id === state.selectedSiteId) ?? DEFAULT_GLOBE_SITE
     : DEFAULT_GLOBE_SITE;
 
+  // Check if site is enhanced 3D (has flag and sufficient boundary)
+  const isEnhancedSite = currentSite.enhanced_3d === true && (currentSite.boundary_polygon?.length ?? 0) >= 3;
+
   // Build CUAS placements in Site3DViewer format for live preview
   const viewer3DCuasPlacements = state.cuasPlacements.map(p => ({
     id: p.id,
@@ -345,12 +348,12 @@ export default function SessionSetupWizard({
         flexDirection: 'row',
       }}
     >
-      {/* ── Left Panel: Wizard (450px) ── */}
+      {/* ── Left Panel: Wizard (450px with 3D, 600px full-width without) ── */}
       <GlassPanel
         className="wizard-container"
         style={{
-          width: '450px',
-          minWidth: '450px',
+          width: isEnhancedSite ? '450px' : '600px',
+          minWidth: isEnhancedSite ? '450px' : '600px',
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
@@ -461,8 +464,8 @@ export default function SessionSetupWizard({
         </div>
       </GlassPanel>
 
-      {/* ── Right Area: 3D Site Viewer ── */}
-      <div
+      {/* ── Right Area: 3D Site Viewer (only for enhanced sites) ── */}
+      {isEnhancedSite ? <div
         style={{
           flex: 1,
           position: 'relative',
@@ -492,7 +495,7 @@ export default function SessionSetupWizard({
             cuasPlacements={viewer3DCuasPlacements}
             cuasProfiles={cuasProfiles}
             mode={viewer3DMode as 'preview' | 'interactive'}
-            tileMode="osm"
+            tileMode={isEnhancedSite ? 'google3d' : 'osm'}
             initialCameraState={currentSite.camera_state_3d}
             onCuasPlaced={handleCuasPlacedOn3D}
           />
@@ -575,7 +578,14 @@ export default function SessionSetupWizard({
             ? 'Select a site to view in 3D'
             : currentSite.name}
         </div>
-      </div>
+      </div> : /* Non-enhanced: dark background fills remaining space */
+      <div style={{ flex: 1, background: 'rgba(10, 15, 26, 0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: 'rgba(255, 255, 255, 0.3)' }}>
+          <Box size={48} style={{ marginBottom: '12px', opacity: 0.3 }} />
+          <div style={{ fontSize: '14px', marginBottom: '4px' }}>3D Preview</div>
+          <div style={{ fontSize: '11px' }}>Enable Enhanced 3D on a site to see the 3D viewer here</div>
+        </div>
+      </div>}
 
       {/* Inline style for pulse-border animation */}
       <style>{`

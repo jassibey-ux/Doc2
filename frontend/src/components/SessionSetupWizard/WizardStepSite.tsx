@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { MapPin, Plus, Search, Check, Copy, ChevronDown, ChevronUp } from 'lucide-react';
-import { GlassPanel, GlassCard, GlassButton, GlassInput } from '../ui/GlassUI';
+import { GlassPanel, GlassCard, GlassButton, GlassInput, Badge } from '../ui/GlassUI';
 import type { WizardState, WizardAction, CUASPlacementData } from './wizardTypes';
 import { TRACK_COLORS } from './wizardTypes';
 import type { SiteDefinition } from '../../types/workflow';
@@ -348,6 +348,9 @@ export default function WizardStepSite({ state, dispatch, sites }: WizardStepSit
                         >
                           {site.environment_type || 'Unknown'}
                         </span>
+                        {site.enhanced_3d && (
+                          <Badge color="green" size="sm">3D</Badge>
+                        )}
                         {site.markers && site.markers.length > 0 && (
                           <span>{site.markers.length} markers</span>
                         )}
