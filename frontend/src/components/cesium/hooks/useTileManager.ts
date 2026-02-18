@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import type { CesiumModule, CesiumViewer, TileMode } from '../types';
 import type { SiteDefinition } from '../../../types/workflow';
 import { createBoundaryClippingPlanes } from '../utils/clippingPlanes';
+import { useApiUsageSafe } from '../../../contexts/ApiUsageContext';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || '';
 const IS_DEV = import.meta.env.DEV;
@@ -58,6 +59,7 @@ export function useTileManager(options: UseTileManagerOptions) {
     lastTileLoadTime: null,
   });
   const tileLoadListenerRef = useRef<(() => void) | null>(null);
+  const apiUsage = useApiUsageSafe();
 
   // Auto-enable Google 3D for enhanced sites
   useEffect(() => {
@@ -121,6 +123,7 @@ export function useTileManager(options: UseTileManagerOptions) {
                 google3DTilesLoaded: loadCount,
                 lastTileLoadTime: Date.now(),
               }));
+              apiUsage?.recordTileLoad();
             };
 
             const onTileFailed = () => {

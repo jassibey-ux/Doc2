@@ -5,10 +5,11 @@
  * then imperatively creates and configures a gmp-map-3d element.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMapsLibrary } from '@vis.gl/react-google-maps';
 import type { SiteDefinition, CameraState3D } from '../../../types/workflow';
 import { cesiumToGoogle3DCamera } from '../types';
+import { useApiUsageSafe } from '../../../contexts/ApiUsageContext';
 
 /** Ref to the gmp-map-3d element (typed as any since Google types may lag) */
 export type Map3DElementRef = any;
@@ -25,6 +26,7 @@ interface UseGoogle3DMapReturn {
   maps3dLib: any;
   isLoaded: boolean;
   error: string | null;
+  setMapMode: (mode: 'HYBRID' | 'SATELLITE') => void;
 }
 
 export function useGoogle3DMap({
@@ -36,6 +38,8 @@ export function useGoogle3DMap({
   const mapRef = useRef<Map3DElementRef | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const apiUsage = useApiUsageSafe();
 
   // Load the maps3d library via @vis.gl/react-google-maps
   const maps3dLib = useMapsLibrary('maps3d');
@@ -112,7 +116,10 @@ export function useGoogle3DMap({
       // explicit 'ready' event. Use a short delay after append as a pragmatic approach.
       // The map renders progressively, so this is sufficient for our purposes.
       requestAnimationFrame(() => {
-        setTimeout(onReady, 500);
+        setTimeout(() => {
+          onReady();
+          apiUsage?.recordMapInit();
+        }, 500);
       });
     } catch (err) {
       setError(`Failed to initialize Google 3D Map: ${err}`);
@@ -132,7 +139,13 @@ export function useGoogle3DMap({
     };
   }, [maps3dLib]); // Only re-run when library loads, not on prop changes
 
-  return { mapRef, maps3dLib, isLoaded, error };
+  const setMapMode = useCallback((mode: 'HYBRID' | 'SATELLITE') => {
+    if (mapRef.current) {
+      mapRef.current.mode = mode;
+    }
+  }, []);
+
+  return { mapRef, maps3dLib, isLoaded, error, setMapMode };
 }
 
 /**

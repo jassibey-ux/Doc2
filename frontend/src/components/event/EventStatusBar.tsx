@@ -10,6 +10,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Bell } from 'lucide-react';
 import { StatusDot } from '../ui/GlassUI';
 import type { FleetSummary } from '../../types/blueUas';
+import { useApiUsageSafe } from '../../contexts/ApiUsageContext';
 
 interface EventStatusBarProps {
   summary: FleetSummary;
@@ -33,6 +34,7 @@ const EventStatusBar: React.FC<EventStatusBarProps> = ({
   onAlertClick,
 }) => {
   const status = STATUS_CONFIG[summary.overallStatus];
+  const apiUsage = useApiUsageSafe();
   const [clock, setClock] = useState(() => formatTime());
 
   useEffect(() => {
@@ -112,7 +114,28 @@ const EventStatusBar: React.FC<EventStatusBarProps> = ({
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Right: Alert bell, clock, connection */}
+      {/* Right: API usage indicator, alert bell, clock, connection */}
+      {apiUsage && (
+        <>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: '2px 8px', borderRadius: 4,
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            fontSize: 10, fontFamily: 'monospace', color: '#9ca3af',
+          }}
+          title={`Session: ${apiUsage.sessionTileLoads} tiles, ${apiUsage.sessionMapInits} map inits | Est. $${apiUsage.sessionCost.toFixed(2)}`}
+          >
+            <span style={{ color: '#3b82f6' }}>Tiles: {apiUsage.sessionTileLoads}</span>
+            <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
+            <span style={{ color: apiUsage.sessionCost > 1 ? '#ef4444' : apiUsage.sessionCost > 0.1 ? '#f59e0b' : '#22c55e' }}>
+              ~${apiUsage.sessionCost.toFixed(2)}
+            </span>
+          </div>
+          <Separator />
+        </>
+      )}
+
       <button
         onClick={onAlertClick}
         style={{

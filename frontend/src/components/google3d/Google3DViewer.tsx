@@ -24,6 +24,7 @@ import { renderDroneTracks } from './layers/DroneTrackLayer3D';
 import { renderDroneMarkers } from './layers/DroneMarkerLayer3D';
 import { renderEngagementLayer } from './layers/EngagementLayer3D';
 import { renderGeofenceZones } from './layers/GeofenceLayer3D';
+import { useApiUsageSafe } from '../../contexts/ApiUsageContext';
 
 /** Imperative handle for external camera control */
 export interface Google3DViewerHandle {
@@ -80,11 +81,14 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
   } = props;
 
   const features = MODE_FEATURES[mode];
+  const apiUsage = useApiUsageSafe();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [showLabels, setShowLabels] = useState(true);
+  const [showLabelsInternal, setShowLabelsInternal] = useState(true);
+  // Use prop if provided (event mode), otherwise use internal state
+  const showLabels = props.showLabels ?? showLabelsInternal;
 
   // Core map setup
-  const { mapRef, maps3dLib, isLoaded, error } = useGoogle3DMap({
+  const { mapRef, maps3dLib, isLoaded, error, setMapMode } = useGoogle3DMap({
     containerRef,
     site,
     initialCameraState,
@@ -110,6 +114,13 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     startOrbit: (durationMs?: number) => startOrbit(durationMs ?? 15000),
   }), [flyTo, handleResetCamera, startOrbit]);
 
+  // Toggle Google POI labels by switching map mode
+  useEffect(() => {
+    if (isLoaded) {
+      setMapMode(showLabels ? 'HYBRID' : 'SATELLITE');
+    }
+  }, [isLoaded, showLabels, setMapMode]);
+
   // Click handling
   useGoogle3DClickHandler({
     mapRef,
@@ -119,6 +130,28 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     onCuasClick,
     onCuasPlaced: features.clickToPlace ? onCuasPlaced : undefined,
   });
+
+  // PerformanceObserver to count Google Maps tile fetches
+  useEffect(() => {
+    if (!apiUsage) return;
+    try {
+      const observer = new PerformanceObserver((list) => {
+        let tileCount = 0;
+        for (const entry of list.getEntries()) {
+          if (entry.name.includes('maps.googleapis.com') || entry.name.includes('khms.googleapis.com')) {
+            tileCount++;
+          }
+        }
+        if (tileCount > 0) {
+          apiUsage.recordTileLoad(tileCount);
+        }
+      });
+      observer.observe({ type: 'resource', buffered: false });
+      return () => observer.disconnect();
+    } catch {
+      // PerformanceObserver not supported
+    }
+  }, [apiUsage]);
 
   // Track cleanup functions for layers
   const cleanupRef = useRef<Array<() => void>>([]);
@@ -141,12 +174,14 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
       cleanupRef.current.push(
         renderSiteBoundary(maps3dLib, mapEl, site)
       );
+      apiUsage?.recordLayerRender('SiteBoundary');
 
       // Geofence zones (event mode)
       if (features.geofences && geofenceZones) {
         cleanupRef.current.push(
           renderGeofenceZones(maps3dLib, mapEl, geofenceZones)
         );
+        apiUsage?.recordLayerRender('GeofenceZones');
       }
 
       // CUAS placements
@@ -161,6 +196,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
             onCuasClick,
           })
         );
+        apiUsage?.recordLayerRender('CUAS');
       }
 
       // Drone tracks
@@ -174,6 +210,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
         });
         colorMap = trackResult.colorMap;
         cleanupRef.current.push(trackResult.cleanup);
+        apiUsage?.recordLayerRender('DroneTracks');
       }
 
       // Drone markers (current position)
@@ -192,6 +229,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
             onDroneClick,
           })
         );
+        apiUsage?.recordLayerRender('DroneMarkers');
       }
 
       // Engagement lines
@@ -205,6 +243,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
             showLabels,
           })
         );
+        apiUsage?.recordLayerRender('Engagements');
       }
     } catch (err) {
       console.warn('[Google3DViewer] Layer rendering failed (Maps 3D alpha API):', err);
@@ -267,7 +306,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
           <ControlButton
             label={showLabels ? 'Labels: ON' : 'Labels: OFF'}
             active={showLabels}
-            onClick={() => setShowLabels(v => !v)}
+            onClick={() => setShowLabelsInternal(v => !v)}
           />
           <ControlButton
             label="Reset Camera"
