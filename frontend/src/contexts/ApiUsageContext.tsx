@@ -9,9 +9,12 @@
 import React, { createContext, useContext, useCallback, useState, useEffect, useRef, ReactNode } from 'react';
 
 // Google Maps pricing (as of 2025)
+// Only map loads are billable when using the Maps JavaScript API (gmp-map-3d).
+// Tiles fetched within a map session are included — NOT billed separately.
+// Photorealistic 3D Tiles are free when rendered through Google Maps Platform.
+// Layer renders are purely client-side and have zero billing impact.
 const PRICING = {
-  mapLoad: 7.0 / 1000,      // $7 per 1,000 map loads
-  tileRequest: 5.0 / 1000,  // $5 per 1,000 tile requests
+  mapLoad: 7.0 / 1000,  // $7 per 1,000 Dynamic Map loads (the only billable metric)
 };
 
 const STORAGE_KEY = 'scensus-api-usage-daily';
@@ -81,8 +84,8 @@ function saveDailyTotals(totals: DailyTotals): void {
   }
 }
 
-function estimateCost(tileLoads: number, mapInits: number): number {
-  return tileLoads * PRICING.tileRequest + mapInits * PRICING.mapLoad;
+function estimateCost(mapInits: number): number {
+  return mapInits * PRICING.mapLoad;
 }
 
 export const ApiUsageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -140,8 +143,8 @@ export const ApiUsageProvider: React.FC<{ children: ReactNode }> = ({ children }
     setSessionLayerBreakdown({});
   }, []);
 
-  const sessionCost = estimateCost(sessionTileLoads, sessionMapInits);
-  const dailyCost = estimateCost(dailyTotals.tileLoads, dailyTotals.mapInits);
+  const sessionCost = estimateCost(sessionMapInits);
+  const dailyCost = estimateCost(dailyTotals.mapInits);
 
   return (
     <ApiUsageContext.Provider value={{

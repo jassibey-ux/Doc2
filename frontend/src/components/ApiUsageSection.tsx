@@ -60,10 +60,47 @@ const ApiUsageSection: React.FC = () => {
         </span>
       </div>
 
+      {/* Billable: Map Loads */}
       <GlassCard style={{ padding: 12 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <StatBox icon={<Map size={14} />} label="Tile Loads" value={usage.sessionTileLoads} color="#3b82f6" />
-          <StatBox icon={<Layers size={14} />} label="Map Inits" value={usage.sessionMapInits} color="#22c55e" />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Layers size={14} style={{ color: '#22c55e' }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>Map Loads</span>
+            <span style={{
+              fontSize: 9, padding: '1px 5px', borderRadius: 3,
+              background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444',
+              fontWeight: 600, letterSpacing: 0.5,
+            }}>BILLED</span>
+          </div>
+          <span style={{ fontFamily: 'monospace', fontSize: 22, fontWeight: 700, color: '#fff' }}>
+            {usage.sessionMapInits}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Est. Session Cost ($7/1K loads)</span>
+          <span style={{
+            fontFamily: 'monospace', fontSize: 18, fontWeight: 700,
+            color: usage.sessionCost > 1 ? '#ef4444' : usage.sessionCost > 0.1 ? '#f59e0b' : '#22c55e',
+          }}>
+            {formatCost(usage.sessionCost)}
+          </span>
+        </div>
+      </GlassCard>
+
+      {/* Performance Metrics (not billed) */}
+      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+        <BarChart3 size={12} />
+        Performance Metrics
+        <span style={{
+          fontSize: 9, padding: '1px 5px', borderRadius: 3,
+          background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)',
+          fontWeight: 600, letterSpacing: 0.5,
+        }}>NOT BILLED</span>
+      </div>
+
+      <GlassCard style={{ padding: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <StatBox icon={<Map size={14} />} label="Network Reqs" value={usage.sessionTileLoads} color="#3b82f6" />
           <StatBox icon={<BarChart3 size={14} />} label="Layer Renders" value={usage.sessionLayerRenders} color="#f59e0b" />
         </div>
       </GlassCard>
@@ -87,21 +124,6 @@ const ApiUsageSection: React.FC = () => {
         </GlassCard>
       )}
 
-      {/* Session Cost Estimate */}
-      <GlassCard style={{ padding: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Est. Session Cost</div>
-          <span style={{
-            fontFamily: 'monospace',
-            fontSize: 18,
-            fontWeight: 700,
-            color: usage.sessionCost > 1 ? '#ef4444' : usage.sessionCost > 0.1 ? '#f59e0b' : '#22c55e',
-          }}>
-            {formatCost(usage.sessionCost)}
-          </span>
-        </div>
-      </GlassCard>
-
       <GlassDivider />
 
       {/* Daily Totals */}
@@ -113,8 +135,8 @@ const ApiUsageSection: React.FC = () => {
 
       <GlassCard style={{ padding: 12 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <StatBox icon={<Map size={14} />} label="Tiles" value={usage.dailyTileLoads} color="#3b82f6" />
-          <StatBox icon={<Layers size={14} />} label="Map Inits" value={usage.dailyMapInits} color="#22c55e" />
+          <StatBox icon={<Layers size={14} />} label="Map Loads" value={usage.dailyMapInits} color="#22c55e" />
+          <StatBox icon={<Map size={14} />} label="Net Reqs" value={usage.dailyTileLoads} color="#3b82f6" />
           <StatBox icon={<BarChart3 size={14} />} label="Layers" value={usage.dailyLayerRenders} color="#f59e0b" />
         </div>
         <div style={{
@@ -131,13 +153,16 @@ const ApiUsageSection: React.FC = () => {
         </div>
       </GlassCard>
 
-      {/* Free Credit Reminder */}
+      {/* Pricing Explainer */}
       <div style={{
         fontSize: 10, color: 'rgba(255,255,255,0.4)',
-        padding: '6px 10px', background: 'rgba(59, 130, 246, 0.08)',
+        padding: '8px 10px', background: 'rgba(59, 130, 246, 0.08)',
         borderRadius: 6, border: '1px solid rgba(59, 130, 246, 0.15)',
+        lineHeight: 1.5,
       }}>
-        Google Maps provides $200/month free credit. Estimated costs shown are approximate.
+        <strong style={{ color: 'rgba(255,255,255,0.6)' }}>Only Map Loads are billed</strong> ($7/1K).
+        Tile network requests and layer renders are included in the map load — not charged separately.
+        3D Tiles are free via Maps JS API. Google provides $200/month free credit.
       </div>
 
       <GlassDivider />

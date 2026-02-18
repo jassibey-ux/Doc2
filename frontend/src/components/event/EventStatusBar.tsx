@@ -124,12 +124,12 @@ const EventStatusBar: React.FC<EventStatusBarProps> = ({
             border: '1px solid rgba(255,255,255,0.08)',
             fontSize: 10, fontFamily: 'monospace', color: '#9ca3af',
           }}
-          title={`Session: ${apiUsage.sessionTileLoads} tiles, ${apiUsage.sessionMapInits} map inits | Est. $${apiUsage.sessionCost.toFixed(2)}`}
+          title={`Session: ${apiUsage.sessionMapInits} map loads, ${apiUsage.sessionTileLoads} network reqs | Est. $${apiUsage.sessionCost.toFixed(4)}`}
           >
-            <span style={{ color: '#3b82f6' }}>Tiles: {apiUsage.sessionTileLoads}</span>
+            <span style={{ color: '#22c55e' }}>Maps: {apiUsage.sessionMapInits}</span>
             <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
             <span style={{ color: apiUsage.sessionCost > 1 ? '#ef4444' : apiUsage.sessionCost > 0.1 ? '#f59e0b' : '#22c55e' }}>
-              ~${apiUsage.sessionCost.toFixed(2)}
+              ~${apiUsage.sessionCost.toFixed(3)}
             </span>
           </div>
           <Separator />
