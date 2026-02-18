@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Settings, MonitorDot, MapPin, Zap, PlayCircle, HardDrive, BarChart3, Square, Activity, History, BookOpen } from 'lucide-react';
+import { Settings, MonitorDot, MapPin, Zap, PlayCircle, HardDrive, BarChart3, Square, Activity, History, BookOpen, Shield } from 'lucide-react';
 import type { SessionPhase } from '../contexts/TestSessionPhaseContext';
 
 interface SidebarProps {
@@ -231,6 +231,20 @@ export default function Sidebar({
         }}
       >
         <BookOpen size={20} style={{ color: '#ff8c00' }} />
+      </button>
+
+      {/* Event Dashboard Button - navigates to event dashboard */}
+      <button
+        className="control-btn tooltip-btn"
+        data-tooltip="Event Dashboard"
+        aria-label="Event Dashboard"
+        onClick={() => navigate('/event')}
+        style={{
+          background: 'rgba(10, 15, 26, 0.85)',
+          borderColor: 'rgba(59, 130, 246, 0.4)',
+        }}
+      >
+        <Shield size={20} style={{ color: '#3b82f6' }} />
       </button>
 
       {/* Console Button - navigates to monitoring console */}
