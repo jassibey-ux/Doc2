@@ -1,5 +1,5 @@
 import { useReducer, useEffect, useCallback, useState, lazy, Suspense } from 'react';
-import { X, Zap, Target, Box } from 'lucide-react';
+import { X, Zap, Target } from 'lucide-react';
 import { GlassPanel, GlassButton } from '../ui/GlassUI';
 import { wizardReducer, initialWizardState, validateStep, generateSessionName, getValidationMessage } from './wizardReducer';
 import { useToast } from '../../contexts/ToastContext';
@@ -13,7 +13,8 @@ import { TRACK_COLORS } from './wizardTypes';
 import type { SiteDefinition, DroneProfile, CUASProfile } from '../../types/workflow';
 import type { DroneSummary } from '../../types/drone';
 
-const CesiumGlobeViewer = lazy(() => import('../cesium/CesiumGlobeViewer'));
+const Google3DViewer = lazy(() => import('../google3d/Google3DViewer'));
+import { APIProvider } from '@vis.gl/react-google-maps';
 
 interface SessionSetupWizardProps {
   isOpen: boolean;
@@ -277,9 +278,6 @@ export default function SessionSetupWizard({
     ? sites.find(s => s.id === state.selectedSiteId) ?? DEFAULT_GLOBE_SITE
     : DEFAULT_GLOBE_SITE;
 
-  // Check if site is enhanced 3D (has flag and sufficient boundary)
-  const isEnhancedSite = currentSite.enhanced_3d === true && (currentSite.boundary_polygon?.length ?? 0) >= 3;
-
   // Build CUAS placements in Site3DViewer format for live preview
   const viewer3DCuasPlacements = state.cuasPlacements.map(p => ({
     id: p.id,
@@ -352,8 +350,8 @@ export default function SessionSetupWizard({
       <GlassPanel
         className="wizard-container"
         style={{
-          width: isEnhancedSite ? '450px' : '600px',
-          minWidth: isEnhancedSite ? '450px' : '600px',
+          width: '450px',
+          minWidth: '450px',
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
@@ -464,8 +462,8 @@ export default function SessionSetupWizard({
         </div>
       </GlassPanel>
 
-      {/* ── Right Area: 3D Site Viewer (only for enhanced sites) ── */}
-      {isEnhancedSite ? <div
+      {/* ── Right Area: 3D Site Viewer (always shown) ── */}
+      <div
         style={{
           flex: 1,
           position: 'relative',
@@ -490,16 +488,16 @@ export default function SessionSetupWizard({
             </div>
           }
         >
-          <CesiumGlobeViewer
-            mode={viewer3DMode as 'setup' | 'preview'}
-            site={currentSite}
-            cuasPlacements={viewer3DCuasPlacements}
-            cuasProfiles={cuasProfiles}
-            tileMode={isEnhancedSite ? 'google3d' : 'osm'}
-            initialCameraState={currentSite.camera_state_3d}
-            onCuasPlaced={handleCuasPlacedOn3D}
-            enableBoundaryClipping
-          />
+          <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} version="alpha">
+            <Google3DViewer
+              mode={viewer3DMode as 'setup' | 'preview'}
+              site={currentSite}
+              cuasPlacements={viewer3DCuasPlacements}
+              cuasProfiles={cuasProfiles}
+              initialCameraState={currentSite.camera_state_3d}
+              onCuasPlaced={handleCuasPlacedOn3D}
+            />
+          </APIProvider>
         </Suspense>
 
         {/* CUAS Placement Banner — shown when placing on 3D map */}
@@ -579,14 +577,7 @@ export default function SessionSetupWizard({
             ? 'Select a site to view in 3D'
             : currentSite.name}
         </div>
-      </div> : /* Non-enhanced: dark background fills remaining space */
-      <div style={{ flex: 1, background: 'rgba(10, 15, 26, 0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', color: 'rgba(255, 255, 255, 0.3)' }}>
-          <Box size={48} style={{ marginBottom: '12px', opacity: 0.3 }} />
-          <div style={{ fontSize: '14px', marginBottom: '4px' }}>3D Preview</div>
-          <div style={{ fontSize: '11px' }}>Enable Enhanced 3D on a site to see the 3D viewer here</div>
-        </div>
-      </div>}
+      </div>
 
       {/* Inline style for pulse-border animation */}
       <style>{`

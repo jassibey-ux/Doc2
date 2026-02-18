@@ -22,7 +22,6 @@ import { SessionSetupWizard } from './SessionSetupWizard';
 import CUASControlPanel from './CUASControlPanel';
 import TrackLegend from './TrackLegend';
 import AnomalyAlertToast from './AnomalyAlertToast';
-import Map3DViewer from './Map3DViewer';
 import Google3DViewer from './google3d/Google3DViewer';
 import { APIProvider } from '@vis.gl/react-google-maps';
 import TerrainProfileChart from './TerrainProfileChart';
@@ -30,7 +29,7 @@ import LinkBudgetPanel from './LinkBudgetPanel';
 import CoordinateBar from './CoordinateBar';
 import MapFileDropHandler from './MapFileDropHandler';
 import type { ImportedLayer } from './MapFileDropHandler';
-import { FileText, X, Globe, Map as MapIcon, Signal, Box, Target, MapPin, Globe2, Mountain, AlertTriangle, Radio, Ruler, Camera } from 'lucide-react';
+import { FileText, X, Globe, Map as MapIcon, Signal, Target, MapPin, Mountain, AlertTriangle, Radio, Ruler, Camera } from 'lucide-react';
 import { SiteReconViewer } from './SiteReconViewer';
 import type { GeoPoint } from '../types/workflow';
 
@@ -104,9 +103,8 @@ export default function MapView() {
   // Track quality visualization toggle
   const [showQualityColors, setShowQualityColors] = useState(false);
 
-  // 3D view toggle: 'none' | 'maplibre3d' | 'google3d'
-  const [show3DView, setShow3DView] = useState(false);
-  const [showGoogle3DGlobe, setShowGoogle3DGlobe] = useState(false);
+  // Google 3D Globe toggle (default: on)
+  const [showGoogle3DGlobe, setShowGoogle3DGlobe] = useState(true);
 
   // Wizard open state (for dual Cesium instance prevention)
   const [wizardIsOpen, setWizardIsOpen] = useState(false);
@@ -520,61 +518,9 @@ export default function MapView() {
           onSetJamState={setJamState}
         />
 
-        {/* Main Map (wrapped in file drop handler) */}
-        <MapFileDropHandler onLayerImported={handleLayerImported}>
-          <MapComponent
-            drones={drones}
-            droneHistory={droneHistory}
-            selectedDroneId={selectedDroneId}
-            onDroneClick={handleDroneClick}
-            currentTime={currentTime}
-            timelineStart={timelineStart}
-            mapStyle={mapStyle}
-            showQualityColors={showQualityColors}
-            cuasPlacements={phaseActiveSession?.cuas_placements}
-            cuasProfiles={cuasProfiles}
-            cuasJamStates={cuasJamStates}
-            showCuasCoverage={currentPhase === 'active' || currentPhase === 'planning'}
-            selectedSite={selectedSite}
-            isDrawingMode={isDrawingMode}
-            onDrawingComplete={handleDrawingComplete}
-            placingCuasId={placingCuasId}
-            onCuasPlaced={handleCuasPlaced}
-            wizardCuasPlacements={wizardCuasPlacements}
-            wizardCuasProfiles={cuasProfiles}
-            onWizardCuasMoved={handleWizardCuasMoved}
-            flyToCenter={flyToCenter}
-            onFlyToComplete={() => setFlyToCenter(null)}
-            sdCardTracks={sdCardTracks}
-            showSDCardTracks={showSDCardTracks}
-            onCursorMove={handleCursorMove}
-            measureMode={measureMode}
-            onMeasurementAdded={handleMeasurementAdded}
-            importedLayers={importedLayers}
-            droneProfileMap={droneProfileMap}
-          />
-        </MapFileDropHandler>
-
-        {/* 3D View Overlay (MapLibre-based) */}
-        {show3DView && !showGoogle3DGlobe && (
-          <Map3DViewer
-            droneHistory={droneHistory}
-            currentTime={currentTime}
-            timelineStart={timelineStart}
-            onClose={() => setShow3DView(false)}
-            showQualityColors={showQualityColors}
-            mapStyle={mapStyle}
-            site={selectedSite}
-            cuasPlacements={phaseActiveSession?.cuas_placements || []}
-            cuasProfiles={cuasProfiles}
-            sdCardTracks={sdCardTracks}
-            showSDCardTracks={showSDCardTracks}
-          />
-        )}
-
-        {/* Google 3D Globe Overlay — hidden when wizard is open to prevent dual instances */}
-        {showGoogle3DGlobe && !wizardIsOpen && (
-          <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
+        {/* Primary map: Google 3D (default) or 2D MapComponent (fallback) */}
+        {showGoogle3DGlobe && !wizardIsOpen ? (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 2 }}>
             <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} version="alpha">
               <Google3DViewer
                 mode="live"
@@ -585,7 +531,6 @@ export default function MapView() {
                 cuasPlacements={phaseActiveSession?.cuas_placements || []}
                 cuasProfiles={cuasProfiles}
                 cuasJamStates={cuasJamStates}
-                onClose={() => setShowGoogle3DGlobe(false)}
                 initialCameraState={selectedSite?.camera_state_3d}
                 droneProfiles={droneProfiles}
                 droneProfileMap={droneProfileMap}
@@ -595,6 +540,40 @@ export default function MapView() {
               />
             </APIProvider>
           </div>
+        ) : (
+          <MapFileDropHandler onLayerImported={handleLayerImported}>
+            <MapComponent
+              drones={drones}
+              droneHistory={droneHistory}
+              selectedDroneId={selectedDroneId}
+              onDroneClick={handleDroneClick}
+              currentTime={currentTime}
+              timelineStart={timelineStart}
+              mapStyle={mapStyle}
+              showQualityColors={showQualityColors}
+              cuasPlacements={phaseActiveSession?.cuas_placements}
+              cuasProfiles={cuasProfiles}
+              cuasJamStates={cuasJamStates}
+              showCuasCoverage={currentPhase === 'active' || currentPhase === 'planning'}
+              selectedSite={selectedSite}
+              isDrawingMode={isDrawingMode}
+              onDrawingComplete={handleDrawingComplete}
+              placingCuasId={placingCuasId}
+              onCuasPlaced={handleCuasPlaced}
+              wizardCuasPlacements={wizardCuasPlacements}
+              wizardCuasProfiles={cuasProfiles}
+              onWizardCuasMoved={handleWizardCuasMoved}
+              flyToCenter={flyToCenter}
+              onFlyToComplete={() => setFlyToCenter(null)}
+              sdCardTracks={sdCardTracks}
+              showSDCardTracks={showSDCardTracks}
+              onCursorMove={handleCursorMove}
+              measureMode={measureMode}
+              onMeasurementAdded={handleMeasurementAdded}
+              importedLayers={importedLayers}
+              droneProfileMap={droneProfileMap}
+            />
+          </MapFileDropHandler>
         )}
 
         {/* Site Recon Viewer Overlay */}
@@ -631,34 +610,20 @@ export default function MapView() {
 
         {/* Map Controls Group - Bottom Right */}
         <div className="map-controls-group">
-          {/* ── 3D View Section ── */}
-          <div className="map-controls-3d-section">
-            <span className="map-controls-section-label">3D View</span>
-            <div className="map-controls-3d-buttons">
-              <button
-                className={`map-control-btn map-control-labeled ${show3DView && !showGoogle3DGlobe ? 'active' : ''}`}
-                onClick={() => { setShow3DView(prev => !prev); setShowGoogle3DGlobe(false); }}
-                title={show3DView ? 'Switch to 2D Map' : '3D Terrain View (MapLibre)'}
-              >
-                <Box size={18} />
-                <span className="map-control-label">3D</span>
-              </button>
-
-              <button
-                className={`map-control-btn map-control-labeled ${showGoogle3DGlobe ? 'active' : ''}`}
-                onClick={() => { setShowGoogle3DGlobe(prev => !prev); setShow3DView(false); }}
-                title={showGoogle3DGlobe ? 'Exit Globe View' : 'Google 3D Globe'}
-              >
-                <Globe2 size={18} />
-                <span className="map-control-label">Globe</span>
-              </button>
-            </div>
-          </div>
+          {/* ── 2D/3D Toggle ── */}
+          <button
+            className={`map-control-btn map-control-labeled ${showGoogle3DGlobe ? 'active' : ''}`}
+            onClick={() => setShowGoogle3DGlobe(prev => !prev)}
+            title={showGoogle3DGlobe ? 'Switch to 2D Map' : 'Switch to 3D Map'}
+          >
+            {showGoogle3DGlobe ? <MapIcon size={18} /> : <Globe size={18} />}
+            <span className="map-control-label">{showGoogle3DGlobe ? '2D' : '3D'}</span>
+          </button>
 
           <div className="map-controls-divider" />
 
           {/* ── Map Tools ── */}
-          {/* Map Style Toggle */}
+          {/* Map Style Toggle (only relevant in 2D mode) */}
           <button
             className={`map-control-btn ${mapStyle !== 'dark' ? 'active' : ''}`}
             onClick={() => setMapStyle(prev => prev === 'dark' ? 'satellite' : prev === 'satellite' ? 'street' : 'dark')}

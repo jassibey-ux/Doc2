@@ -11,8 +11,8 @@ import { useTestSessionPhase } from '../contexts/TestSessionPhaseContext';
 import { useToast } from '../contexts/ToastContext';
 import { GlassButton, Badge } from './ui/GlassUI';
 import MapComponent from './Map';
-import Map3DViewer from './Map3DViewer';
-import CesiumGlobeViewer from './cesium/CesiumGlobeViewer';
+import Google3DViewer from './google3d/Google3DViewer';
+import { APIProvider } from '@vis.gl/react-google-maps';
 import DroneDetailPanel from './DroneDetailPanel';
 import type { TestEvent, CUASPlacement, CUASProfile, JamBurst } from '../types/workflow';
 import type { DroneSummary, PositionPoint } from '../types/drone';
@@ -30,7 +30,6 @@ import {
   Zap,
   ChevronDown,
   Check,
-  Box,
   HardDrive,
   BarChart3,
   X,
@@ -257,9 +256,8 @@ export default function SessionConsole() {
   const [lastEvent, setLastEvent] = useState<{ type: string; timestamp: number } | null>(null);
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [noteText, setNoteText] = useState('');
-  const [show3DView, setShow3DView] = useState(true); // Default to 3D view
-  const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
-  const [mapStyle, setMapStyle] = useState<'dark' | 'satellite' | 'street'>('satellite');
+  const [showGoogle3DGlobe, setShowGoogle3DGlobe] = useState(true); // Default to Google 3D
+  const [mapStyle] = useState<'dark' | 'satellite' | 'street'>('satellite');
   const [selectedCuasId, setSelectedCuasId] = useState<string | null>(null);
   const [showSDCardPanel, setShowSDCardPanel] = useState(false);
   const [expandedSDTrackerId, setExpandedSDTrackerId] = useState<string | null>(null);
@@ -1037,56 +1035,10 @@ export default function SessionConsole() {
                 </button>
               </div>
             )}
-            <MapComponent
-              drones={sessionDrones}
-              droneHistory={sessionDroneHistory}
-              selectedDroneId={selectedDroneId}
-              onDroneClick={handleDroneClick}
-              currentTime={Date.now()}
-              timelineStart={Date.now() - 3600000}
-              selectedSite={sessionSite}
-              cuasPlacements={cuasPlacements}
-              cuasProfiles={cuasProfiles}
-              cuasJamStates={cuasJamStates}
-              showCuasCoverage={true}
-              mapStyle={mapStyle}
-              sdCardTracks={sdCardTracks}
-              showSDCardTracks={showSDCardTracks}
-              activeEngagements={Array.from(activeEngagements.values())}
-              activeBursts={activeBursts}
-              onCuasClick={handleCuasClickOnMap}
-              engagementModeCuasId={engagementModeCuasId}
-            />
-
-            {/* 3D View Overlay */}
-            {show3DView && !showCesiumGlobe && (
-              <Map3DViewer
-                droneHistory={sessionDroneHistory}
-                currentTime={Date.now()}
-                timelineStart={Date.now() - 3600000}
-                onClose={() => setShow3DView(false)}
-                showQualityColors={false}
-                mapStyle={mapStyle}
-                site={sessionSite}
-                cuasPlacements={cuasPlacements}
-                cuasProfiles={cuasProfiles}
-                cuasJamStates={cuasJamStates}
-                currentDroneData={sessionDrones}
-                selectedDroneId={selectedDroneId}
-                onDroneClick={handleDroneClick}
-                sdCardTracks={sdCardTracks}
-                showSDCardTracks={showSDCardTracks}
-                activeEngagements={Array.from(activeEngagements.values())}
-                activeBursts={activeBursts}
-                onCuasClick={handleCuasClickOnMap}
-                engagementModeCuasId={engagementModeCuasId}
-              />
-            )}
-
-            {/* Cesium Globe Overlay */}
-            {showCesiumGlobe && (
-              <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
-                <CesiumGlobeViewer
+            {/* Primary map: Google 3D or 2D fallback */}
+            {showGoogle3DGlobe ? (
+              <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} version="alpha">
+                <Google3DViewer
                   mode="live"
                   droneHistory={sessionDroneHistory}
                   currentTime={Date.now()}
@@ -1098,102 +1050,62 @@ export default function SessionConsole() {
                   currentDroneData={sessionDrones}
                   selectedDroneId={selectedDroneId}
                   onDroneClick={handleDroneClick}
-                  onClose={() => setShowCesiumGlobe(false)}
                   engagements={Array.from(activeEngagements.values())}
                   activeBursts={activeBursts}
                   onCuasClick={handleCuasClickOnMap}
                   engagementModeCuasId={engagementModeCuasId}
                   initialCameraState={sessionSite?.camera_state_3d}
                   droneProfiles={droneProfiles}
-                  enableBoundaryClipping
                 />
-              </div>
+              </APIProvider>
+            ) : (
+              <MapComponent
+                drones={sessionDrones}
+                droneHistory={sessionDroneHistory}
+                selectedDroneId={selectedDroneId}
+                onDroneClick={handleDroneClick}
+                currentTime={Date.now()}
+                timelineStart={Date.now() - 3600000}
+                selectedSite={sessionSite}
+                cuasPlacements={cuasPlacements}
+                cuasProfiles={cuasProfiles}
+                cuasJamStates={cuasJamStates}
+                showCuasCoverage={true}
+                mapStyle={mapStyle}
+                sdCardTracks={sdCardTracks}
+                showSDCardTracks={showSDCardTracks}
+                activeEngagements={Array.from(activeEngagements.values())}
+                activeBursts={activeBursts}
+                onCuasClick={handleCuasClickOnMap}
+                engagementModeCuasId={engagementModeCuasId}
+              />
             )}
 
-            {/* Cesium Globe Toggle Button */}
+            {/* 2D/3D Toggle Button */}
             <button
-              onClick={() => {
-                setShowCesiumGlobe(prev => !prev);
-                if (!showCesiumGlobe) setShow3DView(false); // Turn off Map3DViewer when switching to Globe
-              }}
-              title={showCesiumGlobe ? 'Close Globe View' : 'Open Cesium Globe'}
-              style={{
-                position: 'absolute',
-                top: '10px',
-                right: '102px',
-                zIndex: 1000,
-                width: '36px',
-                height: '36px',
-                borderRadius: '8px',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                background: showCesiumGlobe ? 'rgba(0, 200, 255, 0.3)' : 'rgba(20, 20, 35, 0.9)',
-                color: showCesiumGlobe ? '#00c8ff' : 'rgba(255, 255, 255, 0.7)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.2s ease',
-                fontSize: '11px',
-                fontWeight: 700,
-              }}
-            >
-              <Globe size={18} />
-            </button>
-
-            {/* Map Style Toggle Button */}
-            <button
-              onClick={() => setMapStyle(prev =>
-                prev === 'dark' ? 'satellite' : prev === 'satellite' ? 'street' : 'dark'
-              )}
-              title={`Switch to ${mapStyle === 'dark' ? 'Satellite' : mapStyle === 'satellite' ? 'Street' : 'Dark'} Map`}
-              style={{
-                position: 'absolute',
-                top: '10px',
-                right: '56px',
-                zIndex: 1000,
-                width: '36px',
-                height: '36px',
-                borderRadius: '8px',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                background: mapStyle !== 'dark' ? 'rgba(0, 200, 255, 0.3)' : 'rgba(20, 20, 35, 0.9)',
-                color: mapStyle !== 'dark' ? '#00c8ff' : 'rgba(255, 255, 255, 0.7)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              {mapStyle === 'satellite' ? <Globe size={18} /> : <MapIcon size={18} />}
-            </button>
-
-            {/* 3D Toggle Button */}
-            <button
-              onClick={() => {
-                setShow3DView(prev => !prev);
-                if (!show3DView) setShowCesiumGlobe(false); // Turn off Globe when switching to Map3DViewer
-              }}
-              title={show3DView ? 'Switch to 2D Map' : 'Switch to 3D View'}
-              className="sc-3d-toggle"
+              onClick={() => setShowGoogle3DGlobe(prev => !prev)}
+              title={showGoogle3DGlobe ? 'Switch to 2D Map' : 'Switch to 3D Map'}
               style={{
                 position: 'absolute',
                 top: '10px',
                 right: '10px',
                 zIndex: 1000,
-                width: '36px',
-                height: '36px',
+                padding: '6px 12px',
                 borderRadius: '8px',
                 border: '1px solid rgba(255, 255, 255, 0.15)',
-                background: show3DView ? 'rgba(0, 200, 255, 0.3)' : 'rgba(20, 20, 35, 0.9)',
-                color: show3DView ? '#00c8ff' : 'rgba(255, 255, 255, 0.7)',
+                background: 'rgba(20, 20, 35, 0.9)',
+                color: 'rgba(255, 255, 255, 0.8)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
+                gap: '6px',
                 transition: 'all 0.2s ease',
+                fontSize: '12px',
+                fontWeight: 600,
               }}
             >
-              <Box size={18} />
+              {showGoogle3DGlobe ? <MapIcon size={16} /> : <Globe size={16} />}
+              {showGoogle3DGlobe ? '2D' : '3D'}
             </button>
           </div>
 
