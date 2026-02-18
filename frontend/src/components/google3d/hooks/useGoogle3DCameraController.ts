@@ -15,6 +15,18 @@ import type { Map3DElementRef } from './useGoogle3DMap';
 import { getGoogle3DCameraState } from './useGoogle3DMap';
 import { cesiumToGoogle3DCamera } from '../types';
 
+/** Waypoint for guided camera tours */
+export interface TourWaypoint {
+  lat: number;
+  lng: number;
+  altitude?: number;
+  range?: number;
+  tilt?: number;
+  heading?: number;
+  durationMs?: number;
+  pauseMs?: number;
+}
+
 interface UseGoogle3DCameraControllerOptions {
   mapRef: React.MutableRefObject<Map3DElementRef | null>;
   isLoaded: boolean;
@@ -185,5 +197,88 @@ export function useGoogle3DCameraController({
     }
   }, []);
 
-  return { handleResetCamera, startOrbit, flyTo };
+  // Guided tour state
+  const tourIndexRef = useRef(-1);
+  const tourWaypointsRef = useRef<TourWaypoint[]>([]);
+  const tourPauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tourActiveRef = useRef(false);
+
+  const cancelTour = useCallback(() => {
+    tourActiveRef.current = false;
+    tourIndexRef.current = -1;
+    tourWaypointsRef.current = [];
+    if (tourPauseTimerRef.current) {
+      clearTimeout(tourPauseTimerRef.current);
+      tourPauseTimerRef.current = null;
+    }
+  }, []);
+
+  const guidedTour = useCallback((waypoints: TourWaypoint[]) => {
+    const mapEl = mapRef.current;
+    if (!mapEl || waypoints.length === 0) return;
+
+    // Cancel any existing tour
+    cancelTour();
+
+    tourWaypointsRef.current = waypoints;
+    tourActiveRef.current = true;
+
+    const flyToWaypoint = (index: number) => {
+      if (!tourActiveRef.current || index >= tourWaypointsRef.current.length) {
+        cancelTour();
+        return;
+      }
+
+      tourIndexRef.current = index;
+      const wp = tourWaypointsRef.current[index];
+
+      try {
+        mapEl.flyCameraTo({
+          endCamera: {
+            center: { lat: wp.lat, lng: wp.lng, altitude: wp.altitude ?? 0 },
+            range: wp.range ?? 1500,
+            tilt: wp.tilt ?? 65,
+            heading: wp.heading ?? (mapEl.heading ?? 0),
+          },
+          durationMillis: wp.durationMs ?? 2000,
+        });
+      } catch {
+        // Fallback: set camera directly
+        mapEl.center = { lat: wp.lat, lng: wp.lng, altitude: wp.altitude ?? 0 };
+        mapEl.range = wp.range ?? 1500;
+        mapEl.tilt = wp.tilt ?? 65;
+        if (wp.heading !== undefined) mapEl.heading = wp.heading;
+      }
+    };
+
+    // Listen for animation end to advance to next waypoint
+    const handleAnimationEnd = () => {
+      if (!tourActiveRef.current) return;
+      const nextIndex = tourIndexRef.current + 1;
+      if (nextIndex >= tourWaypointsRef.current.length) {
+        cancelTour();
+        mapEl.removeEventListener('gmp-animationend', handleAnimationEnd);
+        return;
+      }
+
+      const currentWp = tourWaypointsRef.current[tourIndexRef.current];
+      const pauseMs = currentWp?.pauseMs ?? 0;
+
+      if (pauseMs > 0) {
+        tourPauseTimerRef.current = setTimeout(() => {
+          flyToWaypoint(nextIndex);
+        }, pauseMs);
+      } else {
+        flyToWaypoint(nextIndex);
+      }
+    };
+
+    mapEl.addEventListener('gmp-animationend', handleAnimationEnd);
+
+    // Start the tour with the first waypoint
+    flyToWaypoint(0);
+
+  }, [cancelTour]);
+
+  return { handleResetCamera, startOrbit, flyTo, guidedTour, cancelTour };
 }

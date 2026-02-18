@@ -19,6 +19,7 @@
     "@vis.gl/react-google-maps": "^1.7.1",
     "cesium": "^1.138.0",
     "hls.js": "^1.5.0",
+    "html2canvas": "^1.4.1",
     "lucide-react": "^0.400.0",
     "maplibre-gl": "^4.5.0",
     "mgrs": "^2.1.0",

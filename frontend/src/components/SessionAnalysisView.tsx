@@ -35,8 +35,9 @@ import { GlassPanel, GlassCard, GlassButton, Badge } from './ui/GlassUI';
 import { useWorkflow } from '../contexts/WorkflowContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useCRM } from '../contexts/CRMContext';
+import { APIProvider } from '@vis.gl/react-google-maps';
 import Map3DViewer from './Map3DViewer';
-import CesiumGlobeViewer from './cesium/CesiumGlobeViewer';
+import Google3DViewer from './google3d/Google3DViewer';
 import TrackLegend from './TrackLegend';
 import TagInput from './crm/TagInput';
 import AnnotationList from './crm/AnnotationList';
@@ -352,7 +353,7 @@ export default function SessionAnalysisView() {
           </GlassButton>
           <GlassButton variant="ghost" onClick={() => { setShowCesiumGlobe(!showCesiumGlobe); if (!showCesiumGlobe) setShow3DView(false); }}>
             <Globe size={16} />
-            {showCesiumGlobe ? 'Hide Globe' : 'Globe'}
+            {showCesiumGlobe ? 'Hide 3D Globe' : '3D Globe'}
           </GlassButton>
         </div>
       </div>
@@ -371,21 +372,22 @@ export default function SessionAnalysisView() {
         />
       )}
 
-      {/* Cesium Globe Overlay */}
+      {/* Google 3D Globe Overlay */}
       {showCesiumGlobe && (
         <div style={{ position: 'relative', height: '400px', marginBottom: '20px', borderRadius: '12px', overflow: 'hidden' }}>
-          <CesiumGlobeViewer
-            mode="analysis"
-            droneHistory={droneHistory}
-            currentTime={timelineInfo.end}
-            timelineStart={timelineInfo.start}
-            site={site}
-            cuasPlacements={session?.cuas_placements || []}
-            cuasProfiles={cuasProfiles}
-            engagements={sessionEngagements}
-            enableBoundaryClipping
-            onClose={() => setShowCesiumGlobe(false)}
-          />
+          <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} version="alpha">
+            <Google3DViewer
+              mode="analysis"
+              droneHistory={droneHistory}
+              currentTime={timelineInfo.end}
+              timelineStart={timelineInfo.start}
+              site={site}
+              cuasPlacements={session?.cuas_placements || []}
+              cuasProfiles={cuasProfiles}
+              engagements={sessionEngagements}
+              onClose={() => setShowCesiumGlobe(false)}
+            />
+          </APIProvider>
         </div>
       )}
 

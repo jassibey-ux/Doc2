@@ -65,6 +65,9 @@ export interface Google3DViewerProps {
   geofenceZones?: GeofenceZone[];
   blueUasDrones?: Map<string, BlueUASDroneInfo>;
 
+  // Place intelligence (event mode — click building → fetch place info)
+  onPlaceClick?: (place: { displayName: string; types: string[]; formattedAddress?: string }) => void;
+
   // Lifecycle
   onReady?: () => void;
   onClose?: () => void;

@@ -21,6 +21,7 @@ interface UseGoogle3DClickHandlerOptions {
   onDroneClick?: (droneId: string) => void;
   onCuasClick?: (cuasPlacementId: string) => void;
   onCuasPlaced?: (position: { lat: number; lon: number; alt_m: number }) => void;
+  onPlaceClick?: (place: { displayName: string; types: string[]; formattedAddress?: string }) => void;
 }
 
 export function useGoogle3DClickHandler({
@@ -30,6 +31,7 @@ export function useGoogle3DClickHandler({
   onDroneClick: _onDroneClick,
   onCuasClick: _onCuasClick,
   onCuasPlaced,
+  onPlaceClick,
 }: UseGoogle3DClickHandlerOptions) {
 
   // Map click handler — click-to-place in setup mode
@@ -57,6 +59,36 @@ export function useGoogle3DClickHandler({
       mapEl.removeEventListener('gmp-click', handleMapClick);
     };
   }, [isLoaded, mode, onCuasPlaced]);
+
+  // Place click handler — gmp-placeclick for event mode
+  useEffect(() => {
+    const mapEl = mapRef.current;
+    if (!mapEl || !isLoaded || mode !== 'event' || !onPlaceClick) return;
+
+    const handlePlaceClick = async (event: any) => {
+      try {
+        const place = event?.place;
+        if (!place) return;
+
+        // Fetch basic fields only ($5/1K calls)
+        await place.fetchFields({ fields: ['displayName', 'types', 'formattedAddress'] });
+
+        onPlaceClick({
+          displayName: place.displayName || 'Unknown Place',
+          types: place.types || [],
+          formattedAddress: place.formattedAddress,
+        });
+      } catch (err) {
+        console.warn('[Google3D] Place fetch failed:', err);
+      }
+    };
+
+    mapEl.addEventListener('gmp-placeclick', handlePlaceClick);
+
+    return () => {
+      mapEl.removeEventListener('gmp-placeclick', handlePlaceClick);
+    };
+  }, [isLoaded, mode, onPlaceClick]);
 }
 
 /**

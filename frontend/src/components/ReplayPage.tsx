@@ -9,9 +9,10 @@ import { useWebSocket } from '../contexts/WebSocketContext';
 import { useWorkflow } from '../contexts/WorkflowContext';
 import { useToast } from '../contexts/ToastContext';
 import { GlassButton, Badge } from './ui/GlassUI';
+import { APIProvider } from '@vis.gl/react-google-maps';
 import MapComponent from './Map';
 import Map3DViewer from './Map3DViewer';
-import CesiumGlobeViewer from './cesium/CesiumGlobeViewer';
+import Google3DViewer from './google3d/Google3DViewer';
 import DroneDetailPanel from './DroneDetailPanel';
 import ReplaySessionBrowserPanel from './ReplaySessionBrowserPanel';
 import PredictedVsActualView from './PredictedVsActualView';
@@ -546,23 +547,24 @@ export default function ReplayPage() {
                   />
                 )}
 
-                {/* Cesium Globe Overlay */}
+                {/* Google 3D Globe Overlay */}
                 {showCesiumGlobe && (
                   <div style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
-                    <CesiumGlobeViewer
-                      mode="replay"
-                      droneHistory={droneHistory}
-                      currentTime={mapCurrentTime}
-                      timelineStart={mapTimelineStart}
-                      site={sessionSite}
-                      cuasPlacements={cuasPlacements}
-                      cuasProfiles={cuasProfiles}
-                      currentDroneData={drones}
-                      selectedDroneId={selectedDroneId}
-                      onDroneClick={(id) => setSelectedDroneId(id)}
-                      enableBoundaryClipping
-                      onClose={() => setShowCesiumGlobe(false)}
-                    />
+                    <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} version="alpha">
+                      <Google3DViewer
+                        mode="replay"
+                        droneHistory={droneHistory}
+                        currentTime={mapCurrentTime}
+                        timelineStart={mapTimelineStart}
+                        site={sessionSite}
+                        cuasPlacements={cuasPlacements}
+                        cuasProfiles={cuasProfiles}
+                        currentDroneData={drones}
+                        selectedDroneId={selectedDroneId}
+                        onDroneClick={(id) => setSelectedDroneId(id)}
+                        onClose={() => setShowCesiumGlobe(false)}
+                      />
+                    </APIProvider>
                   </div>
                 )}
 

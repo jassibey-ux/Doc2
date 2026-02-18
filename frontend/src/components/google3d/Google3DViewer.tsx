@@ -13,11 +13,12 @@
  * - event:    Blue UAS event dashboard (geofences, fleet tracking)
  */
 
-import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
+import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback } from 'react';
 import type { Google3DViewerProps, ViewerMode } from './types';
 import { useGoogle3DMap } from './hooks/useGoogle3DMap';
-import { useGoogle3DCameraController } from './hooks/useGoogle3DCameraController';
+import { useGoogle3DCameraController, type TourWaypoint } from './hooks/useGoogle3DCameraController';
 import { useGoogle3DClickHandler } from './hooks/useGoogle3DClickHandler';
+import { useGoogle3DScreenshot } from './hooks/useGoogle3DScreenshot';
 import { renderSiteBoundary } from './layers/SiteBoundaryLayer3D';
 import { renderCuasLayer } from './layers/CuasLayer3D';
 import { renderDroneTracks } from './layers/DroneTrackLayer3D';
@@ -25,12 +26,16 @@ import { renderDroneMarkers } from './layers/DroneMarkerLayer3D';
 import { renderEngagementLayer } from './layers/EngagementLayer3D';
 import { renderGeofenceZones } from './layers/GeofenceLayer3D';
 import { useApiUsageSafe } from '../../contexts/ApiUsageContext';
+import DronePopoverCard from './overlays/DronePopoverCard';
 
 /** Imperative handle for external camera control */
 export interface Google3DViewerHandle {
   flyTo(lat: number, lng: number, alt: number, range?: number): void;
   resetCamera(): void;
   startOrbit(durationMs?: number): void;
+  guidedTour(waypoints: TourWaypoint[]): void;
+  cancelTour(): void;
+  captureScreenshot(): Promise<string | null>;
 }
 
 // Feature matrix: which features are active per mode
@@ -43,13 +48,15 @@ const MODE_FEATURES: Record<ViewerMode, {
   screenshots: boolean;
   droneSelectionFlyTo: boolean;
   geofences: boolean;
+  dronePopover: boolean;
+  placeIntelligence: boolean;
 }> = {
-  setup:    { droneTracks: false, droneMarkers: false, engagements: false, jamStateColors: false, clickToPlace: true,  screenshots: true,  droneSelectionFlyTo: false, geofences: false },
-  live:     { droneTracks: true,  droneMarkers: true,  engagements: true,  jamStateColors: true,  clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: false },
-  replay:   { droneTracks: true,  droneMarkers: true,  engagements: false, jamStateColors: false, clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: false },
-  analysis: { droneTracks: true,  droneMarkers: true,  engagements: true,  jamStateColors: false, clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: false },
-  preview:  { droneTracks: false, droneMarkers: false, engagements: false, jamStateColors: false, clickToPlace: false, screenshots: true,  droneSelectionFlyTo: false, geofences: false },
-  event:    { droneTracks: true,  droneMarkers: true,  engagements: false, jamStateColors: false, clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: true  },
+  setup:    { droneTracks: false, droneMarkers: false, engagements: false, jamStateColors: false, clickToPlace: true,  screenshots: true,  droneSelectionFlyTo: false, geofences: false, dronePopover: false, placeIntelligence: false },
+  live:     { droneTracks: true,  droneMarkers: true,  engagements: true,  jamStateColors: true,  clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: false, dronePopover: true,  placeIntelligence: false },
+  replay:   { droneTracks: true,  droneMarkers: true,  engagements: false, jamStateColors: false, clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: false, dronePopover: true,  placeIntelligence: false },
+  analysis: { droneTracks: true,  droneMarkers: true,  engagements: true,  jamStateColors: false, clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: false, dronePopover: true,  placeIntelligence: false },
+  preview:  { droneTracks: false, droneMarkers: false, engagements: false, jamStateColors: false, clickToPlace: false, screenshots: true,  droneSelectionFlyTo: false, geofences: false, dronePopover: false, placeIntelligence: false },
+  event:    { droneTracks: true,  droneMarkers: true,  engagements: false, jamStateColors: false, clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: true,  dronePopover: true,  placeIntelligence: true  },
 };
 
 const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((props, ref) => {
@@ -76,6 +83,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     engagements,
     activeBursts,
     geofenceZones,
+    onPlaceClick,
     onReady,
     onClose,
   } = props;
@@ -87,6 +95,9 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
   // Use prop if provided (event mode), otherwise use internal state
   const showLabels = props.showLabels ?? showLabelsInternal;
 
+  // Screenshot flash feedback
+  const [screenshotFlash, setScreenshotFlash] = useState(false);
+
   // Core map setup
   const { mapRef, maps3dLib, isLoaded, error, setMapMode } = useGoogle3DMap({
     containerRef,
@@ -96,7 +107,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
   });
 
   // Camera management
-  const { handleResetCamera, startOrbit, flyTo } = useGoogle3DCameraController({
+  const { handleResetCamera, startOrbit, flyTo, guidedTour, cancelTour } = useGoogle3DCameraController({
     mapRef,
     isLoaded,
     site,
@@ -107,12 +118,34 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     onReady,
   });
 
+  // Screenshot capture
+  const { captureScreenshot: doCapture } = useGoogle3DScreenshot({ containerRef });
+
+  const captureScreenshot = useCallback(async (): Promise<string | null> => {
+    const dataUrl = await doCapture();
+    if (dataUrl) {
+      // Flash the button briefly
+      setScreenshotFlash(true);
+      setTimeout(() => setScreenshotFlash(false), 300);
+
+      // Auto-download
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = `screenshot-${Date.now()}.png`;
+      link.click();
+    }
+    return dataUrl;
+  }, [doCapture]);
+
   // Expose imperative handle for external camera control
   useImperativeHandle(ref, () => ({
     flyTo: (lat: number, lng: number, alt: number, range?: number) => flyTo(lat, lng, alt, range),
     resetCamera: handleResetCamera,
     startOrbit: (durationMs?: number) => startOrbit(durationMs ?? 15000),
-  }), [flyTo, handleResetCamera, startOrbit]);
+    guidedTour,
+    cancelTour,
+    captureScreenshot,
+  }), [flyTo, handleResetCamera, startOrbit, guidedTour, cancelTour, captureScreenshot]);
 
   // Toggle Google POI labels by switching map mode
   useEffect(() => {
@@ -129,6 +162,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     onDroneClick,
     onCuasClick,
     onCuasPlaced: features.clickToPlace ? onCuasPlaced : undefined,
+    onPlaceClick: features.placeIntelligence ? onPlaceClick : undefined,
   });
 
   // PerformanceObserver to count Google Maps tile fetches
@@ -264,6 +298,14 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     };
   }, []);
 
+  // Resolve drone profile for popover
+  const selectedDroneData = selectedDroneId ? currentDroneData?.get(selectedDroneId) : undefined;
+  const selectedDroneProfile = selectedDroneId && droneProfileMap
+    ? droneProfileMap.get(selectedDroneId)
+    : selectedDroneId && droneProfiles
+      ? droneProfiles.find(p => p.id === selectedDroneId || p.name === selectedDroneId)
+      : undefined;
+
   // Error state
   if (error) {
     return (
@@ -313,6 +355,12 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
             active={false}
             onClick={handleResetCamera}
           />
+          <ControlButton
+            label="Screenshot"
+            active={screenshotFlash}
+            onClick={captureScreenshot}
+            icon="📷"
+          />
         </div>
       )}
 
@@ -355,6 +403,17 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
         </button>
       )}
 
+      {/* Drone Popover Card */}
+      {isLoaded && features.dronePopover && selectedDroneId && selectedDroneData && (
+        <DronePopoverCard
+          droneId={selectedDroneId}
+          droneData={selectedDroneData}
+          droneProfile={selectedDroneProfile ?? null}
+          containerRef={containerRef}
+          onClose={() => onDroneClick?.(selectedDroneId)}
+        />
+      )}
+
       {/* Loading overlay */}
       {!isLoaded && !error && (
         <div style={{
@@ -376,7 +435,8 @@ const ControlButton: React.FC<{
   label: string;
   active: boolean;
   onClick: () => void;
-}> = ({ label, active, onClick }) => (
+  icon?: string;
+}> = ({ label, active, onClick, icon }) => (
   <button
     onClick={onClick}
     style={{
@@ -388,8 +448,12 @@ const ControlButton: React.FC<{
       cursor: 'pointer',
       fontSize: 11,
       whiteSpace: 'nowrap',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 4,
     }}
   >
+    {icon && <span style={{ fontSize: 13 }}>{icon}</span>}
     {label}
   </button>
 );

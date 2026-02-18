@@ -99,6 +99,12 @@ export function useGoogle3DMap({
         mapEl.minTilt = 0;
       }
 
+      // Apply mode-specific camera gesture constraints
+      if (_mode === 'event') {
+        mapEl.maxAltitude = 50000;   // 50km max zoom-out
+        mapEl.minTilt = 20;          // prevent fully top-down
+      }
+
       // Style the map to fill container
       mapEl.style.width = '100%';
       mapEl.style.height = '100%';
