@@ -10,9 +10,12 @@
  * | bar  |  [EventSidebarPanel, 280px]               | (when drone   |
  * | 56px |  (overlays map when open)                 |  selected)    |
  * +------+-------------------------------------------+---------------+
+ *
+ * Quick Start: When no drones are detected, an overlay offers demo mode
+ * selection (backend scenarios or client-side simulation).
  */
 
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { APIProvider } from '@vis.gl/react-google-maps';
 import Google3DViewer from '../google3d/Google3DViewer';
@@ -23,9 +26,13 @@ import type { EventPanel } from './EventSidebar';
 import EventSidebarPanel from './EventSidebarPanel';
 import DroneDetailPanel from './DroneDetailPanel';
 import CameraPresetsOverlay from './CameraPresetsOverlay';
+import QuickStartOverlay from './QuickStartOverlay';
 import { useEventAlerts } from './hooks/useEventAlerts';
+import { useBackendStatus } from './hooks/useBackendStatus';
+import { useClientDemoMode } from './hooks/useClientDemoMode';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useWorkflow } from '../../contexts/WorkflowContext';
+import { haversineDistance } from '../../utils/geo';
 import type { FleetSummary, GeofenceZone } from '../../types/blueUas';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
@@ -33,7 +40,7 @@ const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const EventDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { drones, droneHistory, currentTime, timelineStart } = useWebSocket();
-  const { selectedSite, cuasProfiles, droneProfiles } = useWorkflow();
+  const { selectedSite, sites, loadSites, selectSite, cuasProfiles, droneProfiles } = useWorkflow();
 
   // State
   const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
@@ -42,17 +49,32 @@ const EventDashboard: React.FC = () => {
   const [showLabels, setShowLabels] = useState(true);
   const [hiddenZoneIds, setHiddenZoneIds] = useState<Set<string>>(new Set());
 
+  // Quick Start state
+  const [quickStartDismissed, setQuickStartDismissed] = useState(false);
+  const [clientDemoActive, setClientDemoActive] = useState(false);
+  const [isLaunchingDemo, setIsLaunchingDemo] = useState(false);
+
   // Viewer ref for camera controls
   const viewerRef = useRef<Google3DViewerHandle>(null);
 
-  // Geofence zones
-  const geofenceZones = useMemo<GeofenceZone[]>(() => {
+  // Backend status + demo mode API
+  const { backendAvailable, scenarios, enableDemoMode, isChecking } = useBackendStatus();
+
+  // Client-side demo data
+  const { demoDrones, demoDroneHistory, demoGeofenceZones, demoSiteCenter } = useClientDemoMode(clientDemoActive);
+
+  // ─── Data merging: real WebSocket data wins; client demo is fallback ───
+  const effectiveDrones = drones.size > 0 ? drones : demoDrones;
+  const effectiveDroneHistory = droneHistory.size > 0 ? droneHistory : demoDroneHistory;
+
+  // Geofence zones from site selection
+  const siteGeofenceZones = useMemo<GeofenceZone[]>(() => {
     if (!selectedSite?.center) return [];
     return [
       {
         id: 'auth-corridor-1',
         name: 'Authorized Flight Corridor',
-        type: 'authorized_corridor',
+        type: 'authorized_corridor' as const,
         center: { lat: selectedSite.center.lat, lng: selectedSite.center.lon },
         radiusM: 500,
         minAltitudeM: 30,
@@ -63,22 +85,49 @@ const EventDashboard: React.FC = () => {
         extruded: true,
         active: true,
       },
+      {
+        id: 'restricted-south-1',
+        name: 'Restricted Airspace',
+        type: 'restricted_airspace' as const,
+        center: { lat: selectedSite.center.lat - 0.003, lng: selectedSite.center.lon + 0.001 },
+        radiusM: 200,
+        minAltitudeM: 0,
+        maxAltitudeM: 400,
+        fillColor: 'rgba(239, 68, 68, 0.2)',
+        strokeColor: '#ef4444',
+        fillOpacity: 0.2,
+        extruded: true,
+        active: true,
+      },
     ];
   }, [selectedSite]);
 
+  const effectiveGeofenceZones = siteGeofenceZones.length > 0 ? siteGeofenceZones : demoGeofenceZones;
+
   // Visible zones (filter out hidden)
   const visibleZones = useMemo(
-    () => geofenceZones.filter(z => !hiddenZoneIds.has(z.id)),
-    [geofenceZones, hiddenZoneIds],
+    () => effectiveGeofenceZones.filter(z => !hiddenZoneIds.has(z.id)),
+    [effectiveGeofenceZones, hiddenZoneIds],
   );
 
-  // Alerts
-  const { alerts, unacknowledgedCount, acknowledgeAlert, acknowledgeAll } = useEventAlerts(drones, geofenceZones);
+  // ─── Auto-transition when real data arrives ───
+  useEffect(() => {
+    if (drones.size > 0) {
+      if (clientDemoActive) setClientDemoActive(false);
+      if (!quickStartDismissed) setQuickStartDismissed(true);
+    }
+  }, [drones.size, clientDemoActive, quickStartDismissed]);
 
-  // Fleet summary
+  // Quick Start visibility
+  const showQuickStart = !quickStartDismissed && effectiveDrones.size === 0 && !isChecking;
+
+  // Alerts (using effective data)
+  const { alerts, unacknowledgedCount, acknowledgeAlert, acknowledgeAll } = useEventAlerts(effectiveDrones, effectiveGeofenceZones);
+
+  // Fleet summary (using effective data)
   const fleetSummary = useMemo<FleetSummary>(() => {
     let active = 0, landed = 0, emergency = 0, total = 0;
-    drones.forEach(drone => {
+    effectiveDrones.forEach(drone => {
       total++;
       if (drone.is_stale) landed++;
       else active++;
@@ -91,15 +140,63 @@ const EventDashboard: React.FC = () => {
       geofenceBreaches: alerts.filter(a => a.type === 'geofence_breach' && !a.acknowledged).length,
       overallStatus: emergency > 0 ? 'alert' : alerts.some(a => a.severity === 'critical' && !a.acknowledged) ? 'warning' : 'nominal',
     };
-  }, [drones, alerts]);
+  }, [effectiveDrones, alerts]);
 
-  // Selected drone data
-  const selectedDrone = selectedDroneId ? drones.get(selectedDroneId) : null;
+  // Selected drone data (check effective drones)
+  const selectedDrone = selectedDroneId ? effectiveDrones.get(selectedDroneId) : null;
   const selectedProfile = selectedDroneId
     ? droneProfiles.find(p => p.id === selectedDroneId) ?? null
     : null;
 
-  // Handlers
+  // Effective site name (real site or demo label)
+  const effectiveSiteName = selectedSite?.name ?? (clientDemoActive ? 'SF Demo Site' : undefined);
+
+  // ─── Scenario-to-site matching ───
+  const findMatchingSite = useCallback((scenarioId: string) => {
+    if (sites.length === 0) return null;
+    if (scenarioId === 'default') {
+      const alphaMatch = sites.find(s => /alpha/i.test(s.name));
+      if (alphaMatch) return alphaMatch;
+    }
+    if (scenarioId === 'bmo-field') {
+      // Find nearest site to Toronto BMO Field (43.63, -79.42)
+      let best = sites[0];
+      let bestDist = Infinity;
+      for (const s of sites) {
+        const d = haversineDistance(s.center.lat, s.center.lon, 43.63, -79.42);
+        if (d < bestDist) { bestDist = d; best = s; }
+      }
+      return best;
+    }
+    return sites[0];
+  }, [sites]);
+
+  // ─── Quick Start handlers ───
+  const handleLaunchDemo = useCallback(async (scenarioId: string) => {
+    setIsLaunchingDemo(true);
+    try {
+      const success = await enableDemoMode(scenarioId);
+      if (success) {
+        await loadSites();
+        const match = findMatchingSite(scenarioId);
+        if (match) selectSite(match);
+        setQuickStartDismissed(true);
+      }
+    } finally {
+      setIsLaunchingDemo(false);
+    }
+  }, [enableDemoMode, loadSites, findMatchingSite, selectSite]);
+
+  const handleStartClientDemo = useCallback(() => {
+    setClientDemoActive(true);
+    setQuickStartDismissed(true);
+  }, []);
+
+  const handleDismiss = useCallback(() => {
+    setQuickStartDismissed(true);
+  }, []);
+
+  // ─── Drone interaction handlers ───
   const handleDroneClick = useCallback((droneId: string) => {
     setSelectedDroneId(prev => prev === droneId ? null : droneId);
     setIsTracking(false);
@@ -108,12 +205,11 @@ const EventDashboard: React.FC = () => {
   const handleSelectDroneFromPanel = useCallback((droneId: string) => {
     setSelectedDroneId(droneId);
     setIsTracking(false);
-    // Fly to drone
-    const drone = drones.get(droneId);
+    const drone = effectiveDrones.get(droneId);
     if (drone?.lat != null && drone?.lon != null) {
       viewerRef.current?.flyTo(drone.lat, drone.lon, drone.alt_m ?? 50);
     }
-  }, [drones]);
+  }, [effectiveDrones]);
 
   const handleCloseDetail = useCallback(() => {
     setSelectedDroneId(null);
@@ -137,10 +233,11 @@ const EventDashboard: React.FC = () => {
 
   // Camera presets
   const handleOverview = useCallback(() => {
-    if (selectedSite?.center) {
-      viewerRef.current?.flyTo(selectedSite.center.lat, selectedSite.center.lon, selectedSite.center.alt_m ?? 0, 3000);
+    const center = selectedSite?.center ?? (clientDemoActive ? { lat: demoSiteCenter.lat, lon: demoSiteCenter.lon, alt_m: 0 } : null);
+    if (center) {
+      viewerRef.current?.flyTo(center.lat, center.lon, center.alt_m ?? 0, 3000);
     }
-  }, [selectedSite]);
+  }, [selectedSite, clientDemoActive, demoSiteCenter]);
 
   const handleOrbitVenue = useCallback(() => {
     viewerRef.current?.startOrbit(15000);
@@ -169,12 +266,12 @@ const EventDashboard: React.FC = () => {
   }, []);
 
   const handleAlertClick = useCallback((alert: { trackerId: string }) => {
-    const drone = drones.get(alert.trackerId);
+    const drone = effectiveDrones.get(alert.trackerId);
     if (drone?.lat != null && drone?.lon != null) {
       setSelectedDroneId(alert.trackerId);
       viewerRef.current?.flyTo(drone.lat, drone.lon, drone.alt_m ?? 50);
     }
-  }, [drones]);
+  }, [effectiveDrones]);
 
   const handleAlertBellClick = useCallback(() => {
     setActiveSidebarPanel(prev => prev === 'alerts' ? null : 'alerts');
@@ -208,7 +305,7 @@ const EventDashboard: React.FC = () => {
         {/* Top bar */}
         <EventStatusBar
           summary={fleetSummary}
-          siteName={selectedSite?.name}
+          siteName={effectiveSiteName}
           alertCount={unacknowledgedCount}
           onNavigateBack={() => navigate('/')}
           onAlertClick={handleAlertBellClick}
@@ -226,11 +323,11 @@ const EventDashboard: React.FC = () => {
           {/* Expandable sidebar panel */}
           <EventSidebarPanel
             activePanel={activeSidebarPanel}
-            drones={drones}
+            drones={effectiveDrones}
             droneProfiles={droneProfiles}
             selectedDroneId={selectedDroneId}
             onSelectDrone={handleSelectDroneFromPanel}
-            geofenceZones={geofenceZones}
+            geofenceZones={effectiveGeofenceZones}
             hiddenZoneIds={hiddenZoneIds}
             onToggleZone={handleToggleZone}
             alerts={alerts}
@@ -246,10 +343,10 @@ const EventDashboard: React.FC = () => {
               mode="event"
               site={selectedSite}
               initialCameraState={selectedSite?.camera_state_3d}
-              droneHistory={droneHistory}
+              droneHistory={effectiveDroneHistory}
               currentTime={currentTime}
               timelineStart={timelineStart}
-              currentDroneData={drones}
+              currentDroneData={effectiveDrones}
               selectedDroneId={selectedDroneId}
               onDroneClick={handleDroneClick}
               droneProfiles={droneProfiles}
@@ -268,6 +365,18 @@ const EventDashboard: React.FC = () => {
               onToggleLabels={handleToggleLabels}
               hasDroneSelected={!!selectedDroneId}
             />
+
+            {/* Quick Start overlay */}
+            {showQuickStart && (
+              <QuickStartOverlay
+                scenarios={scenarios}
+                backendAvailable={backendAvailable}
+                isLoading={isLaunchingDemo}
+                onLaunchDemo={handleLaunchDemo}
+                onStartClientDemo={handleStartClientDemo}
+                onDismiss={handleDismiss}
+              />
+            )}
           </div>
 
           {/* Right detail panel */}

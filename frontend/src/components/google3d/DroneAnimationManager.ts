@@ -145,7 +145,7 @@ export class DroneAnimationManager {
 
     const now = Date.now();
 
-    for (const [trackerId, state] of this.drones) {
+    for (const [, state] of this.drones) {
       // Check for stale drones
       if (now - state.lastUpdateTime > this.staleThresholdMs && !state.isStale) {
         state.isStale = true;

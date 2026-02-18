@@ -124,7 +124,7 @@ export function renderCuasLayer(
       const ring = circleGeoJSON.geometry.coordinates[0];
       const polygon = new Polygon3DElement();
       polygon.setAttribute('data-layer', CUAS_TAG);
-      polygon.outerCoordinates = ring.map(([lng, lat]: [number, number]) => ({
+      polygon.outerCoordinates = ring.map(([lng, lat]: number[]) => ({
         lat,
         lng,
         altitude: placement.height_agl_m ?? 2,

@@ -187,7 +187,7 @@ function getPositionAtTime(positions: PositionPoint[], time: number): PositionPo
 function findDroneProfile(
   trackerId: string,
   droneProfileMap?: Map<string, DroneProfile>,
-  currentDroneData?: Map<string, DroneSummary>,
+  _currentDroneData?: Map<string, DroneSummary>,
 ): DroneProfile | null {
   if (!droneProfileMap) return null;
   return droneProfileMap.get(trackerId) ?? null;

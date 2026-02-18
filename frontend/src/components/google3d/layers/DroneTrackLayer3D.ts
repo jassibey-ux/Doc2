@@ -53,7 +53,7 @@ export function renderDroneTracks(
 ): DroneTrackResult & { cleanup: () => void } {
   cleanupTracks(mapEl);
 
-  const { droneHistory, enhancedHistory, currentTime, timelineStart } = options;
+  const { droneHistory, enhancedHistory, currentTime, timelineStart: _timelineStart } = options;
   const colorMap = new Map<string, string>();
   let hasPositions = false;
 

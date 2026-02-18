@@ -27,8 +27,8 @@ export function useGoogle3DClickHandler({
   mapRef,
   isLoaded,
   mode,
-  onDroneClick,
-  onCuasClick,
+  onDroneClick: _onDroneClick,
+  onCuasClick: _onCuasClick,
   onCuasPlaced,
 }: UseGoogle3DClickHandlerOptions) {
 

@@ -51,7 +51,7 @@ export function renderGeofenceZones(
       );
 
       const ring = circleGeoJSON.geometry.coordinates[0];
-      coordinates = ring.map(([lng, lat]: [number, number]) => ({
+      coordinates = ring.map(([lng, lat]: number[]) => ({
         lat,
         lng,
         altitude: zone.minAltitudeM,

@@ -5,7 +5,7 @@
  * then imperatively creates and configures a gmp-map-3d element.
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMapsLibrary } from '@vis.gl/react-google-maps';
 import type { SiteDefinition, CameraState3D } from '../../../types/workflow';
 import { cesiumToGoogle3DCamera } from '../types';
@@ -31,7 +31,7 @@ export function useGoogle3DMap({
   containerRef,
   site,
   initialCameraState,
-  mode,
+  mode: _mode,
 }: UseGoogle3DMapOptions): UseGoogle3DMapReturn {
   const mapRef = useRef<Map3DElementRef | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
