@@ -58,6 +58,9 @@ export interface Google3DViewerProps {
     label: string; base64: string; cameraState: CameraState3D;
   }>) => void;
 
+  // Label visibility (when controlled externally, e.g. event mode)
+  showLabels?: boolean;
+
   // Event mode extensions (Blue UAS)
   geofenceZones?: GeofenceZone[];
   blueUasDrones?: Map<string, BlueUASDroneInfo>;

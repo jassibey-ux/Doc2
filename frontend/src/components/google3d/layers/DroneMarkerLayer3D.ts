@@ -66,6 +66,7 @@ export function renderDroneMarkers(
   }
 
   const { Marker3DInteractiveElement, Model3DInteractiveElement } = maps3dLib;
+  const baseUrl = import.meta.env.BASE_URL ?? '/';
 
   for (const [trackerId, positions] of droneHistory) {
     if (positions.length === 0) continue;
@@ -89,26 +90,32 @@ export function renderDroneMarkers(
       }
     }
 
-    // Check if we have a 3D model for this drone
+    // Check if we have a 3D model for this drone (default to generic quadcopter)
     const profile = findDroneProfile(trackerId, droneProfileMap, currentDroneData);
-    const modelPath = profile?.model_3d ? `/models/drones/${profile.model_3d}.glb` : null;
+    const modelId = profile?.model_3d ?? 'quadcopter_generic';
+    const modelPath = `${baseUrl}models/drones/${modelId}.glb`;
 
-    if (modelPath && Model3DInteractiveElement) {
-      // Render as 3D GLB model
-      const model = new Model3DInteractiveElement();
-      model.setAttribute('data-layer', DRONE_TAG);
-      model.setAttribute('data-drone-id', trackerId);
-      model.src = modelPath;
-      model.position = {
-        lat: currentPos.lat,
-        lng: currentPos.lon,
-        altitude: currentPos.alt_m ?? 50,
-      };
-      model.altitudeMode = 'RELATIVE_TO_MESH';
-      model.orientation = { heading: headingDeg - 90, tilt: 0, roll: 0 };
-      model.scale = isSelected ? 15 : 10;
-      attachDroneClickHandler(model, trackerId, onDroneClick);
-      mapEl.append(model);
+    if (Model3DInteractiveElement) {
+      // Render as 3D GLB model (constructor pattern per Google docs)
+      try {
+        const model = new Model3DInteractiveElement({
+          src: modelPath,
+          position: {
+            lat: currentPos.lat,
+            lng: currentPos.lon,
+            altitude: currentPos.alt_m ?? 50,
+          },
+          altitudeMode: 'RELATIVE_TO_GROUND',
+          orientation: { heading: headingDeg - 90, tilt: 0, roll: 0 },
+          scale: isSelected ? 15 : 10,
+        });
+        model.setAttribute('data-layer', DRONE_TAG);
+        model.setAttribute('data-drone-id', trackerId);
+        attachDroneClickHandler(model, trackerId, onDroneClick);
+        mapEl.append(model);
+      } catch {
+        // Model3DInteractiveElement may not be fully supported in alpha API
+      }
     }
 
     // Always render a marker (either as primary or as label overlay)

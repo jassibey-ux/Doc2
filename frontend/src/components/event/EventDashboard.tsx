@@ -355,6 +355,7 @@ const EventDashboard: React.FC = () => {
               cuasPlacements={[]}
               cuasProfiles={cuasProfiles}
               geofenceZones={visibleZones}
+              showLabels={showLabels}
             />
 
             {/* Camera presets overlay */}
