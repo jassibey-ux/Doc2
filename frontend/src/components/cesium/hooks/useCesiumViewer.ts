@@ -22,7 +22,14 @@ export function useCesiumViewer() {
 
     const loadCesium = async () => {
       try {
-        const Cesium = await import('cesium');
+        // Use variable specifier to bypass rollup-plugin-external-globals AST transform.
+        // The plugin converts literal import('cesium') → Promise.resolve(Cesium), which
+        // causes a TDZ error when minified: const S = ... Promise.resolve(S).
+        // Using a variable specifier avoids the transform entirely.
+        // In production, window.Cesium is set by the UMD <script> tag (vite-plugin-cesium).
+        // In dev, the dynamic import resolves via Vite's native ESM handling.
+        const _mod = 'cesium';
+        const Cesium = (window as any).Cesium ?? await import(/* @vite-ignore */ _mod);
         if (destroyed) return;
 
         cesiumRef.current = Cesium;

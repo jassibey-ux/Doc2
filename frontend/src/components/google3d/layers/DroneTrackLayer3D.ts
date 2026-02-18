@@ -95,7 +95,7 @@ export function renderDroneTracks(
       polyline.strokeColor = trackColor;
       polyline.strokeWidth = 3;
       polyline.outerColor = '#000000';
-      polyline.outerWidth = 5;
+      polyline.outerWidth = 1;
       mapEl.append(polyline);
     }
   }
@@ -142,7 +142,7 @@ function renderQualitySegments(
         polyline.strokeColor = color;
         polyline.strokeWidth = 3;
         polyline.outerColor = '#000000';
-        polyline.outerWidth = 5;
+        polyline.outerWidth = 1;
         mapEl.append(polyline);
       }
 

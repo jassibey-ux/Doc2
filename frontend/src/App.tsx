@@ -13,6 +13,7 @@ import SessionConsole from './components/SessionConsole';
 import SessionAnalysisView from './components/SessionAnalysisView';
 import ReplayPage from './components/ReplayPage';
 import CRMDashboard from './components/crm/CRMDashboard';
+import EventDashboard from './components/event/EventDashboard';
 import LoginPage from './components/LoginPage';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -53,6 +54,7 @@ export default function App() {
                           <Route path="/replay" element={<ReplayPage />} />
                           <Route path="/replay/:sessionId" element={<ReplayPage />} />
                           <Route path="/crm" element={<CRMDashboard />} />
+                          <Route path="/event" element={<EventDashboard />} />
                           <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
                       </CRMProvider>
