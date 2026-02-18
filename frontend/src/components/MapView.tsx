@@ -23,7 +23,8 @@ import CUASControlPanel from './CUASControlPanel';
 import TrackLegend from './TrackLegend';
 import AnomalyAlertToast from './AnomalyAlertToast';
 import Map3DViewer from './Map3DViewer';
-import CesiumGlobeViewer from './cesium/CesiumGlobeViewer';
+import Google3DViewer from './google3d/Google3DViewer';
+import { APIProvider } from '@vis.gl/react-google-maps';
 import TerrainProfileChart from './TerrainProfileChart';
 import LinkBudgetPanel from './LinkBudgetPanel';
 import CoordinateBar from './CoordinateBar';
@@ -103,9 +104,9 @@ export default function MapView() {
   // Track quality visualization toggle
   const [showQualityColors, setShowQualityColors] = useState(false);
 
-  // 3D view toggle: 'none' | 'maplibre3d' | 'cesium'
+  // 3D view toggle: 'none' | 'maplibre3d' | 'google3d'
   const [show3DView, setShow3DView] = useState(false);
-  const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
+  const [showGoogle3DGlobe, setShowGoogle3DGlobe] = useState(false);
 
   // Wizard open state (for dual Cesium instance prevention)
   const [wizardIsOpen, setWizardIsOpen] = useState(false);
@@ -555,7 +556,7 @@ export default function MapView() {
         </MapFileDropHandler>
 
         {/* 3D View Overlay (MapLibre-based) */}
-        {show3DView && !showCesiumGlobe && (
+        {show3DView && !showGoogle3DGlobe && (
           <Map3DViewer
             droneHistory={droneHistory}
             currentTime={currentTime}
@@ -571,23 +572,28 @@ export default function MapView() {
           />
         )}
 
-        {/* CesiumJS Globe Overlay — hidden when wizard is open to prevent dual Cesium instances */}
-        {showCesiumGlobe && !wizardIsOpen && (
+        {/* Google 3D Globe Overlay — hidden when wizard is open to prevent dual instances */}
+        {showGoogle3DGlobe && !wizardIsOpen && (
           <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
-            <CesiumGlobeViewer
-              mode="live"
-              droneHistory={droneHistory}
-              currentTime={currentTime}
-              timelineStart={timelineStart}
-              site={selectedSite}
-              cuasPlacements={phaseActiveSession?.cuas_placements || []}
-              cuasProfiles={cuasProfiles}
-              onClose={() => setShowCesiumGlobe(false)}
-              initialCameraState={selectedSite?.camera_state_3d}
-              droneProfiles={droneProfiles}
-              droneProfileMap={droneProfileMap}
-              enableBoundaryClipping
-            />
+            <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} version="alpha">
+              <Google3DViewer
+                mode="live"
+                droneHistory={droneHistory}
+                currentTime={currentTime}
+                timelineStart={timelineStart}
+                site={selectedSite}
+                cuasPlacements={phaseActiveSession?.cuas_placements || []}
+                cuasProfiles={cuasProfiles}
+                cuasJamStates={cuasJamStates}
+                onClose={() => setShowGoogle3DGlobe(false)}
+                initialCameraState={selectedSite?.camera_state_3d}
+                droneProfiles={droneProfiles}
+                droneProfileMap={droneProfileMap}
+                currentDroneData={drones}
+                selectedDroneId={selectedDroneId}
+                onDroneClick={handleDroneClick}
+              />
+            </APIProvider>
           </div>
         )}
 
@@ -630,8 +636,8 @@ export default function MapView() {
             <span className="map-controls-section-label">3D View</span>
             <div className="map-controls-3d-buttons">
               <button
-                className={`map-control-btn map-control-labeled ${show3DView && !showCesiumGlobe ? 'active' : ''}`}
-                onClick={() => { setShow3DView(prev => !prev); setShowCesiumGlobe(false); }}
+                className={`map-control-btn map-control-labeled ${show3DView && !showGoogle3DGlobe ? 'active' : ''}`}
+                onClick={() => { setShow3DView(prev => !prev); setShowGoogle3DGlobe(false); }}
                 title={show3DView ? 'Switch to 2D Map' : '3D Terrain View (MapLibre)'}
               >
                 <Box size={18} />
@@ -639,9 +645,9 @@ export default function MapView() {
               </button>
 
               <button
-                className={`map-control-btn map-control-labeled ${showCesiumGlobe ? 'active' : ''}`}
-                onClick={() => { setShowCesiumGlobe(prev => !prev); setShow3DView(false); }}
-                title={showCesiumGlobe ? 'Exit Globe View' : 'CesiumJS Globe (3D Tiles + OSM Buildings)'}
+                className={`map-control-btn map-control-labeled ${showGoogle3DGlobe ? 'active' : ''}`}
+                onClick={() => { setShowGoogle3DGlobe(prev => !prev); setShow3DView(false); }}
+                title={showGoogle3DGlobe ? 'Exit Globe View' : 'Google 3D Globe'}
               >
                 <Globe2 size={18} />
                 <span className="map-control-label">Globe</span>

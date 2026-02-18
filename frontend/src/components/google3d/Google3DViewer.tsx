@@ -15,7 +15,7 @@
 
 import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback } from 'react';
 import type { Google3DViewerProps, ViewerMode } from './types';
-import { useGoogle3DMap } from './hooks/useGoogle3DMap';
+import { useGoogle3DMap, getGoogle3DCameraState } from './hooks/useGoogle3DMap';
 import { useGoogle3DCameraController, type TourWaypoint } from './hooks/useGoogle3DCameraController';
 import { useGoogle3DClickHandler } from './hooks/useGoogle3DClickHandler';
 import { useGoogle3DScreenshot } from './hooks/useGoogle3DScreenshot';
@@ -84,6 +84,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     activeBursts,
     geofenceZones,
     onPlaceClick,
+    onCaptureScreenshots,
     onReady,
     onClose,
   } = props;
@@ -128,14 +129,21 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
       setScreenshotFlash(true);
       setTimeout(() => setScreenshotFlash(false), 300);
 
-      // Auto-download
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `screenshot-${Date.now()}.png`;
-      link.click();
+      if (onCaptureScreenshots) {
+        // Caller handles the screenshot (e.g. site recon capture)
+        const camState = mapRef.current ? getGoogle3DCameraState(mapRef.current) : null;
+        const cameraState = camState ?? { latitude: 0, longitude: 0, height: 0, heading: 0, pitch: -90, roll: 0 };
+        onCaptureScreenshots([{ label: 'screenshot', base64: dataUrl, cameraState }]);
+      } else {
+        // Auto-download
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = `screenshot-${Date.now()}.png`;
+        link.click();
+      }
     }
     return dataUrl;
-  }, [doCapture]);
+  }, [doCapture, onCaptureScreenshots, mapRef]);
 
   // Expose imperative handle for external camera control
   useImperativeHandle(ref, () => ({
@@ -200,26 +208,35 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     cleanupRef.current.forEach(fn => fn());
     cleanupRef.current = [];
 
-    // Wrap all layer rendering in try/catch — the Google Maps 3D alpha API
-    // can throw internally (e.g. 'Cannot read properties of undefined')
-    // when element constructors run before the map scene is fully ready.
+    // Each layer is wrapped in its own try/catch so one failure
+    // (e.g. Google Maps 3D alpha API instability) doesn't cascade
+    // and silently skip all subsequent layers.
+
+    // Site boundary (all modes)
     try {
-      // Site boundary (all modes)
       cleanupRef.current.push(
         renderSiteBoundary(maps3dLib, mapEl, site)
       );
       apiUsage?.recordLayerRender('SiteBoundary');
+    } catch (err) {
+      console.warn('[Google3DViewer] SiteBoundary layer failed:', err);
+    }
 
-      // Geofence zones (event mode)
-      if (features.geofences && geofenceZones) {
+    // Geofence zones (event mode)
+    if (features.geofences && geofenceZones) {
+      try {
         cleanupRef.current.push(
           renderGeofenceZones(maps3dLib, mapEl, geofenceZones)
         );
         apiUsage?.recordLayerRender('GeofenceZones');
+      } catch (err) {
+        console.warn('[Google3DViewer] GeofenceZones layer failed:', err);
       }
+    }
 
-      // CUAS placements
-      if (cuasPlacements && cuasPlacements.length > 0) {
+    // CUAS placements
+    if (cuasPlacements && cuasPlacements.length > 0) {
+      try {
         cleanupRef.current.push(
           renderCuasLayer(maps3dLib, mapEl, {
             cuasPlacements,
@@ -231,11 +248,15 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
           })
         );
         apiUsage?.recordLayerRender('CUAS');
+      } catch (err) {
+        console.warn('[Google3DViewer] CUAS layer failed:', err);
       }
+    }
 
-      // Drone tracks
-      let colorMap = new Map<string, string>();
-      if (features.droneTracks && droneHistory && droneHistory.size > 0) {
+    // Drone tracks
+    let colorMap = new Map<string, string>();
+    if (features.droneTracks && droneHistory && droneHistory.size > 0) {
+      try {
         const trackResult = renderDroneTracks(maps3dLib, mapEl, {
           droneHistory,
           enhancedHistory,
@@ -245,10 +266,14 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
         colorMap = trackResult.colorMap;
         cleanupRef.current.push(trackResult.cleanup);
         apiUsage?.recordLayerRender('DroneTracks');
+      } catch (err) {
+        console.warn('[Google3DViewer] DroneTracks layer failed:', err);
       }
+    }
 
-      // Drone markers (current position)
-      if (features.droneMarkers && droneHistory && droneHistory.size > 0) {
+    // Drone markers (current position)
+    if (features.droneMarkers && droneHistory && droneHistory.size > 0) {
+      try {
         cleanupRef.current.push(
           renderDroneMarkers(maps3dLib, mapEl, {
             droneHistory,
@@ -264,10 +289,14 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
           })
         );
         apiUsage?.recordLayerRender('DroneMarkers');
+      } catch (err) {
+        console.warn('[Google3DViewer] DroneMarkers layer failed:', err);
       }
+    }
 
-      // Engagement lines
-      if (features.engagements && engagements && cuasPlacements) {
+    // Engagement lines
+    if (features.engagements && engagements && cuasPlacements) {
+      try {
         cleanupRef.current.push(
           renderEngagementLayer(maps3dLib, mapEl, {
             engagements,
@@ -278,9 +307,9 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
           })
         );
         apiUsage?.recordLayerRender('Engagements');
+      } catch (err) {
+        console.warn('[Google3DViewer] Engagements layer failed:', err);
       }
-    } catch (err) {
-      console.warn('[Google3DViewer] Layer rendering failed (Maps 3D alpha API):', err);
     }
   }, [
     isLoaded, maps3dLib, droneHistory, enhancedHistory, currentTime, timelineStart,

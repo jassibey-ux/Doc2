@@ -63,7 +63,7 @@ export function renderCuasLayer(
   cuasProfiles?.forEach(p => profileMap.set(p.id, p));
 
   for (const placement of cuasPlacements) {
-    if (!placement.position?.lat || !placement.position?.lon) continue;
+    if (placement.position?.lat == null || placement.position?.lon == null) continue;
 
     const profile = profileMap.get(placement.cuas_profile_id);
     const isJamming = cuasJamStates?.get(placement.id) ?? false;
