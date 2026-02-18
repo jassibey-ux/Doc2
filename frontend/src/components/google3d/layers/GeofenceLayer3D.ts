@@ -60,25 +60,26 @@ export function renderGeofenceZones(
       continue; // Skip invalid zones
     }
 
-    const polygon = new Polygon3DElement();
-    polygon.setAttribute('data-layer', GEOFENCE_TAG);
-    polygon.setAttribute('data-zone-id', zone.id);
-    polygon.outerCoordinates = coordinates;
-    polygon.altitudeMode = 'RELATIVE_TO_GROUND';
-    polygon.fillColor = zone.fillColor;
-    polygon.strokeColor = zone.strokeColor;
-    polygon.strokeWidth = 2;
+    try {
+      const polygon = new Polygon3DElement();
+      polygon.setAttribute('data-layer', GEOFENCE_TAG);
+      polygon.setAttribute('data-zone-id', zone.id);
+      polygon.outerCoordinates = coordinates;
+      polygon.altitudeMode = 'RELATIVE_TO_GROUND';
+      polygon.fillColor = zone.fillColor;
+      polygon.strokeColor = zone.strokeColor;
+      polygon.strokeWidth = 2;
 
-    if (zone.extruded) {
-      polygon.extruded = true;
-      // Set top altitude to create a 3D volume
-      // The polygon coordinates set the base altitude;
-      // extruded height is the difference between max and min
-      const extrudeHeight = zone.maxAltitudeM - zone.minAltitudeM;
-      polygon.extrudedHeight = extrudeHeight > 0 ? extrudeHeight : 100;
+      if (zone.extruded) {
+        polygon.extruded = true;
+        const extrudeHeight = zone.maxAltitudeM - zone.minAltitudeM;
+        polygon.extrudedHeight = extrudeHeight > 0 ? extrudeHeight : 100;
+      }
+
+      mapEl.append(polygon);
+    } catch (err) {
+      console.warn(`[GeofenceLayer3D] Failed to render zone "${zone.id}":`, err);
     }
-
-    mapEl.append(polygon);
   }
 
   return () => cleanupGeofences(mapEl);

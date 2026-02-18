@@ -102,7 +102,9 @@ const EventDashboard: React.FC = () => {
     ];
   }, [selectedSite]);
 
-  const effectiveGeofenceZones = siteGeofenceZones.length > 0 ? siteGeofenceZones : demoGeofenceZones;
+  const effectiveGeofenceZones = siteGeofenceZones.length > 0
+    ? siteGeofenceZones
+    : clientDemoActive ? demoGeofenceZones : [];
 
   // Visible zones (filter out hidden)
   const visibleZones = useMemo(

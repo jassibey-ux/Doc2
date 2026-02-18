@@ -133,74 +133,81 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     cleanupRef.current.forEach(fn => fn());
     cleanupRef.current = [];
 
-    // Site boundary (all modes)
-    cleanupRef.current.push(
-      renderSiteBoundary(maps3dLib, mapEl, site)
-    );
-
-    // Geofence zones (event mode)
-    if (features.geofences && geofenceZones) {
+    // Wrap all layer rendering in try/catch — the Google Maps 3D alpha API
+    // can throw internally (e.g. 'Cannot read properties of undefined')
+    // when element constructors run before the map scene is fully ready.
+    try {
+      // Site boundary (all modes)
       cleanupRef.current.push(
-        renderGeofenceZones(maps3dLib, mapEl, geofenceZones)
+        renderSiteBoundary(maps3dLib, mapEl, site)
       );
-    }
 
-    // CUAS placements
-    if (cuasPlacements && cuasPlacements.length > 0) {
-      cleanupRef.current.push(
-        renderCuasLayer(maps3dLib, mapEl, {
-          cuasPlacements,
-          cuasProfiles,
-          cuasJamStates: features.jamStateColors ? cuasJamStates : undefined,
-          engagementModeCuasId,
-          showLabels,
-          onCuasClick,
-        })
-      );
-    }
+      // Geofence zones (event mode)
+      if (features.geofences && geofenceZones) {
+        cleanupRef.current.push(
+          renderGeofenceZones(maps3dLib, mapEl, geofenceZones)
+        );
+      }
 
-    // Drone tracks
-    let colorMap = new Map<string, string>();
-    if (features.droneTracks && droneHistory && droneHistory.size > 0) {
-      const trackResult = renderDroneTracks(maps3dLib, mapEl, {
-        droneHistory,
-        enhancedHistory,
-        currentTime: currentTime ?? Date.now(),
-        timelineStart: timelineStart ?? (Date.now() - 3600000),
-      });
-      colorMap = trackResult.colorMap;
-      cleanupRef.current.push(trackResult.cleanup);
-    }
+      // CUAS placements
+      if (cuasPlacements && cuasPlacements.length > 0) {
+        cleanupRef.current.push(
+          renderCuasLayer(maps3dLib, mapEl, {
+            cuasPlacements,
+            cuasProfiles,
+            cuasJamStates: features.jamStateColors ? cuasJamStates : undefined,
+            engagementModeCuasId,
+            showLabels,
+            onCuasClick,
+          })
+        );
+      }
 
-    // Drone markers (current position)
-    if (features.droneMarkers && droneHistory && droneHistory.size > 0) {
-      cleanupRef.current.push(
-        renderDroneMarkers(maps3dLib, mapEl, {
+      // Drone tracks
+      let colorMap = new Map<string, string>();
+      if (features.droneTracks && droneHistory && droneHistory.size > 0) {
+        const trackResult = renderDroneTracks(maps3dLib, mapEl, {
           droneHistory,
+          enhancedHistory,
           currentTime: currentTime ?? Date.now(),
           timelineStart: timelineStart ?? (Date.now() - 3600000),
-          currentDroneData,
-          selectedDroneId,
-          droneProfiles,
-          droneProfileMap,
-          showLabels,
-          colorMap,
-          onDroneClick,
-        })
-      );
-    }
+        });
+        colorMap = trackResult.colorMap;
+        cleanupRef.current.push(trackResult.cleanup);
+      }
 
-    // Engagement lines
-    if (features.engagements && engagements && cuasPlacements) {
-      cleanupRef.current.push(
-        renderEngagementLayer(maps3dLib, mapEl, {
-          engagements,
-          activeBursts: features.jamStateColors ? activeBursts : undefined,
-          cuasPlacements,
-          currentDroneData: currentDroneData ?? new Map(),
-          showLabels,
-        })
-      );
+      // Drone markers (current position)
+      if (features.droneMarkers && droneHistory && droneHistory.size > 0) {
+        cleanupRef.current.push(
+          renderDroneMarkers(maps3dLib, mapEl, {
+            droneHistory,
+            currentTime: currentTime ?? Date.now(),
+            timelineStart: timelineStart ?? (Date.now() - 3600000),
+            currentDroneData,
+            selectedDroneId,
+            droneProfiles,
+            droneProfileMap,
+            showLabels,
+            colorMap,
+            onDroneClick,
+          })
+        );
+      }
+
+      // Engagement lines
+      if (features.engagements && engagements && cuasPlacements) {
+        cleanupRef.current.push(
+          renderEngagementLayer(maps3dLib, mapEl, {
+            engagements,
+            activeBursts: features.jamStateColors ? activeBursts : undefined,
+            cuasPlacements,
+            currentDroneData: currentDroneData ?? new Map(),
+            showLabels,
+          })
+        );
+      }
+    } catch (err) {
+      console.warn('[Google3DViewer] Layer rendering failed (Maps 3D alpha API):', err);
     }
   }, [
     isLoaded, maps3dLib, droneHistory, enhancedHistory, currentTime, timelineStart,
