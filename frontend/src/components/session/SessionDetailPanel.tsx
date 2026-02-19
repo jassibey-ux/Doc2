@@ -7,15 +7,18 @@
  * 3. CUAS detail (CUAS clicked) - profile specs, jam history
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { X, Navigation, Crosshair } from 'lucide-react';
 import type { DroneSummary } from '../../types/drone';
 import type { CUASPlacement, CUASProfile, Engagement } from '../../types/workflow';
+import StreamingLogPanel from '../table/StreamingLogPanel';
+import type { TelemetryRow } from '../table/types';
 
 export type DetailContext =
   | { type: 'drone'; droneId: string }
   | { type: 'engagement'; engagementId: string }
   | { type: 'cuas'; cuasId: string }
+  | { type: 'log' }
   | null;
 
 interface SessionDetailPanelProps {
@@ -36,6 +39,10 @@ interface SessionDetailPanelProps {
   cuasPlacements: CUASPlacement[];
   cuasProfiles: CUASProfile[];
   cuasJamStates: Map<string, boolean>;
+
+  // Streaming log data
+  sessionTrackerIds?: Set<string>;
+  onLogRowClick?: (row: TelemetryRow) => void;
 }
 
 const PANEL_WIDTH = 320;
@@ -52,6 +59,8 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
   cuasPlacements,
   cuasProfiles,
   cuasJamStates,
+  sessionTrackerIds,
+  onLogRowClick,
 }) => {
   if (!context) return null;
 
@@ -73,6 +82,7 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
     }}>
       {context.type === 'drone' && (
         <DroneDetail
+          key={context.droneId}
           drone={drones.get(context.droneId)}
           droneId={context.droneId}
           onClose={onClose}
@@ -80,6 +90,7 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
           onTrack={() => onTrackDrone(context.droneId)}
           isTracking={trackingDroneId === context.droneId}
           tacticalMode={tacticalMode}
+          onLogRowClick={onLogRowClick}
         />
       )}
       {context.type === 'engagement' && (
@@ -98,6 +109,16 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
           tacticalMode={tacticalMode}
         />
       )}
+      {context.type === 'log' && (
+        <>
+          <CloseHeader title="Live Data Log" onClose={onClose} tacticalMode={tacticalMode} />
+          <StreamingLogPanel
+            trackerFilter={sessionTrackerIds}
+            onRowClick={onLogRowClick}
+            tacticalMode={tacticalMode}
+          />
+        </>
+      )}
     </div>
   );
 };
@@ -112,8 +133,11 @@ const DroneDetail: React.FC<{
   onTrack: () => void;
   isTracking: boolean;
   tacticalMode: boolean;
-}> = ({ drone, droneId, onClose, onFlyTo, onTrack, isTracking, tacticalMode }) => {
+  onLogRowClick?: (row: TelemetryRow) => void;
+}> = ({ drone, droneId, onClose, onFlyTo, onTrack, isTracking, tacticalMode, onLogRowClick }) => {
+  const [activeTab, setActiveTab] = useState<'details' | 'logs'>('details');
   const dimColor = tacticalMode ? 'rgba(74,222,128,0.5)' : '#6b7280';
+  const accentColor = tacticalMode ? '#4ade80' : '#60a5fa';
 
   if (!drone) {
     return (
@@ -131,50 +155,92 @@ const DroneDetail: React.FC<{
   return (
     <>
       <CloseHeader title={displayName} onClose={onClose} tacticalMode={tacticalMode} />
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
-        {/* Status badge */}
-        <div style={{
-          display: 'inline-block',
-          padding: '2px 8px', borderRadius: 4,
-          background: drone.is_stale ? 'rgba(107,114,128,0.15)' : 'rgba(34,197,94,0.15)',
-          border: `1px solid ${drone.is_stale ? 'rgba(107,114,128,0.3)' : 'rgba(34,197,94,0.3)'}`,
-          fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
-          color: drone.is_stale ? '#6b7280' : '#22c55e',
-          marginBottom: 12,
-        }}>
-          {drone.is_stale ? 'STALE' : 'ACTIVE'}
-        </div>
 
-        {/* Telemetry grid */}
-        <SectionLabel tacticalMode={tacticalMode}>Telemetry</SectionLabel>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px', marginBottom: 16 }}>
-          <TelemetryItem label="Altitude" value={drone.alt_m != null ? `${Math.round(drone.alt_m)}m` : '--'} tacticalMode={tacticalMode} />
-          <TelemetryItem label="Speed" value={drone.speed_mps != null ? `${drone.speed_mps.toFixed(1)} m/s` : '--'} tacticalMode={tacticalMode} />
-          <TelemetryItem label="Signal" value={drone.rssi_dbm != null ? `${drone.rssi_dbm} dBm` : '--'} tacticalMode={tacticalMode} />
-          <TelemetryItem label="GPS Fix" value={drone.fix_valid ? 'Valid' : 'No Fix'} color={drone.fix_valid ? '#22c55e' : '#ef4444'} tacticalMode={tacticalMode} />
-          <TelemetryItem label="Data Age" value={`${drone.age_seconds}s`} color={drone.is_stale ? '#ef4444' : undefined} tacticalMode={tacticalMode} />
-          {drone.battery_mv != null && (
-            <TelemetryItem label="Battery" value={`${(drone.battery_mv / 1000).toFixed(1)}V`} color={drone.low_battery ? '#ef4444' : undefined} tacticalMode={tacticalMode} />
+      {/* Tab bar */}
+      <div style={{
+        display: 'flex',
+        borderBottom: `1px solid ${tacticalMode ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.06)'}`,
+        flexShrink: 0,
+      }}>
+        {(['details', 'logs'] as const).map(tab => {
+          const isActive = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                flex: 1,
+                padding: '8px 0',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: `2px solid ${isActive ? accentColor : 'transparent'}`,
+                color: isActive ? accentColor : dimColor,
+                fontSize: 11,
+                fontWeight: isActive ? 700 : 500,
+                letterSpacing: 0.5,
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {tab === 'details' ? 'Details' : 'Logs'}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === 'details' ? (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+          {/* Status badge */}
+          <div style={{
+            display: 'inline-block',
+            padding: '2px 8px', borderRadius: 4,
+            background: drone.is_stale ? 'rgba(107,114,128,0.15)' : 'rgba(34,197,94,0.15)',
+            border: `1px solid ${drone.is_stale ? 'rgba(107,114,128,0.3)' : 'rgba(34,197,94,0.3)'}`,
+            fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+            color: drone.is_stale ? '#6b7280' : '#22c55e',
+            marginBottom: 12,
+          }}>
+            {drone.is_stale ? 'STALE' : 'ACTIVE'}
+          </div>
+
+          {/* Telemetry grid */}
+          <SectionLabel tacticalMode={tacticalMode}>Telemetry</SectionLabel>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px', marginBottom: 16 }}>
+            <TelemetryItem label="Altitude" value={drone.alt_m != null ? `${Math.round(drone.alt_m)}m` : '--'} tacticalMode={tacticalMode} />
+            <TelemetryItem label="Speed" value={drone.speed_mps != null ? `${drone.speed_mps.toFixed(1)} m/s` : '--'} tacticalMode={tacticalMode} />
+            <TelemetryItem label="Signal" value={drone.rssi_dbm != null ? `${drone.rssi_dbm} dBm` : '--'} tacticalMode={tacticalMode} />
+            <TelemetryItem label="GPS Fix" value={drone.fix_valid ? 'Valid' : 'No Fix'} color={drone.fix_valid ? '#22c55e' : '#ef4444'} tacticalMode={tacticalMode} />
+            <TelemetryItem label="Data Age" value={`${drone.age_seconds}s`} color={drone.is_stale ? '#ef4444' : undefined} tacticalMode={tacticalMode} />
+            {drone.battery_mv != null && (
+              <TelemetryItem label="Battery" value={`${(drone.battery_mv / 1000).toFixed(1)}V`} color={drone.low_battery ? '#ef4444' : undefined} tacticalMode={tacticalMode} />
+            )}
+          </div>
+
+          {/* Camera actions */}
+          <SectionLabel tacticalMode={tacticalMode}>Camera</SectionLabel>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+            <ActionButton icon={<Navigation size={13} />} label="Fly To" onClick={onFlyTo} tacticalMode={tacticalMode} />
+            <ActionButton icon={<Crosshair size={13} />} label={isTracking ? 'Tracking' : 'Track'} onClick={onTrack} active={isTracking} tacticalMode={tacticalMode} />
+          </div>
+
+          {/* Position */}
+          {drone.lat != null && drone.lon != null && (
+            <>
+              <SectionLabel tacticalMode={tacticalMode}>Position</SectionLabel>
+              <div style={{ fontSize: 11, color: dimColor, fontFamily: 'monospace' }}>
+                {drone.lat.toFixed(6)}, {drone.lon.toFixed(6)}
+              </div>
+            </>
           )}
         </div>
-
-        {/* Camera actions */}
-        <SectionLabel tacticalMode={tacticalMode}>Camera</SectionLabel>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-          <ActionButton icon={<Navigation size={13} />} label="Fly To" onClick={onFlyTo} tacticalMode={tacticalMode} />
-          <ActionButton icon={<Crosshair size={13} />} label={isTracking ? 'Tracking' : 'Track'} onClick={onTrack} active={isTracking} tacticalMode={tacticalMode} />
-        </div>
-
-        {/* Position */}
-        {drone.lat != null && drone.lon != null && (
-          <>
-            <SectionLabel tacticalMode={tacticalMode}>Position</SectionLabel>
-            <div style={{ fontSize: 11, color: dimColor, fontFamily: 'monospace' }}>
-              {drone.lat.toFixed(6)}, {drone.lon.toFixed(6)}
-            </div>
-          </>
-        )}
-      </div>
+      ) : (
+        <StreamingLogPanel
+          trackerFilter={new Set([droneId])}
+          onRowClick={onLogRowClick}
+          tacticalMode={tacticalMode}
+        />
+      )}
     </>
   );
 };
