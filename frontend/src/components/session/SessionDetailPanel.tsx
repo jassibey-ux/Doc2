@@ -403,7 +403,7 @@ const CuasDetail: React.FC<{
         {/* Position */}
         <SectionLabel tacticalMode={tacticalMode}>Position</SectionLabel>
         <div style={{ fontSize: 11, color: dimColor, fontFamily: 'monospace', marginBottom: 8 }}>
-          {placement.position.lat.toFixed(6)}, {placement.position.lon.toFixed(6)}
+          {placement.position?.lat?.toFixed(6) ?? '?'}, {placement.position?.lon?.toFixed(6) ?? '?'}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px', marginBottom: 16 }}>
           <TelemetryItem label="Height AGL" value={`${placement.height_agl_m}m`} tacticalMode={tacticalMode} />

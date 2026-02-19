@@ -249,7 +249,7 @@ const OperationsPanel: React.FC<OperationsPanelProps> = ({
                     display: 'flex', gap: 8, marginTop: 4, paddingLeft: 15,
                     fontSize: 10, color: dimColor, fontFamily: 'monospace',
                   }}>
-                    <span>{placement.position.lat.toFixed(5)}, {placement.position.lon.toFixed(5)}</span>
+                    <span>{placement.position?.lat?.toFixed(5) ?? '?'}, {placement.position?.lon?.toFixed(5) ?? '?'}</span>
                     {profile?.effective_range_m && (
                       <span>{profile.effective_range_m}m range</span>
                     )}

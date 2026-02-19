@@ -503,7 +503,7 @@ export default function ReplayConsole() {
                       <div className="rc-cuas-info">
                         <span className="rc-cuas-name">{profile?.name || `CUAS ${idx + 1}`}</span>
                         <span className="rc-cuas-location">
-                          {placement.position.lat.toFixed(4)}, {placement.position.lon.toFixed(4)}
+                          {placement.position?.lat?.toFixed(4) ?? '?'}, {placement.position?.lon?.toFixed(4) ?? '?'}
                         </span>
                       </div>
                     </div>
@@ -807,7 +807,7 @@ export default function ReplayConsole() {
                 </div>
                 <div className="rc-cuas-dialog-row">
                   <span>Position:</span>
-                  <span>{placement.position.lat.toFixed(5)}, {placement.position.lon.toFixed(5)}</span>
+                  <span>{placement.position?.lat?.toFixed(5) ?? '?'}, {placement.position?.lon?.toFixed(5) ?? '?'}</span>
                 </div>
                 <div className="rc-cuas-dialog-row">
                   <span>Height AGL:</span>
