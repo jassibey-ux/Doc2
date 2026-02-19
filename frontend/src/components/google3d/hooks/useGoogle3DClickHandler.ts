@@ -10,7 +10,7 @@
  * from the click target.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Map3DElementRef } from './useGoogle3DMap';
 import type { ViewerMode } from '../types';
 
@@ -22,6 +22,8 @@ interface UseGoogle3DClickHandlerOptions {
   onCuasClick?: (cuasPlacementId: string) => void;
   onCuasPlaced?: (position: { lat: number; lon: number; alt_m: number }) => void;
   onPlaceClick?: (place: { displayName: string; types: string[]; formattedAddress?: string }) => void;
+  /** When true, suppress map click handling (e.g., during boundary drawing) */
+  suppressClicks?: boolean;
 }
 
 export function useGoogle3DClickHandler({
@@ -32,7 +34,10 @@ export function useGoogle3DClickHandler({
   onCuasClick: _onCuasClick,
   onCuasPlaced,
   onPlaceClick,
+  suppressClicks,
 }: UseGoogle3DClickHandlerOptions) {
+  const suppressRef = useRef(false);
+  suppressRef.current = !!suppressClicks;
 
   // Map click handler — click-to-place in setup mode
   useEffect(() => {
@@ -40,6 +45,9 @@ export function useGoogle3DClickHandler({
     if (!mapEl || !isLoaded) return;
 
     const handleMapClick = (event: any) => {
+      // Skip if clicks are suppressed (e.g., boundary drawing is active)
+      if (suppressRef.current) return;
+
       // In setup mode, clicks on the map surface place CUAS equipment
       if (mode === 'setup' && onCuasPlaced) {
         const position = event?.position;

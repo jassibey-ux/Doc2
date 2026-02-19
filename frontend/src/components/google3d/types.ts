@@ -13,11 +13,12 @@ import type {
   JamBurst,
   CameraState3D,
   DroneProfile,
+  GeoPoint,
 } from '../../types/workflow';
 import type { GeofenceZone, BlueUASDroneInfo } from '../../types/blueUas';
 
 /** Viewer operating mode — same as Cesium viewer */
-export type ViewerMode = 'setup' | 'live' | 'replay' | 'analysis' | 'preview' | 'event';
+export type ViewerMode = 'setup' | 'live' | 'replay' | 'analysis' | 'preview' | 'event' | 'siteCreation';
 
 /** Props interface matching CesiumGlobeViewerProps + event extensions */
 export interface Google3DViewerProps {
@@ -67,6 +68,12 @@ export interface Google3DViewerProps {
 
   // Place intelligence (event mode — click building → fetch place info)
   onPlaceClick?: (place: { displayName: string; types: string[]; formattedAddress?: string }) => void;
+
+  // Boundary drawing (siteCreation mode)
+  onBoundaryDrawn?: (vertices: GeoPoint[]) => void;
+  initialBoundary?: GeoPoint[];
+  drawingMode?: 'boundary' | 'zone' | 'marker' | null;
+  onMarkerPlaced?: (position: GeoPoint) => void;
 
   // Lifecycle
   onReady?: () => void;

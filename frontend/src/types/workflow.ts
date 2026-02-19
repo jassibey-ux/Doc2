@@ -77,6 +77,7 @@ export interface SiteDefinition {
   recon_capture_count?: number;
   camera_state_3d?: CameraState3D;
   enhanced_3d?: boolean;
+  thumbnail_base64?: string;
   created_at: string;
   updated_at: string;
 }

@@ -194,7 +194,7 @@ export default function MapView() {
 
   // Drawing mode handlers - simplified for mapbox-gl-draw
   const handleDrawingComplete = useCallback((points: GeoPoint[]) => {
-    // Store the result for SiteDefinitionPanel to consume
+    // Store the result for ConfigurationWorkspacePanel to consume
     setPendingDrawingResult({ type: 'polygon', points });
     setIsDrawingMode(false);
     setDrawingType(null);

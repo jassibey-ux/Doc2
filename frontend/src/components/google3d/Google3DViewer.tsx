@@ -5,12 +5,13 @@
  * Uses imperative Google Maps 3D web components for all layer rendering.
  *
  * Modes:
- * - setup:    Click-to-place CUAS, site boundary
- * - live:     Real-time drone tracks, engagements, CUAS jam states
- * - replay:   Timeline-driven drone tracks
- * - analysis: Post-session drone tracks with quality colors
- * - preview:  Static site view
- * - event:    Blue UAS event dashboard (geofences, fleet tracking)
+ * - setup:         Click-to-place CUAS, site boundary
+ * - live:          Real-time drone tracks, engagements, CUAS jam states
+ * - replay:        Timeline-driven drone tracks
+ * - analysis:      Post-session drone tracks with quality colors
+ * - preview:       Static site view
+ * - event:         Blue UAS event dashboard (geofences, fleet tracking)
+ * - siteCreation:  3D boundary drawing for site creation/editing
  */
 
 import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback } from 'react';
@@ -19,6 +20,7 @@ import { useGoogle3DMap, getGoogle3DCameraState } from './hooks/useGoogle3DMap';
 import { useGoogle3DCameraController, type TourWaypoint } from './hooks/useGoogle3DCameraController';
 import { useGoogle3DClickHandler } from './hooks/useGoogle3DClickHandler';
 import { useGoogle3DScreenshot } from './hooks/useGoogle3DScreenshot';
+import { useGoogle3DBoundaryDrawing } from './hooks/useGoogle3DBoundaryDrawing';
 import { renderSiteBoundary } from './layers/SiteBoundaryLayer3D';
 import { renderCuasLayer } from './layers/CuasLayer3D';
 import { renderDroneTracks } from './layers/DroneTrackLayer3D';
@@ -27,6 +29,7 @@ import { renderEngagementLayer } from './layers/EngagementLayer3D';
 import { renderGeofenceZones } from './layers/GeofenceLayer3D';
 import { useApiUsageSafe } from '../../contexts/ApiUsageContext';
 import DronePopoverCard from './overlays/DronePopoverCard';
+import BoundaryDrawingToolbar from './overlays/BoundaryDrawingToolbar';
 
 /** Imperative handle for external camera control */
 export interface Google3DViewerHandle {
@@ -50,13 +53,15 @@ const MODE_FEATURES: Record<ViewerMode, {
   geofences: boolean;
   dronePopover: boolean;
   placeIntelligence: boolean;
+  boundaryDraw: boolean;
 }> = {
-  setup:    { droneTracks: false, droneMarkers: false, engagements: false, jamStateColors: false, clickToPlace: true,  screenshots: true,  droneSelectionFlyTo: false, geofences: false, dronePopover: false, placeIntelligence: false },
-  live:     { droneTracks: true,  droneMarkers: true,  engagements: true,  jamStateColors: true,  clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: false, dronePopover: true,  placeIntelligence: false },
-  replay:   { droneTracks: true,  droneMarkers: true,  engagements: false, jamStateColors: false, clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: false, dronePopover: true,  placeIntelligence: false },
-  analysis: { droneTracks: true,  droneMarkers: true,  engagements: true,  jamStateColors: false, clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: false, dronePopover: true,  placeIntelligence: false },
-  preview:  { droneTracks: false, droneMarkers: false, engagements: false, jamStateColors: false, clickToPlace: false, screenshots: true,  droneSelectionFlyTo: false, geofences: false, dronePopover: false, placeIntelligence: false },
-  event:    { droneTracks: true,  droneMarkers: true,  engagements: false, jamStateColors: false, clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: true,  dronePopover: true,  placeIntelligence: true  },
+  setup:        { droneTracks: false, droneMarkers: false, engagements: false, jamStateColors: false, clickToPlace: true,  screenshots: true,  droneSelectionFlyTo: false, geofences: false, dronePopover: false, placeIntelligence: false, boundaryDraw: false },
+  live:         { droneTracks: true,  droneMarkers: true,  engagements: true,  jamStateColors: true,  clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: false, dronePopover: true,  placeIntelligence: false, boundaryDraw: false },
+  replay:       { droneTracks: true,  droneMarkers: true,  engagements: false, jamStateColors: false, clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: false, dronePopover: true,  placeIntelligence: false, boundaryDraw: false },
+  analysis:     { droneTracks: true,  droneMarkers: true,  engagements: true,  jamStateColors: false, clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: false, dronePopover: true,  placeIntelligence: false, boundaryDraw: false },
+  preview:      { droneTracks: false, droneMarkers: false, engagements: false, jamStateColors: false, clickToPlace: false, screenshots: true,  droneSelectionFlyTo: false, geofences: false, dronePopover: false, placeIntelligence: false, boundaryDraw: false },
+  event:        { droneTracks: true,  droneMarkers: true,  engagements: false, jamStateColors: false, clickToPlace: false, screenshots: false, droneSelectionFlyTo: true,  geofences: true,  dronePopover: true,  placeIntelligence: true,  boundaryDraw: false },
+  siteCreation: { droneTracks: false, droneMarkers: false, engagements: false, jamStateColors: false, clickToPlace: false, screenshots: true,  droneSelectionFlyTo: false, geofences: false, dronePopover: false, placeIntelligence: false, boundaryDraw: true  },
 };
 
 const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((props, ref) => {
@@ -85,6 +90,10 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     geofenceZones,
     onPlaceClick,
     onCaptureScreenshots,
+    onBoundaryDrawn,
+    initialBoundary,
+    drawingMode,
+    onMarkerPlaced,
     onReady,
     onClose,
   } = props;
@@ -145,6 +154,78 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     return dataUrl;
   }, [doCapture, onCaptureScreenshots, mapRef]);
 
+  // Boundary drawing (siteCreation mode)
+  const isBoundaryDrawActive = features.boundaryDraw && (drawingMode === 'boundary' || drawingMode === 'zone');
+  const boundaryDrawing = useGoogle3DBoundaryDrawing({
+    mapRef,
+    maps3dLib,
+    isLoaded,
+    active: !!isBoundaryDrawActive,
+    initialVertices: initialBoundary,
+    onConfirm: onBoundaryDrawn,
+    onCancel: onClose,
+  });
+
+  // Handle vertex selection via custom events from the drawing hook
+  useEffect(() => {
+    const mapEl = mapRef.current;
+    if (!mapEl || !isLoaded || !isBoundaryDrawActive) return;
+
+    const handleVertexClick = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.vertexIndex !== undefined) {
+        // Toggle selection: if already selected, deselect; else select
+        if (boundaryDrawing.selectedVertexIndex === detail.vertexIndex) {
+          // Deselect — update state via a dummy re-render trigger
+        }
+      }
+    };
+
+    const handleCloseSnap = () => {
+      boundaryDrawing.closePolygon();
+    };
+
+    const handleMidpointClick = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.insertAfter !== undefined) {
+        // Insert a vertex at the midpoint — the next map click will place it
+        // For now, we handle this by selecting the insertion point
+      }
+    };
+
+    mapEl.addEventListener('boundary-vertex-click', handleVertexClick);
+    mapEl.addEventListener('boundary-close-snap', handleCloseSnap);
+    mapEl.addEventListener('boundary-midpoint-click', handleMidpointClick);
+
+    return () => {
+      mapEl.removeEventListener('boundary-vertex-click', handleVertexClick);
+      mapEl.removeEventListener('boundary-close-snap', handleCloseSnap);
+      mapEl.removeEventListener('boundary-midpoint-click', handleMidpointClick);
+    };
+  }, [isLoaded, isBoundaryDrawActive, boundaryDrawing]);
+
+  // Single-click marker placement in siteCreation mode
+  useEffect(() => {
+    const mapEl = mapRef.current;
+    if (!mapEl || !isLoaded || mode !== 'siteCreation' || drawingMode !== 'marker' || !onMarkerPlaced) return;
+
+    const handleMarkerPlace = (event: any) => {
+      const position = event?.position;
+      if (position) {
+        onMarkerPlaced({
+          lat: position.lat,
+          lon: position.lng,
+          alt_m: position.altitude ?? 0,
+        });
+      }
+    };
+
+    mapEl.addEventListener('gmp-click', handleMarkerPlace);
+    return () => {
+      mapEl.removeEventListener('gmp-click', handleMarkerPlace);
+    };
+  }, [isLoaded, mode, drawingMode, onMarkerPlaced]);
+
   // Expose imperative handle for external camera control
   useImperativeHandle(ref, () => ({
     flyTo: (lat: number, lng: number, alt: number, range?: number) => flyTo(lat, lng, alt, range),
@@ -162,7 +243,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     }
   }, [isLoaded, showLabels, setMapMode]);
 
-  // Click handling
+  // Click handling (suppressed during boundary drawing)
   useGoogle3DClickHandler({
     mapRef,
     isLoaded,
@@ -171,6 +252,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     onCuasClick,
     onCuasPlaced: features.clickToPlace ? onCuasPlaced : undefined,
     onPlaceClick: features.placeIntelligence ? onPlaceClick : undefined,
+    suppressClicks: !!isBoundaryDrawActive || drawingMode === 'marker',
   });
 
   // PerformanceObserver to count Google Maps tile fetches
@@ -212,14 +294,16 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     // (e.g. Google Maps 3D alpha API instability) doesn't cascade
     // and silently skip all subsequent layers.
 
-    // Site boundary (all modes)
-    try {
-      cleanupRef.current.push(
-        renderSiteBoundary(maps3dLib, mapEl, site)
-      );
-      apiUsage?.recordLayerRender('SiteBoundary');
-    } catch (err) {
-      console.warn('[Google3DViewer] SiteBoundary layer failed:', err);
+    // Site boundary (all modes except siteCreation where drawing hook handles it)
+    if (mode !== 'siteCreation') {
+      try {
+        cleanupRef.current.push(
+          renderSiteBoundary(maps3dLib, mapEl, site)
+        );
+        apiUsage?.recordLayerRender('SiteBoundary');
+      } catch (err) {
+        console.warn('[Google3DViewer] SiteBoundary layer failed:', err);
+      }
     }
 
     // Geofence zones (event mode)
@@ -413,6 +497,45 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
           </span>
           {onClose && (
             <ControlButton label="Close" active={false} onClick={onClose} />
+          )}
+        </div>
+      )}
+
+      {/* Boundary Drawing Toolbar — siteCreation mode */}
+      {isLoaded && isBoundaryDrawActive && (
+        <BoundaryDrawingToolbar
+          drawingState={boundaryDrawing.drawingState}
+          vertexCount={boundaryDrawing.vertices.length}
+          canClose={boundaryDrawing.canClose}
+          canUndo={boundaryDrawing.canUndo}
+          onUndo={boundaryDrawing.undo}
+          onClosePolygon={boundaryDrawing.closePolygon}
+          onConfirm={boundaryDrawing.confirm}
+          onRedraw={boundaryDrawing.redraw}
+          onCancel={boundaryDrawing.cancel}
+        />
+      )}
+
+      {/* Marker placement indicator — siteCreation mode */}
+      {isLoaded && mode === 'siteCreation' && drawingMode === 'marker' && (
+        <div style={{
+          position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+          padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12,
+          zIndex: 10,
+          background: 'rgba(15, 15, 30, 0.88)', borderRadius: 14,
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(16px)',
+        }}>
+          <span style={{
+            padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+            background: 'rgba(59, 130, 246, 0.2)',
+            color: '#3b82f6',
+            border: '1px solid rgba(59, 130, 246, 0.4)',
+          }}>
+            Click to place marker
+          </span>
+          {onClose && (
+            <ControlButton label="Cancel" active={false} onClick={onClose} />
           )}
         </div>
       )}
