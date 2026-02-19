@@ -43,6 +43,9 @@ interface SessionDetailPanelProps {
   // Streaming log data
   sessionTrackerIds?: Set<string>;
   onLogRowClick?: (row: TelemetryRow) => void;
+
+  // Engagement data for streaming log
+  activeEngagements?: Map<string, Engagement>;
 }
 
 const PANEL_WIDTH = 320;
@@ -61,6 +64,7 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
   cuasJamStates,
   sessionTrackerIds,
   onLogRowClick,
+  activeEngagements,
 }) => {
   if (!context) return null;
 
@@ -116,6 +120,7 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
             trackerFilter={sessionTrackerIds}
             onRowClick={onLogRowClick}
             tacticalMode={tacticalMode}
+            activeEngagements={activeEngagements}
           />
         </>
       )}

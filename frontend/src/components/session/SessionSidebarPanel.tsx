@@ -40,6 +40,12 @@ interface SessionSidebarPanelProps {
   onAcknowledgeAlert: (id: string) => void;
   onAcknowledgeAll: () => void;
   onAlertClick: (alert: SessionAlert) => void;
+
+  // Tools panel
+  onOpenLog?: () => void;
+
+  // Live drone data for engagement panel
+  currentDroneData?: Map<string, DroneSummary>;
 }
 
 const PANEL_TITLES: Record<SessionPanel, string> = {
@@ -103,6 +109,8 @@ const SessionSidebarPanel: React.FC<SessionSidebarPanelProps> = ({
             activeEngagements={props.activeEngagements}
             onSelectEngagement={props.onSelectEngagement}
             tacticalMode={tacticalMode}
+            currentDroneData={props.currentDroneData}
+            cuasPlacements={props.cuasPlacements}
           />
         )}
         {activePanel === 'activity' && (
@@ -116,7 +124,7 @@ const SessionSidebarPanel: React.FC<SessionSidebarPanelProps> = ({
           />
         )}
         {activePanel === 'tools' && (
-          <ToolsPanel tacticalMode={tacticalMode} />
+          <ToolsPanel tacticalMode={tacticalMode} onOpenLog={props.onOpenLog} />
         )}
       </div>
     </div>

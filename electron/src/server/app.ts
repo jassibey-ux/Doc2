@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import log from 'electron-log';
 import { TrackerRecord, TrackerState, TrackerSummary, WebSocketMessage, GPSHealthStatus, GPSFixLossEvent } from '../core/models';
-import { getTrackerAliasByTrackerId, addEventToSession } from '../core/library-store';
+import { getTrackerAliasByTrackerId, addEventToSession, getTestSessions, getSites } from '../core/library-store';
 import { StateManager } from '../core/state';
 import { LogWatcher } from '../core/watcher';
 import { SessionScanner } from '../core/session-scanner';
@@ -212,6 +212,17 @@ export class DashboardApp {
     this.stateManager.clearAll();
     this.replayMode = true;
 
+    // Match replay session to library-store TestSession for site info
+    const librarySessions = getTestSessions();
+    const matchedTs = librarySessions.find(ts =>
+      ts.id === session.session_id ||
+      ts.live_data_path === session.path
+    );
+    const allSites = getSites();
+    const matchedSite = matchedTs?.site_id
+      ? allSites.find(s => s.id === matchedTs.site_id)
+      : null;
+
     // Return metadata immediately (Phase 1)
     const response = {
       success: true,
@@ -225,6 +236,8 @@ export class DashboardApp {
         total_records: session.total_records,
         start_time: session.start_time,
         end_time: session.end_time,
+        site_id: matchedTs?.site_id ?? null,
+        site_center: matchedSite?.center ?? null,
       },
     };
 

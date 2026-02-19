@@ -713,6 +713,109 @@ export function testSessionRoutes(): Router {
     }
   });
 
+  // GET /api/test-sessions/:id/raw-telemetry — Full telemetry for analysis table
+  router.get('/test-sessions/:id/raw-telemetry', (req, res) => {
+    try {
+      const sessionId = req.params.id;
+      const session = getTestSessionById(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      // Try in-memory data first (active sessions)
+      const positionsByTracker = sessionDataCollector.getPositionsByTracker(sessionId);
+      const allPositions: any[] = [];
+
+      for (const [trackerId, positions] of positionsByTracker) {
+        for (const p of positions) {
+          const tsMs = new Date(p.timestamp).getTime();
+          allPositions.push({
+            id: `${trackerId}_${tsMs}`,
+            tracker_id: trackerId,
+            timestamp: p.timestamp,
+            timestamp_ms: tsMs,
+            time_gps: null,
+            lat: p.latitude,
+            lon: p.longitude,
+            alt_m: p.altitude_m,
+            speed_mps: p.speed_ms,
+            course_deg: p.heading_deg,
+            hdop: p.hdop ?? null,
+            satellites: p.satellites ?? null,
+            rssi_dbm: p.rssi_dbm ?? null,
+            baro_alt_m: null,
+            baro_temp_c: null,
+            baro_press_hpa: null,
+            fix_valid: p.fix_valid ?? (p.gps_quality !== 'poor'),
+            battery_mv: p.battery_mv ?? null,
+            latency_ms: null,
+            gps_quality: p.gps_quality,
+          });
+        }
+      }
+
+      // Fallback: read CSV files from disk for completed sessions
+      if (allPositions.length === 0 && session.live_data_path && fs.existsSync(session.live_data_path)) {
+        const csvFiles = fs.readdirSync(session.live_data_path).filter(f => f.startsWith('tracker_') && f.endsWith('.csv'));
+        for (const csvFile of csvFiles) {
+          const csvPath = path.join(session.live_data_path, csvFile);
+          const content = fs.readFileSync(csvPath, 'utf-8');
+          const lines = content.trim().split('\n');
+          if (lines.length < 2) continue;
+
+          const headers = lines[0].split(',');
+          for (let i = 1; i < lines.length; i++) {
+            const vals = lines[i].split(',');
+            const row: Record<string, string> = {};
+            headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+
+            const timestamp = row.time_local_received || '';
+            const tsMs = timestamp ? new Date(timestamp).getTime() : 0;
+            const trackerId = row.tracker_id || '';
+
+            allPositions.push({
+              id: `${trackerId}_${tsMs}`,
+              tracker_id: trackerId,
+              timestamp,
+              timestamp_ms: tsMs,
+              time_gps: row.time_gps || null,
+              lat: row.lat ? parseFloat(row.lat) : null,
+              lon: row.lon ? parseFloat(row.lon) : null,
+              alt_m: row.alt_m ? parseFloat(row.alt_m) : null,
+              speed_mps: row.speed_mps ? parseFloat(row.speed_mps) : null,
+              course_deg: row.course_deg ? parseFloat(row.course_deg) : null,
+              hdop: row.hdop ? parseFloat(row.hdop) : null,
+              satellites: row.satellites ? parseInt(row.satellites, 10) : null,
+              rssi_dbm: row.rssi_dbm ? parseFloat(row.rssi_dbm) : null,
+              baro_alt_m: row.baro_alt_m ? parseFloat(row.baro_alt_m) : null,
+              baro_temp_c: row.baro_temp_c ? parseFloat(row.baro_temp_c) : null,
+              baro_press_hpa: row.baro_press_hpa ? parseFloat(row.baro_press_hpa) : null,
+              fix_valid: row.fix_valid === 'true',
+              battery_mv: row.battery_mv ? parseInt(row.battery_mv, 10) : null,
+              latency_ms: row.latency_ms ? parseInt(row.latency_ms, 10) : null,
+              gps_quality: null,
+            });
+          }
+        }
+      }
+
+      // Sort by timestamp
+      allPositions.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+
+      res.json({
+        session_id: sessionId,
+        session_name: session.name,
+        total_count: allPositions.length,
+        positions: allPositions,
+        engagements: session.engagements ?? [],
+        events: session.events ?? [],
+      });
+    } catch (error) {
+      log.error('Failed to get raw telemetry:', error);
+      res.status(500).json({ error: 'Failed to get raw telemetry' });
+    }
+  });
+
   return router;
 }
 

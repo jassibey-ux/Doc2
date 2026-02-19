@@ -377,11 +377,13 @@ const SessionPage: React.FC = () => {
             engagements={engagements}
             activeEngagements={activeEngagements}
             onSelectEngagement={handleSelectEngagement}
+            currentDroneData={sessionDrones}
             alerts={alerts}
             events={events}
             onAcknowledgeAlert={acknowledgeAlert}
             onAcknowledgeAll={acknowledgeAll}
             onAlertClick={handleAlertClick}
+            onOpenLog={() => setDetailContext({ type: 'log' })}
           />
 
           {/* Map area */}
@@ -423,6 +425,14 @@ const SessionPage: React.FC = () => {
             cuasPlacements={cuasPlacements}
             cuasProfiles={cuasProfiles}
             cuasJamStates={cuasJamStates}
+            sessionTrackerIds={sessionTrackerIds}
+            activeEngagements={activeEngagements}
+            onLogRowClick={(row) => {
+              if (row.lat != null && row.lon != null) {
+                mapRef.current?.flyTo(row.lat, row.lon, row.alt_m ?? 50);
+              }
+              setCurrentTime(row.timestamp_ms);
+            }}
           />
 
           {/* Floating quick actions */}
@@ -444,19 +454,21 @@ const SessionPage: React.FC = () => {
           />
         </div>
 
-        {/* Timeline Control */}
-        <TimelineControl
-          isLive={wsIsLive}
-          setIsLive={wsSetIsLive}
-          timeRange={timeRange}
-          setTimeRange={setTimeRange}
-          currentTime={currentTime}
-          setCurrentTime={setCurrentTime}
-          timelineStart={timelineStart}
-          timelineEnd={timelineEnd}
-          connectionStatus={connectionStatus as 'connected' | 'disconnected' | 'connecting'}
-          engagements={engagements}
-        />
+        {/* Timeline Control — flexShrink:0 prevents flex:1 in .timeline-control from expanding vertically */}
+        <div style={{ flexShrink: 0, padding: '6px 12px 8px' }}>
+          <TimelineControl
+            isLive={wsIsLive}
+            setIsLive={wsSetIsLive}
+            timeRange={timeRange}
+            setTimeRange={setTimeRange}
+            currentTime={currentTime}
+            setCurrentTime={setCurrentTime}
+            timelineStart={timelineStart}
+            timelineEnd={timelineEnd}
+            connectionStatus={connectionStatus as 'connected' | 'disconnected' | 'connecting'}
+            engagements={engagements}
+          />
+        </div>
       </div>
     </APIProvider>
   );

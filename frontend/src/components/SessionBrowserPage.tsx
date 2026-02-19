@@ -29,6 +29,8 @@ interface SessionMetadata {
   end_time: string;
   tracker_ids: string[];
   total_records: number;
+  site_id: string | null;
+  site_center: { lat: number; lon: number } | null;
 }
 
 type PageState =
@@ -58,6 +60,10 @@ export default function SessionBrowserPage() {
   const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Extract metadata early (used by sessionSite memo below)
+  const metadata = (pageState.status === 'building' || pageState.status === 'ready')
+    ? pageState.metadata : null;
+
   // Resolve site for current session
   const testSession = useMemo(() => {
     if (pageState.status === 'ready' || pageState.status === 'building') {
@@ -67,11 +73,51 @@ export default function SessionBrowserPage() {
   }, [testSessions, pageState]);
 
   const sessionSite = useMemo(() => {
+    // 1. Try library-store lookup
     if (testSession?.site_id) {
-      return sites.find(s => s.id === testSession.site_id) || null;
+      const site = sites.find(s => s.id === testSession.site_id);
+      if (site) return site;
+    }
+    // 2. Try replay metadata site_id
+    if (metadata?.site_id) {
+      const site = sites.find(s => s.id === metadata.site_id);
+      if (site) return site;
+    }
+    // 3. Build virtual site from replay metadata site_center
+    if (metadata?.site_center) {
+      return {
+        id: 'replay-virtual',
+        name: metadata.name || 'Replay Site',
+        center: metadata.site_center,
+        boundary_polygon: [] as any[],
+        markers: [] as any[],
+        zones: [] as any[],
+        environment_type: 'urban' as const,
+        created_at: '',
+        updated_at: '',
+      };
+    }
+    // 4. Fallback: use first drone position from droneHistory
+    for (const [, history] of droneHistory) {
+      if (history.length > 0) {
+        const first = history[0];
+        if (first.lat != null && first.lon != null) {
+          return {
+            id: 'replay-drone-fallback',
+            name: metadata?.name || 'Replay Site',
+            center: { lat: first.lat, lon: first.lon },
+            boundary_polygon: [] as any[],
+            markers: [] as any[],
+            zones: [] as any[],
+            environment_type: 'urban' as const,
+            created_at: '',
+            updated_at: '',
+          };
+        }
+      }
     }
     return null;
-  }, [testSession, sites]);
+  }, [testSession, sites, metadata, droneHistory]);
 
   const cuasPlacements = testSession?.cuas_placements || [];
 
@@ -143,6 +189,8 @@ export default function SessionBrowserPage() {
         end_time: session.end_time || '',
         tracker_ids: session.tracker_ids || [],
         total_records: session.total_records || 0,
+        site_id: session.site_id || null,
+        site_center: session.site_center || null,
       };
 
       setPageState({ status: 'building', sessionId, metadata });
@@ -163,8 +211,6 @@ export default function SessionBrowserPage() {
   const selectedSessionId = pageState.status !== 'idle' ? (pageState as any).sessionId : null;
   const isProcessing = pageState.status === 'loading' || pageState.status === 'building';
   const isReady = pageState.status === 'ready';
-  const metadata = (pageState.status === 'building' || pageState.status === 'ready')
-    ? pageState.metadata : null;
 
   return (
     <APIProvider apiKey={GOOGLE_MAPS_API_KEY} version="alpha">
@@ -273,19 +319,21 @@ export default function SessionBrowserPage() {
           </div>
         </div>
 
-        {/* Bottom timeline (only when session is ready) */}
+        {/* Bottom timeline (only when session is ready) — flexShrink:0 prevents vertical growth */}
         {isReady && (
-          <TimelineControl
-            isLive={isLive}
-            setIsLive={setIsLive}
-            timeRange={timeRange}
-            setTimeRange={setTimeRange}
-            currentTime={currentTime}
-            setCurrentTime={setCurrentTime}
-            timelineStart={timelineStart}
-            timelineEnd={timelineEnd}
-            connectionStatus={connectionStatus}
-          />
+          <div style={{ flexShrink: 0, padding: '6px 12px 8px' }}>
+            <TimelineControl
+              isLive={isLive}
+              setIsLive={setIsLive}
+              timeRange={timeRange}
+              setTimeRange={setTimeRange}
+              currentTime={currentTime}
+              setCurrentTime={setCurrentTime}
+              timelineStart={timelineStart}
+              timelineEnd={timelineEnd}
+              connectionStatus={connectionStatus}
+            />
+          </div>
         )}
       </div>
     </APIProvider>
