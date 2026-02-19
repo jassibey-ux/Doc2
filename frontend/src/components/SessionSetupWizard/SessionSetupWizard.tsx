@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useCallback, useState, lazy, Suspense } from 'react';
+import { useReducer, useEffect, useCallback, useState, useRef, lazy, Suspense } from 'react';
 import { X, Zap, Target } from 'lucide-react';
 import { GlassPanel, GlassButton } from '../ui/GlassUI';
 import { wizardReducer, initialWizardState, validateStep, generateSessionName, getValidationMessage } from './wizardReducer';
@@ -14,6 +14,7 @@ import type { SiteDefinition, DroneProfile, CUASProfile } from '../../types/work
 import type { DroneSummary } from '../../types/drone';
 
 const Google3DViewer = lazy(() => import('../google3d/Google3DViewer'));
+import type { Google3DViewerHandle } from '../google3d/Google3DViewer';
 import { APIProvider } from '@vis.gl/react-google-maps';
 
 interface SessionSetupWizardProps {
@@ -91,6 +92,7 @@ export default function SessionSetupWizard({
   const [state, dispatch] = useReducer(wizardReducer, initialWizardState);
   const { showToast } = useToast();
   const { selectSite } = useWorkflow();
+  const viewerRef = useRef<Google3DViewerHandle>(null);
 
   // CUAS placement mode: which placement ID is being placed on the 3D map
   const [activePlacingCuasId, setActivePlacingCuasId] = useState<string | null>(null);
@@ -129,6 +131,21 @@ export default function SessionSetupWizard({
       }
     }
   }, [isOpen, state.selectedSiteId, sites, selectSite]);
+
+  // FlyTo when site selection changes (Fix 2.1)
+  useEffect(() => {
+    if (!isOpen || !viewerRef.current) return;
+    const site = state.selectedSiteId
+      ? sites.find(s => s.id === state.selectedSiteId)
+      : null;
+    if (!site) return;
+    if (site.camera_state_3d) {
+      const cam = site.camera_state_3d;
+      viewerRef.current.flyTo(cam.latitude, cam.longitude, cam.height, 2000);
+    } else if (site.center) {
+      viewerRef.current.flyTo(site.center.lat, site.center.lon, 500, 2000);
+    }
+  }, [isOpen, state.selectedSiteId, sites]);
 
   // Broadcast wizard CUAS placements to parent for map preview
   useEffect(() => {
@@ -490,6 +507,7 @@ export default function SessionSetupWizard({
         >
           <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} version="alpha">
             <Google3DViewer
+              ref={viewerRef}
               mode={viewer3DMode as 'setup' | 'preview'}
               site={currentSite}
               cuasPlacements={viewer3DCuasPlacements}

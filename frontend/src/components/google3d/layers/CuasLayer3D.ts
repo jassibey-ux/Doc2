@@ -59,7 +59,7 @@ export function renderCuasLayer(
     return () => cleanupCuasLayer(mapEl);
   }
 
-  const { Marker3DInteractiveElement, Model3DInteractiveElement, Polygon3DElement } = maps3dLib;
+  const { Marker3DInteractiveElement, Model3DInteractiveElement, Polygon3DElement, Polyline3DElement } = maps3dLib;
   const baseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) ?? '/';
 
   // Build profile lookup
@@ -150,7 +150,7 @@ export function renderCuasLayer(
       const circleGeoJSON = circle(
         [placement.position.lon, placement.position.lat],
         radiusKm,
-        { units: 'kilometers', steps: 48 },
+        { units: 'kilometers', steps: Math.max(64, Math.min(256, Math.ceil(radiusKm * 8))) },
       );
 
       const ring = circleGeoJSON.geometry.coordinates[0];
@@ -161,7 +161,7 @@ export function renderCuasLayer(
         lng,
         altitude: placement.height_agl_m ?? 2,
       }));
-      polygon.altitudeMode = 'RELATIVE_TO_GROUND';
+      polygon.altitudeMode = 'RELATIVE_TO_MESH';
       polygon.fillColor = isJamming
         ? 'rgba(239, 68, 68, 0.12)'
         : `${baseColor}1a`; // Add low alpha hex
@@ -169,6 +169,31 @@ export function renderCuasLayer(
       polygon.strokeWidth = 1;
       polygon.extruded = false;
       mapEl.append(polygon);
+
+      // Range rings at 25%, 50%, 75%, 100% of effective range (when CUAS is selected)
+      if (isSelected || isEngagementTarget) {
+        const ringPercents = [0.25, 0.5, 0.75, 1.0];
+        for (const pct of ringPercents) {
+          const ringRadiusKm = radiusKm * pct;
+          const ringGeo = circle(
+            [placement.position.lon, placement.position.lat],
+            ringRadiusKm,
+            { units: 'kilometers', steps: Math.max(48, Math.ceil(ringRadiusKm * 8)) },
+          );
+          const ringCoords = ringGeo.geometry.coordinates[0];
+          const ringLine = new Polyline3DElement();
+          ringLine.setAttribute('data-layer', CUAS_TAG);
+          ringLine.coordinates = ringCoords.map(([lng, lat]: number[]) => ({
+            lat,
+            lng,
+            altitude: (placement.height_agl_m ?? 2) + 1,
+          }));
+          ringLine.altitudeMode = 'RELATIVE_TO_MESH';
+          ringLine.strokeColor = isJamming ? 'rgba(239, 68, 68, 0.4)' : `${baseColor}66`;
+          ringLine.strokeWidth = 1;
+          mapEl.append(ringLine);
+        }
+      }
     }
   }
 

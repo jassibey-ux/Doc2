@@ -8,25 +8,80 @@
 
 import React from 'react';
 import type { DrawingState } from '../hooks/useGoogle3DBoundaryDrawing';
+import type { GeoPoint } from '../../../types/workflow';
 
 interface BoundaryDrawingToolbarProps {
   drawingState: DrawingState;
   vertexCount: number;
+  vertices?: GeoPoint[];
   canClose: boolean;
   canUndo: boolean;
+  canRedo?: boolean;
   onUndo: () => void;
+  onRedo?: () => void;
   onClosePolygon: () => void;
   onConfirm: () => void;
   onRedraw: () => void;
   onCancel: () => void;
 }
 
+/** Calculate polygon area in km² using Shoelace + Haversine-approximate scaling */
+function computeArea(vertices: GeoPoint[]): number {
+  if (vertices.length < 3) return 0;
+  // Use Shoelace in projected coordinates (m)
+  const refLat = vertices[0].lat;
+  const cosLat = Math.cos(refLat * Math.PI / 180);
+  const toMeters = (p: GeoPoint) => ({
+    x: (p.lon - vertices[0].lon) * 111320 * cosLat,
+    y: (p.lat - vertices[0].lat) * 110540,
+  });
+  const pts = vertices.map(toMeters);
+  let area = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+  }
+  return Math.abs(area / 2) / 1e6; // km²
+}
+
+/** Calculate polygon perimeter in km using Haversine */
+function computePerimeter(vertices: GeoPoint[]): number {
+  if (vertices.length < 2) return 0;
+  let total = 0;
+  for (let i = 0; i < vertices.length; i++) {
+    const j = (i + 1) % vertices.length;
+    total += haversineDistance(vertices[i], vertices[j]);
+  }
+  return total / 1000; // km
+}
+
+function haversineDistance(a: GeoPoint, b: GeoPoint): number {
+  const R = 6371000;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLon = (b.lon - a.lon) * Math.PI / 180;
+  const sinLat = Math.sin(dLat / 2);
+  const sinLon = Math.sin(dLon / 2);
+  const h = sinLat * sinLat + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * sinLon * sinLon;
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function formatMetric(value: number, unit: string): string {
+  if (value < 1) {
+    if (unit === 'km²') return `${(value * 1_000_000).toFixed(0)} m²`;
+    return `${(value * 1000).toFixed(0)} m`;
+  }
+  return `${value.toFixed(2)} ${unit}`;
+}
+
 const BoundaryDrawingToolbar: React.FC<BoundaryDrawingToolbarProps> = ({
   drawingState,
   vertexCount,
+  vertices,
   canClose,
   canUndo,
+  canRedo,
   onUndo,
+  onRedo,
   onClosePolygon,
   onConfirm,
   onRedraw,
@@ -79,14 +134,41 @@ const BoundaryDrawingToolbar: React.FC<BoundaryDrawingToolbarProps> = ({
         background: 'rgba(255, 255, 255, 0.15)',
       }} />
 
+      {/* Area and perimeter display */}
+      {vertices && vertices.length >= 3 && (
+        <>
+          <span style={{
+            fontSize: 11,
+            color: 'rgba(255, 255, 255, 0.6)',
+            whiteSpace: 'nowrap',
+            fontFamily: 'monospace',
+          }}>
+            {formatMetric(computeArea(vertices), 'km²')} | {formatMetric(computePerimeter(vertices), 'km')}
+          </span>
+          <div style={{
+            width: 1,
+            height: 20,
+            background: 'rgba(255, 255, 255, 0.15)',
+          }} />
+        </>
+      )}
+
       {drawingState === 'drawing' ? (
         <>
           <ToolbarButton
             label="Undo"
-            shortcut="⌫"
+            shortcut="⌘Z"
             disabled={!canUndo}
             onClick={onUndo}
           />
+          {onRedo && (
+            <ToolbarButton
+              label="Redo"
+              shortcut="⌘⇧Z"
+              disabled={!canRedo}
+              onClick={onRedo}
+            />
+          )}
           <ToolbarButton
             label="Close Polygon"
             disabled={!canClose}

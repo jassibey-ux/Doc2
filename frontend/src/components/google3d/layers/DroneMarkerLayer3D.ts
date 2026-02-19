@@ -162,6 +162,56 @@ export function renderDroneMarkers(
 
     attachDroneClickHandler(marker, trackerId, onDroneClick);
     mapEl.append(marker);
+
+    // Heading vector polyline (Fix 3.5) — 200m forward projection
+    if (headingDeg != null && !isStale && currentPos.lat && currentPos.lon) {
+      try {
+        const headingRad = (headingDeg * Math.PI) / 180;
+        const projDistDeg = 200 / 111320; // ~200m in degrees
+        const endLat = currentPos.lat + projDistDeg * Math.cos(headingRad);
+        const endLon = currentPos.lon + projDistDeg * Math.sin(headingRad) / Math.cos(currentPos.lat * Math.PI / 180);
+        const { Polyline3DElement } = maps3dLib;
+        if (Polyline3DElement) {
+          const headingLine = new Polyline3DElement();
+          headingLine.setAttribute('data-layer', DRONE_TAG);
+          headingLine.coordinates = [
+            { lat: currentPos.lat, lng: currentPos.lon, altitude: (currentPos.alt_m ?? 50) },
+            { lat: endLat, lng: endLon, altitude: (currentPos.alt_m ?? 50) },
+          ];
+          headingLine.altitudeMode = 'RELATIVE_TO_MESH';
+          headingLine.strokeColor = trackColor;
+          headingLine.strokeWidth = 2;
+          headingLine.outerColor = 'rgba(0,0,0,0.5)';
+          headingLine.outerWidth = 1;
+          mapEl.append(headingLine);
+        }
+      } catch { /* heading vector optional */ }
+    }
+
+    // Speed vector polyline (Fix 4.7) — length proportional to speed
+    const speedMps = summary?.speed_mps ?? 0;
+    if (speedMps > 0 && headingDeg != null && !isStale) {
+      try {
+        const speedLengthM = speedMps * 10; // 10-second projection
+        const headingRad = (headingDeg * Math.PI) / 180;
+        const projDistDeg = speedLengthM / 111320;
+        const endLat = currentPos.lat + projDistDeg * Math.cos(headingRad);
+        const endLon = currentPos.lon + projDistDeg * Math.sin(headingRad) / Math.cos(currentPos.lat * Math.PI / 180);
+        const { Polyline3DElement } = maps3dLib;
+        if (Polyline3DElement) {
+          const speedLine = new Polyline3DElement();
+          speedLine.setAttribute('data-layer', DRONE_TAG);
+          speedLine.coordinates = [
+            { lat: currentPos.lat, lng: currentPos.lon, altitude: (currentPos.alt_m ?? 50) + 1 },
+            { lat: endLat, lng: endLon, altitude: (currentPos.alt_m ?? 50) + 1 },
+          ];
+          speedLine.altitudeMode = 'RELATIVE_TO_MESH';
+          speedLine.strokeColor = `${trackColor}88`; // Semi-transparent
+          speedLine.strokeWidth = 1;
+          mapEl.append(speedLine);
+        }
+      } catch { /* speed vector optional */ }
+    }
   }
 
   return () => cleanupDroneMarkers(mapEl);

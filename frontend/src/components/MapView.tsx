@@ -93,7 +93,6 @@ export default function MapView() {
 
   // Panel state
   const [activePanel, setActivePanel] = useState<string | null>(null);
-  console.log('[MapView] activePanel:', activePanel);
   const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
 

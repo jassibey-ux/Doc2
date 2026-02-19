@@ -27,6 +27,8 @@ import { renderDroneTracks } from './layers/DroneTrackLayer3D';
 import { renderDroneMarkers } from './layers/DroneMarkerLayer3D';
 import { renderEngagementLayer } from './layers/EngagementLayer3D';
 import { renderGeofenceZones } from './layers/GeofenceLayer3D';
+import { renderSiteZones } from './layers/SiteZoneLayer3D';
+import { renderSiteMarkers } from './layers/SiteMarkerLayer3D';
 import { useApiUsageSafe } from '../../contexts/ApiUsageContext';
 import DronePopoverCard from './overlays/DronePopoverCard';
 import BoundaryDrawingToolbar from './overlays/BoundaryDrawingToolbar';
@@ -306,6 +308,30 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
       }
     }
 
+    // Site zones (all modes except siteCreation)
+    if (mode !== 'siteCreation') {
+      try {
+        cleanupRef.current.push(
+          renderSiteZones(maps3dLib, mapEl, site)
+        );
+        apiUsage?.recordLayerRender('SiteZones');
+      } catch (err) {
+        console.warn('[Google3DViewer] SiteZones layer failed:', err);
+      }
+    }
+
+    // Site markers (all modes except siteCreation)
+    if (mode !== 'siteCreation') {
+      try {
+        cleanupRef.current.push(
+          renderSiteMarkers(maps3dLib, mapEl, site)
+        );
+        apiUsage?.recordLayerRender('SiteMarkers');
+      } catch (err) {
+        console.warn('[Google3DViewer] SiteMarkers layer failed:', err);
+      }
+    }
+
     // Geofence zones (event mode)
     if (features.geofences && geofenceZones) {
       try {
@@ -506,9 +532,12 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
         <BoundaryDrawingToolbar
           drawingState={boundaryDrawing.drawingState}
           vertexCount={boundaryDrawing.vertices.length}
+          vertices={boundaryDrawing.vertices}
           canClose={boundaryDrawing.canClose}
           canUndo={boundaryDrawing.canUndo}
+          canRedo={boundaryDrawing.canRedo}
           onUndo={boundaryDrawing.undo}
+          onRedo={boundaryDrawing.redo}
           onClosePolygon={boundaryDrawing.closePolygon}
           onConfirm={boundaryDrawing.confirm}
           onRedraw={boundaryDrawing.redraw}

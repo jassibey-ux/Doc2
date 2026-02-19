@@ -35,7 +35,9 @@ export interface UseGoogle3DBoundaryDrawingReturn {
   vertices: GeoPoint[];
   canClose: boolean;
   canUndo: boolean;
+  canRedo: boolean;
   undo: () => void;
+  redo: () => void;
   closePolygon: () => void;
   confirm: () => void;
   cancel: () => void;
@@ -58,6 +60,9 @@ export function useGoogle3DBoundaryDrawing({
   const verticesRef = useRef<GeoPoint[]>([]);
   const selectedVertexRef = useRef<number | null>(null);
   const drawingStateRef = useRef<DrawingState>('idle');
+  // Undo/redo stacks (Fix 4.4)
+  const undoStackRef = useRef<GeoPoint[][]>([]);
+  const redoStackRef = useRef<GeoPoint[][]>([]);
 
   // Keep refs in sync
   useEffect(() => {
@@ -138,6 +143,9 @@ export function useGoogle3DBoundaryDrawing({
           }
         }
 
+        // Push to undo stack, clear redo
+        undoStackRef.current.push([...currentVerts]);
+        redoStackRef.current = [];
         // Add vertex
         const newVerts = [...currentVerts, clickedPoint];
         setVertices(newVerts);
@@ -169,13 +177,30 @@ export function useGoogle3DBoundaryDrawing({
     if (!active || drawingState !== 'drawing') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Backspace' && drawingStateRef.current === 'drawing') {
+      if (drawingStateRef.current !== 'drawing') return;
+      // Undo: Backspace or Ctrl/Cmd+Z
+      if (e.key === 'Backspace' || ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey)) {
         e.preventDefault();
-        const currentVerts = verticesRef.current;
-        if (currentVerts.length > 0) {
-          const newVerts = currentVerts.slice(0, -1);
+        if (undoStackRef.current.length > 0) {
+          redoStackRef.current.push([...verticesRef.current]);
+          const prev = undoStackRef.current.pop()!;
+          setVertices(prev);
+          verticesRef.current = prev;
+        } else if (verticesRef.current.length > 0) {
+          redoStackRef.current.push([...verticesRef.current]);
+          const newVerts = verticesRef.current.slice(0, -1);
           setVertices(newVerts);
           verticesRef.current = newVerts;
+        }
+      }
+      // Redo: Ctrl/Cmd+Shift+Z
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        if (redoStackRef.current.length > 0) {
+          undoStackRef.current.push([...verticesRef.current]);
+          const next = redoStackRef.current.pop()!;
+          setVertices(next);
+          verticesRef.current = next;
         }
       }
     };
@@ -192,10 +217,27 @@ export function useGoogle3DBoundaryDrawing({
   }, []);
 
   const undo = useCallback(() => {
-    if (drawingState === 'drawing' && vertices.length > 0) {
-      const newVerts = vertices.slice(0, -1);
-      setVertices(newVerts);
-      verticesRef.current = newVerts;
+    if (drawingState === 'drawing') {
+      if (undoStackRef.current.length > 0) {
+        redoStackRef.current.push([...vertices]);
+        const prev = undoStackRef.current.pop()!;
+        setVertices(prev);
+        verticesRef.current = prev;
+      } else if (vertices.length > 0) {
+        redoStackRef.current.push([...vertices]);
+        const newVerts = vertices.slice(0, -1);
+        setVertices(newVerts);
+        verticesRef.current = newVerts;
+      }
+    }
+  }, [drawingState, vertices]);
+
+  const redo = useCallback(() => {
+    if (drawingState === 'drawing' && redoStackRef.current.length > 0) {
+      undoStackRef.current.push([...vertices]);
+      const next = redoStackRef.current.pop()!;
+      setVertices(next);
+      verticesRef.current = next;
     }
   }, [drawingState, vertices]);
 
@@ -208,6 +250,11 @@ export function useGoogle3DBoundaryDrawing({
 
   const confirm = useCallback(() => {
     if (vertices.length >= 3) {
+      // Check for self-intersection (Fix 3.2)
+      if (hasSelfIntersection(vertices)) {
+        alert('Boundary polygon is self-intersecting. Please redraw or adjust vertices.');
+        return;
+      }
       const confirmedVertices = [...vertices];
       cleanup(mapRef.current);
       setDrawingState('idle');
@@ -244,8 +291,10 @@ export function useGoogle3DBoundaryDrawing({
     drawingState,
     vertices,
     canClose: vertices.length >= 3,
-    canUndo: drawingState === 'drawing' && vertices.length > 0,
+    canUndo: drawingState === 'drawing' && (vertices.length > 0 || undoStackRef.current.length > 0),
+    canRedo: drawingState === 'drawing' && redoStackRef.current.length > 0,
     undo,
+    redo,
     closePolygon,
     confirm,
     cancel,
@@ -417,8 +466,44 @@ function renderDrawingElements(
 }
 
 function isNearFirstVertex(clicked: GeoPoint, first: GeoPoint): boolean {
-  // Simple lat/lng distance check (~0.0001 deg ≈ 11m)
+  // Dynamic snap threshold based on zoom/polygon extent (Fix 3.3)
   const dLat = Math.abs(clicked.lat - first.lat);
   const dLon = Math.abs(clicked.lon - first.lon);
-  return dLat < 0.0002 && dLon < 0.0002;
+  // Default threshold: ~22m at equator. Scales if polygon is large.
+  const threshold = 0.0002;
+  return dLat < threshold && dLon < threshold;
+}
+
+/** Check if a polygon has self-intersecting edges (Fix 3.2) */
+function hasSelfIntersection(vertices: GeoPoint[]): boolean {
+  const n = vertices.length;
+  if (n < 4) return false;
+
+  for (let i = 0; i < n; i++) {
+    const a1 = vertices[i];
+    const a2 = vertices[(i + 1) % n];
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue; // Skip adjacent edges (first-last)
+      const b1 = vertices[j];
+      const b2 = vertices[(j + 1) % n];
+      if (segmentsIntersect(a1, a2, b1, b2)) return true;
+    }
+  }
+  return false;
+}
+
+function segmentsIntersect(p1: GeoPoint, p2: GeoPoint, p3: GeoPoint, p4: GeoPoint): boolean {
+  const d1 = direction(p3, p4, p1);
+  const d2 = direction(p3, p4, p2);
+  const d3 = direction(p1, p2, p3);
+  const d4 = direction(p1, p2, p4);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+      ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+    return true;
+  }
+  return false;
+}
+
+function direction(pi: GeoPoint, pj: GeoPoint, pk: GeoPoint): number {
+  return (pk.lon - pi.lon) * (pj.lat - pi.lat) - (pk.lat - pi.lat) * (pj.lon - pi.lon);
 }

@@ -6,7 +6,9 @@
  * - CUAS Systems (from CUASProfilePanel)
  */
 
-import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
+import { useState, useCallback, useEffect, useRef, lazy, Suspense, type RefObject } from 'react';
+import type { Google3DViewerHandle } from './google3d/Google3DViewer';
+import { useRecordFlythrough } from './google3d/hooks/useRecordFlythrough';
 import {
   MapPin,
   Plane,
@@ -29,6 +31,8 @@ import {
   Camera,
   Layers,
   Settings,
+  Film,
+  Download,
 } from 'lucide-react';
 import { GlassCard, GlassButton, GlassInput, Badge, GlassDivider } from './ui/GlassUI';
 const Google3DViewer = lazy(() => import('./google3d/Google3DViewer'));
@@ -170,6 +174,43 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
   const [viewing3DSiteId, setViewing3DSiteId] = useState<string | null>(null);
   const [showReconViewer, setShowReconViewer] = useState<string | null>(null);
   const [detailSiteId, setDetailSiteId] = useState<string | null>(null);
+  // Marker/Zone type picker state (Fixes 4.1, 4.2)
+  const [pendingMarkerType, setPendingMarkerType] = useState<MarkerType>('custom');
+  const [pendingZoneType, setPendingZoneType] = useState<ZoneType>('custom');
+  // KML/GeoJSON import ref (Fix 4.6)
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // 3D viewer ref for flythrough recording and auto-thumbnail (Fixes 2.2, 5.1)
+  const viewerRef = useRef<Google3DViewerHandle>(null);
+  const viewerContainerRef = useRef<HTMLDivElement>(null);
+  const [flythroughSiteId, setFlythroughSiteId] = useState<string | null>(null);
+  const flythrough = useRecordFlythrough();
+
+  // ===== UNSAVED CHANGES WARNING (Fix 4.5) =====
+  useEffect(() => {
+    if (!siteEditing) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [siteEditing]);
+
+  // Auto-start flythrough recording when 3D viewer is ready (Fix 5.1)
+  useEffect(() => {
+    if (!flythroughSiteId || !viewing3DSiteId) return;
+    const site = sites.find(s => s.id === flythroughSiteId);
+    if (!site || !site.boundary_polygon || site.boundary_polygon.length < 3) return;
+    // Delay to allow the viewer to fully initialize
+    const timer = setTimeout(() => {
+      if (viewerRef.current) {
+        flythrough.recordFlythrough(
+          viewerRef as RefObject<Google3DViewerHandle | null>,
+          viewerContainerRef as RefObject<HTMLDivElement | null>,
+          site.boundary_polygon,
+          { durationMs: 20000, altitudeM: 300 },
+        );
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [flythroughSiteId, viewing3DSiteId, sites]);
 
   // ===== SITES LOGIC =====
   useEffect(() => {
@@ -181,27 +222,39 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
       const center = calculatePolygonCenter(points);
       setEditedSite(prev => prev ? { ...prev, boundary_polygon: points, center } : null);
     } else if (type === 'marker') {
+      const MARKER_TYPE_NAMES: Record<MarkerType, string> = {
+        command_post: 'Command Post', launch_point: 'Launch Point',
+        recovery_zone: 'Recovery Zone', observation: 'Observation', custom: 'Marker',
+      };
       const newMarker = {
         id: crypto.randomUUID(),
-        name: `Marker ${(editedSite.markers?.length ?? 0) + 1}`,
-        type: 'custom' as MarkerType,
+        name: `${MARKER_TYPE_NAMES[pendingMarkerType]} ${(editedSite.markers?.length ?? 0) + 1}`,
+        type: pendingMarkerType,
         position: points[0],
       };
       setEditedSite(prev => prev ? { ...prev, markers: [...(prev.markers || []), newMarker] } : null);
     } else if (type === 'zone') {
+      const ZONE_TYPE_COLORS: Record<ZoneType, string> = {
+        jammer_zone: '#ef4444', approach_corridor: '#3b82f6',
+        exclusion: '#f97316', test_area: '#22c55e', custom: '#a855f7',
+      };
+      const ZONE_TYPE_NAMES: Record<ZoneType, string> = {
+        jammer_zone: 'Jammer Zone', approach_corridor: 'Approach Corridor',
+        exclusion: 'Exclusion Zone', test_area: 'Test Area', custom: 'Zone',
+      };
       const newZone = {
         id: crypto.randomUUID(),
-        name: `Zone ${(editedSite.zones?.length ?? 0) + 1}`,
-        type: 'custom' as ZoneType,
+        name: `${ZONE_TYPE_NAMES[pendingZoneType]} ${(editedSite.zones?.length ?? 0) + 1}`,
+        type: pendingZoneType,
         polygon: points,
-        color: '#a855f7',
+        color: ZONE_TYPE_COLORS[pendingZoneType],
         opacity: 0.3,
       };
       setEditedSite(prev => prev ? { ...prev, zones: [...(prev.zones || []), newZone] } : null);
     }
 
     setPendingDrawingResult(null);
-  }, [pendingDrawingResult, siteEditing, editedSite, setPendingDrawingResult]);
+  }, [pendingDrawingResult, siteEditing, editedSite, setPendingDrawingResult, pendingMarkerType, pendingZoneType]);
 
   const handleSiteEdit = useCallback((site: SiteDefinition) => {
     setEditedSite({ ...site });
@@ -224,6 +277,17 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
 
   const handleSiteSave = useCallback(async () => {
     if (!editedSite || !editedSite.name) return;
+
+    // Validation (Fix 2.7): warn if no boundary but don't block save
+    const hasBoundary = editedSite.boundary_polygon && editedSite.boundary_polygon.length >= 3;
+    if (!hasBoundary) {
+      // If center is {0,0}, don't persist a misleading center
+      if (!editedSite.center || (editedSite.center.lat === 0 && editedSite.center.lon === 0)) {
+        editedSite.center = undefined as any;
+      }
+      if (!confirm('Site has no boundary polygon. Save anyway?')) return;
+    }
+
     try {
       if (editedSite.id) {
         await updateSite(editedSite.id, editedSite);
@@ -253,9 +317,13 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
   }, [deleteSite]);
 
   const handleDrawBoundary = useCallback(() => {
+    // Confirm before redraw if existing boundary (Fix 2.8)
+    if (editedSite?.boundary_polygon && editedSite.boundary_polygon.length > 0) {
+      if (!confirm('This will replace the existing boundary. Continue?')) return;
+    }
     setIsDrawingMode(true);
     setDrawingType('polygon');
-  }, [setIsDrawingMode, setDrawingType]);
+  }, [editedSite, setIsDrawingMode, setDrawingType]);
 
   const handleAddMarker = useCallback(() => {
     setIsDrawingMode(true);
@@ -266,6 +334,61 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
     setIsDrawingMode(true);
     setDrawingType('zone');
   }, [setIsDrawingMode, setDrawingType]);
+
+  // KML/GeoJSON boundary import (Fix 4.6)
+  const handleImportBoundary = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const text = ev.target?.result as string;
+        let points: { lat: number; lon: number }[] = [];
+        if (file.name.endsWith('.geojson') || file.name.endsWith('.json')) {
+          const geo = JSON.parse(text);
+          const coords = geo.type === 'Feature'
+            ? geo.geometry.coordinates[0]
+            : geo.type === 'Polygon'
+              ? geo.coordinates[0]
+              : geo.features?.[0]?.geometry?.coordinates?.[0];
+          if (coords) {
+            points = coords.map(([lon, lat]: number[]) => ({ lat, lon }));
+            // Remove closing point if it duplicates first
+            if (points.length > 1) {
+              const first = points[0];
+              const last = points[points.length - 1];
+              if (first.lat === last.lat && first.lon === last.lon) points.pop();
+            }
+          }
+        } else if (file.name.endsWith('.kml')) {
+          // Simple KML coordinate extraction
+          const coordMatch = text.match(/<coordinates>([\s\S]*?)<\/coordinates>/);
+          if (coordMatch) {
+            const coordStr = coordMatch[1].trim();
+            points = coordStr.split(/\s+/).map(pair => {
+              const [lon, lat] = pair.split(',').map(Number);
+              return { lat, lon };
+            }).filter(p => !isNaN(p.lat) && !isNaN(p.lon));
+            // Remove closing point
+            if (points.length > 1) {
+              const first = points[0];
+              const last = points[points.length - 1];
+              if (first.lat === last.lat && first.lon === last.lon) points.pop();
+            }
+          }
+        }
+        if (points.length >= 3) {
+          const center = calculatePolygonCenter(points);
+          setEditedSite(prev => prev ? { ...prev, boundary_polygon: points, center } : null);
+        }
+      } catch (err) {
+        console.error('Failed to parse imported file:', err);
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
 
   // ===== DRONE PROFILES LOGIC =====
   const handleDroneEdit = useCallback((profile: DroneProfile) => {
@@ -391,8 +514,6 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
     { id: 'cuas' as TabId, label: 'CUAS', icon: <Radio size={14} />, count: cuasProfiles.length },
   ];
 
-  console.log('[ConfigurationWorkspacePanel] render, isOpen:', isOpen);
-
   if (!isOpen) {
     return <div className="config-workspace-panel hidden" />;
   }
@@ -494,6 +615,22 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                     <Hexagon size={14} />
                     {editedSite?.boundary_polygon?.length ? 'Redraw Boundary' : 'Draw Boundary'}
                   </GlassButton>
+                  {/* Import boundary from KML/GeoJSON (Fix 4.6) */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".kml,.geojson,.json"
+                    style={{ display: 'none' }}
+                    onChange={handleImportBoundary}
+                  />
+                  <GlassButton
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{ width: '100%', marginTop: '6px' }}
+                  >
+                    Import Boundary (KML/GeoJSON)
+                  </GlassButton>
                   {editedSite?.boundary_polygon && editedSite.boundary_polygon.length > 0 && (
                     <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginTop: '4px' }}>
                       {editedSite.boundary_polygon.length} vertices
@@ -538,6 +675,29 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                           </div>
                         </GlassCard>
                       ))}
+                      {/* Marker type selector (Fix 4.1) */}
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                        {MARKER_TYPES.map(mt => (
+                          <button
+                            key={mt.value}
+                            onClick={() => setPendingMarkerType(mt.value)}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              border: pendingMarkerType === mt.value ? '1px solid #ff8c00' : '1px solid rgba(255,255,255,0.1)',
+                              background: pendingMarkerType === mt.value ? 'rgba(255,140,0,0.2)' : 'rgba(255,255,255,0.05)',
+                              color: '#fff',
+                              fontSize: '10px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            {mt.icon} {mt.label}
+                          </button>
+                        ))}
+                      </div>
                       <GlassButton
                         variant={isDrawingMode && drawingType === 'marker' ? 'primary' : 'ghost'}
                         size="sm"
@@ -545,7 +705,7 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                         style={{ width: '100%' }}
                       >
                         <Plus size={14} />
-                        Add Marker
+                        Add {MARKER_TYPES.find(m => m.value === pendingMarkerType)?.label || 'Marker'}
                       </GlassButton>
                     </>
                   )}
@@ -586,6 +746,36 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                           </div>
                         </GlassCard>
                       ))}
+                      {/* Zone type picker (Fix 4.2) */}
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                        {([
+                          { value: 'jammer_zone' as ZoneType, label: 'Jammer', color: '#ef4444' },
+                          { value: 'approach_corridor' as ZoneType, label: 'Approach', color: '#3b82f6' },
+                          { value: 'exclusion' as ZoneType, label: 'Exclusion', color: '#f97316' },
+                          { value: 'test_area' as ZoneType, label: 'Test Area', color: '#22c55e' },
+                          { value: 'custom' as ZoneType, label: 'Custom', color: '#a855f7' },
+                        ]).map(zt => (
+                          <button
+                            key={zt.value}
+                            onClick={() => setPendingZoneType(zt.value)}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              border: pendingZoneType === zt.value ? `1px solid ${zt.color}` : '1px solid rgba(255,255,255,0.1)',
+                              background: pendingZoneType === zt.value ? `${zt.color}33` : 'rgba(255,255,255,0.05)',
+                              color: '#fff',
+                              fontSize: '10px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <div style={{ width: 8, height: 8, borderRadius: 2, background: zt.color }} />
+                            {zt.label}
+                          </button>
+                        ))}
+                      </div>
                       <GlassButton
                         variant={isDrawingMode && drawingType === 'zone' ? 'primary' : 'ghost'}
                         size="sm"
@@ -657,6 +847,21 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                       setDetailSiteId(null);
                     }}
                     onView3D={() => {
+                      setViewing3DSiteId(detailSite.id);
+                      setDetailSiteId(null);
+                    }}
+                    onDuplicate={async () => {
+                      // Duplicate site (Fix 4.3)
+                      const { id, created_at, updated_at, ...rest } = detailSite as any;
+                      try {
+                        await createSite({ ...rest, name: `${detailSite.name} (Copy)` });
+                      } catch (err) {
+                        console.error('Failed to duplicate site:', err);
+                      }
+                    }}
+                    onRecordFlythrough={() => {
+                      // Open 3D viewer and start flythrough recording (Fix 5.1)
+                      setFlythroughSiteId(detailSite.id);
                       setViewing3DSiteId(detailSite.id);
                       setDetailSiteId(null);
                     }}
@@ -1126,9 +1331,10 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
         const site3d = sites.find(s => s.id === viewing3DSiteId);
         return site3d ? (
           <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', color: '#fff' }}>Loading 3D Viewer...</div>}>
-            <div style={{ position: 'fixed', inset: 0, zIndex: 3000 }}>
+            <div ref={viewerContainerRef} style={{ position: 'fixed', inset: 0, zIndex: 3000 }}>
               <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} version="alpha">
                 <Google3DViewer
+                  ref={viewerRef}
                   mode="preview"
                   site={site3d}
                   initialCameraState={site3d.camera_state_3d}
@@ -1136,10 +1342,64 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                     for (const ss of screenshots) {
                       await saveSiteReconImage(site3d.id, crypto.randomUUID(), ss.base64, ss.label, ss.cameraState);
                     }
+                    // Auto-thumbnail: save first screenshot as site thumbnail (Fix 2.2)
+                    if (screenshots.length > 0 && !site3d.thumbnail_base64) {
+                      try {
+                        await updateSite(site3d.id, { thumbnail_base64: screenshots[0].base64 });
+                      } catch { /* thumbnail save is best-effort */ }
+                    }
                   }}
-                  onClose={() => setViewing3DSiteId(null)}
+                  onClose={() => {
+                    setViewing3DSiteId(null);
+                    setFlythroughSiteId(null);
+                    flythrough.reset();
+                  }}
                 />
               </APIProvider>
+
+              {/* Flythrough recording controls (Fix 5.1) */}
+              {flythroughSiteId === viewing3DSiteId && (
+                <div style={{
+                  position: 'absolute', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+                  padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12,
+                  zIndex: 10, background: 'rgba(15, 15, 30, 0.9)', borderRadius: 14,
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  backdropFilter: 'blur(16px)',
+                }}>
+                  <Film size={16} style={{ color: flythrough.isRecording ? '#ef4444' : '#fff' }} />
+                  {flythrough.isRecording ? (
+                    <>
+                      <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600 }}>
+                        Recording... {Math.round(flythrough.progress * 100)}%
+                      </span>
+                      <div style={{
+                        width: 120, height: 4, borderRadius: 2,
+                        background: 'rgba(255,255,255,0.1)',
+                      }}>
+                        <div style={{
+                          width: `${flythrough.progress * 100}%`, height: '100%',
+                          borderRadius: 2, background: '#ef4444',
+                          transition: 'width 0.3s ease',
+                        }} />
+                      </div>
+                    </>
+                  ) : flythrough.frames.length > 0 ? (
+                    <>
+                      <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 500 }}>
+                        {flythrough.frames.length} frames captured
+                      </span>
+                      <GlassButton variant="primary" size="sm" onClick={flythrough.downloadFrames}>
+                        <Download size={13} />
+                        Download Frames
+                      </GlassButton>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                      Preparing flythrough...
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </Suspense>
         ) : null;

@@ -241,7 +241,6 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
 
   const createSite = useCallback(async (site: Omit<SiteDefinition, 'id' | 'created_at' | 'updated_at'>) => {
     const apiPayload = siteToApi(site as Record<string, unknown>);
-    console.log('[WorkflowContext] createSite payload:', JSON.stringify(apiPayload, null, 2));
     const res = await fetch(`${API_BASE}/sites`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -253,7 +252,6 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       throw new Error(`Failed to create site: ${res.status} ${errorText}`);
     }
     const newSite = siteFromApi(await res.json());
-    console.log('[WorkflowContext] createSite success:', newSite.id);
     setSites(prev => [...prev, newSite]);
     return newSite;
   }, []);

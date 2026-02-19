@@ -10,12 +10,14 @@ import {
   Edit3,
   Trash2,
   Box,
+  Copy,
   MapPin,
   Target,
   Navigation,
   Flag,
   Eye,
   Hexagon,
+  Film,
 } from 'lucide-react';
 import { GlassButton, Badge, GlassDivider } from '../ui/GlassUI';
 import type { SiteDefinition, MarkerType } from '../../types/workflow';
@@ -34,6 +36,8 @@ interface SiteDetailPanelProps {
   onEdit: () => void;
   onDelete: () => void;
   onView3D: () => void;
+  onDuplicate?: () => void;
+  onRecordFlythrough?: () => void;
 }
 
 const SiteDetailPanel: React.FC<SiteDetailPanelProps> = ({
@@ -42,6 +46,8 @@ const SiteDetailPanel: React.FC<SiteDetailPanelProps> = ({
   onEdit,
   onDelete,
   onView3D,
+  onDuplicate,
+  onRecordFlythrough,
 }) => {
   return (
     <div style={{
@@ -264,6 +270,11 @@ const SiteDetailPanel: React.FC<SiteDetailPanelProps> = ({
           <Box size={13} />
           3D View
         </GlassButton>
+        {onDuplicate && (
+          <GlassButton variant="ghost" size="sm" onClick={onDuplicate} style={{ flexShrink: 0 }}>
+            <Copy size={13} />
+          </GlassButton>
+        )}
         <GlassButton
           variant="ghost"
           size="sm"
@@ -273,6 +284,14 @@ const SiteDetailPanel: React.FC<SiteDetailPanelProps> = ({
           <Trash2 size={13} />
         </GlassButton>
       </div>
+
+      {/* Record Flythrough — only shown if site has boundary */}
+      {onRecordFlythrough && site.boundary_polygon && site.boundary_polygon.length >= 3 && (
+        <GlassButton variant="ghost" size="sm" onClick={onRecordFlythrough} style={{ width: '100%' }}>
+          <Film size={13} />
+          Record Flythrough
+        </GlassButton>
+      )}
 
       {/* Timestamps */}
       <div style={{

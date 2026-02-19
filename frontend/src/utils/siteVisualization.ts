@@ -13,12 +13,33 @@ export function calculatePolygonCenter(points: GeoPoint[]): GeoPoint {
   if (points.length === 0) {
     return { lat: 0, lon: 0 };
   }
-  const sumLat = points.reduce((sum, p) => sum + p.lat, 0);
-  const sumLon = points.reduce((sum, p) => sum + p.lon, 0);
-  return {
-    lat: sumLat / points.length,
-    lon: sumLon / points.length,
-  };
+  if (points.length < 3) {
+    const sumLat = points.reduce((sum, p) => sum + p.lat, 0);
+    const sumLon = points.reduce((sum, p) => sum + p.lon, 0);
+    return { lat: sumLat / points.length, lon: sumLon / points.length };
+  }
+
+  // Weighted centroid using Shoelace formula — accurate for concave polygons
+  let area = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < points.length; i++) {
+    const j = (i + 1) % points.length;
+    const cross = points[i].lat * points[j].lon - points[j].lat * points[i].lon;
+    area += cross;
+    cx += (points[i].lat + points[j].lat) * cross;
+    cy += (points[i].lon + points[j].lon) * cross;
+  }
+  area /= 2;
+  if (Math.abs(area) < 1e-12) {
+    // Degenerate polygon — fall back to simple average
+    const sumLat = points.reduce((sum, p) => sum + p.lat, 0);
+    const sumLon = points.reduce((sum, p) => sum + p.lon, 0);
+    return { lat: sumLat / points.length, lon: sumLon / points.length };
+  }
+  cx /= (6 * area);
+  cy /= (6 * area);
+  return { lat: cx, lon: cy };
 }
 
 // Zone type colors

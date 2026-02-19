@@ -78,6 +78,14 @@ export function simplePythonProxy() {
 
       const response = await fetch(url, fetchOptions);
 
+      // Python returned 404 or 502 — fall through to Express routes
+      if (response.status === 404 || response.status === 502) {
+        log.info(`[proxy] Python returned ${response.status} for ${req.path}, falling back to Express routes`);
+        req.url = req.url.replace('/api/v2', '/api');
+        req.originalUrl = req.originalUrl.replace('/api/v2', '/api');
+        return next();
+      }
+
       // Forward status and headers
       res.status(response.status);
       response.headers.forEach((value, key) => {
@@ -99,15 +107,15 @@ export function simplePythonProxy() {
         res.send(text);
       }
     } catch (e: any) {
-      if (e.name === 'AbortError') {
+      if (e.name === 'AbortError' || e.name === 'TimeoutError') {
         res.status(504).json({ error: 'Python backend timeout' });
       } else {
-        log.warn(`[proxy] Python backend unavailable for ${req.path}: ${e.message}`);
-        res.status(502).json({
-          error: 'Python backend unavailable',
-          detail: `Cannot reach backend at ${PYTHON_BACKEND_URL}`,
-          code: 'BACKEND_UNAVAILABLE',
-        });
+        // Python backend unreachable — fall through to Express /api/* routes
+        log.info(`[proxy] Python backend unavailable for ${req.path}, falling back to Express routes`);
+        // Rewrite /api/v2/* → /api/* so Express v1 routes can handle
+        req.url = req.url.replace('/api/v2', '/api');
+        req.originalUrl = req.originalUrl.replace('/api/v2', '/api');
+        next();
       }
     }
   };
