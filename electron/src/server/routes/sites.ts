@@ -24,6 +24,7 @@ export function siteRoutes(): Router {
       const sites = getSites();
       res.json(sites);
     } catch (error) {
+      console.error('[sites] GET /sites error:', error);
       res.status(500).json({ error: 'Failed to fetch sites' });
     }
   });
@@ -37,6 +38,7 @@ export function siteRoutes(): Router {
       }
       res.json(site);
     } catch (error) {
+      console.error('[sites] GET /sites/:id error:', error);
       res.status(500).json({ error: 'Failed to fetch site' });
     }
   });
@@ -44,36 +46,44 @@ export function siteRoutes(): Router {
   // POST /api/sites - Create new site
   router.post('/sites', (req, res) => {
     try {
-      // Use any to allow legacy format fields
-      const rawData = req.body as Record<string, unknown>;
-      const siteData = { ...rawData } as Omit<SiteDefinition, 'id' | 'created_at' | 'updated_at'> & {
-        center_lat?: number;
-        center_lon?: number;
-      };
+      const siteData = { ...req.body } as Omit<SiteDefinition, 'id' | 'created_at' | 'updated_at'>;
 
-      // Validate required fields - name and center are required, boundary_polygon is optional
+      // Validate required fields
       if (!siteData.name) {
         return res.status(400).json({ error: 'Missing required field: name' });
       }
 
-      // Default center if not provided
+      // Center is required
       if (!siteData.center) {
-        // If center_lat/center_lon are provided (legacy format), use those
-        if (siteData.center_lat !== undefined && siteData.center_lon !== undefined) {
-          siteData.center = { lat: siteData.center_lat, lon: siteData.center_lon };
-        } else {
-          return res.status(400).json({ error: 'Missing required field: center (or center_lat/center_lon)' });
-        }
+        return res.status(400).json({ error: 'Missing required field: center' });
       }
 
-      // Ensure boundary_polygon is at least an empty array if not provided
+      // Coordinate validation
+      const { lat, lon } = siteData.center;
+      if (typeof lat !== 'number' || typeof lon !== 'number' ||
+          lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        return res.status(400).json({ error: 'Invalid center coordinates: lat must be [-90,90], lon must be [-180,180]' });
+      }
+
+      // Normalize boundary_polygon: unwrap { points: [...] } if needed
+      if (siteData.boundary_polygon && !Array.isArray(siteData.boundary_polygon)) {
+        siteData.boundary_polygon = (siteData.boundary_polygon as any).points ?? [];
+      }
       if (!siteData.boundary_polygon) {
         siteData.boundary_polygon = [];
+      }
+
+      // Auto-generate GeoJSON boundary from boundary_polygon if not already present
+      if (siteData.boundary_polygon && siteData.boundary_polygon.length >= 3 && !siteData.boundary) {
+        const coords = siteData.boundary_polygon.map((p: any) => [p.lon, p.lat]);
+        coords.push(coords[0]); // Close the ring
+        (siteData as any).boundary = { type: 'Polygon', coordinates: [coords] };
       }
 
       const site = createSite(siteData);
       res.status(201).json(site);
     } catch (error) {
+      console.error('[sites] POST /sites error:', error);
       res.status(500).json({ error: 'Failed to create site' });
     }
   });
@@ -82,6 +92,16 @@ export function siteRoutes(): Router {
   router.put('/sites/:id', (req, res) => {
     try {
       const updates = req.body as Partial<SiteDefinition>;
+      // Normalize boundary_polygon: unwrap { points: [...] } if needed
+      if (updates.boundary_polygon && !Array.isArray(updates.boundary_polygon)) {
+        updates.boundary_polygon = (updates.boundary_polygon as any).points ?? [];
+      }
+      // Auto-generate GeoJSON boundary from boundary_polygon if updated
+      if (updates.boundary_polygon && updates.boundary_polygon.length >= 3 && !updates.boundary) {
+        const coords = updates.boundary_polygon.map(p => [p.lon, p.lat]);
+        coords.push(coords[0]); // Close the ring
+        updates.boundary = { type: 'Polygon', coordinates: [coords] };
+      }
       const site = updateSite(req.params.id, updates);
 
       if (!site) {
@@ -90,6 +110,7 @@ export function siteRoutes(): Router {
 
       res.json(site);
     } catch (error) {
+      console.error('[sites] PUT /sites/:id error:', error);
       res.status(500).json({ error: 'Failed to update site' });
     }
   });
@@ -113,6 +134,7 @@ export function siteRoutes(): Router {
 
       res.json({ success: true });
     } catch (error) {
+      console.error('[sites] DELETE /sites/:id error:', error);
       res.status(500).json({ error: 'Failed to delete site' });
     }
   });
@@ -132,6 +154,7 @@ export function siteRoutes(): Router {
 
       res.status(201).json(site);
     } catch (error) {
+      console.error('[sites] POST /sites/:id/duplicate error:', error);
       res.status(500).json({ error: 'Failed to duplicate site' });
     }
   });
@@ -147,6 +170,7 @@ export function siteRoutes(): Router {
       const sessions = getTestSessionsBySite(req.params.id);
       res.json(sessions);
     } catch (error) {
+      console.error('[sites] GET /sites/:id/sessions error:', error);
       res.status(500).json({ error: 'Failed to fetch sessions' });
     }
   });

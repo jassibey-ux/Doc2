@@ -70,6 +70,7 @@ export default function MapView() {
     clearExportSummary,
     isDrawingMode,
     setIsDrawingMode,
+    drawingType,
     setDrawingType,
     setPendingDrawingResult,
     siteReconCaptures,
@@ -110,6 +111,13 @@ export default function MapView() {
 
   // Site Recon viewer
   const [showReconViewer, setShowReconViewer] = useState(false);
+
+  // Auto-switch to 2D when entering drawing mode (3D view has no MapboxDraw)
+  useEffect(() => {
+    if (isDrawingMode && showGoogle3DGlobe) {
+      setShowGoogle3DGlobe(false);
+    }
+  }, [isDrawingMode, showGoogle3DGlobe]);
 
   // Build tracker_id -> DroneProfile map for 2D marker thumbnails
   const droneProfileMap = useMemo(() => {
@@ -193,11 +201,12 @@ export default function MapView() {
 
   // Drawing mode handlers - simplified for mapbox-gl-draw
   const handleDrawingComplete = useCallback((points: GeoPoint[]) => {
-    // Store the result for ConfigurationWorkspacePanel to consume
-    setPendingDrawingResult({ type: 'polygon', points });
+    // Use the actual drawingType from context (polygon/marker/zone)
+    const type = drawingType || 'polygon';
+    setPendingDrawingResult({ type, points });
     setIsDrawingMode(false);
     setDrawingType(null);
-  }, [setPendingDrawingResult, setIsDrawingMode, setDrawingType]);
+  }, [drawingType, setPendingDrawingResult, setIsDrawingMode, setDrawingType]);
 
   // CUAS placement handlers
   const handleRequestCuasPlacement = useCallback((placementId: string) => {
@@ -556,6 +565,7 @@ export default function MapView() {
               showCuasCoverage={currentPhase === 'active' || currentPhase === 'planning'}
               selectedSite={selectedSite}
               isDrawingMode={isDrawingMode}
+              drawingType={drawingType}
               onDrawingComplete={handleDrawingComplete}
               placingCuasId={placingCuasId}
               onCuasPlaced={handleCuasPlaced}

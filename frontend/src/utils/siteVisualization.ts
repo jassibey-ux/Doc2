@@ -66,7 +66,27 @@ const MARKER_COLORS: Record<MarkerType, string> = {
 export function generateSiteBoundaryGeoJSON(
   site: SiteDefinition | null | undefined
 ): FeatureCollection<Polygon> {
-  if (!site || !site.boundary_polygon || site.boundary_polygon.length < 3) {
+  if (!site) {
+    return { type: 'FeatureCollection', features: [] };
+  }
+
+  // Prefer pre-computed GeoJSON boundary if available
+  if (site.boundary && site.boundary.type === 'Polygon' && site.boundary.coordinates?.length > 0) {
+    const feature: Feature<Polygon> = {
+      type: 'Feature',
+      properties: {
+        id: site.id,
+        name: site.name,
+        type: 'boundary',
+        environmentType: site.environment_type,
+      },
+      geometry: site.boundary,
+    };
+    return { type: 'FeatureCollection', features: [feature] };
+  }
+
+  // Fallback: convert boundary_polygon GeoPoint[] to GeoJSON
+  if (!site.boundary_polygon || site.boundary_polygon.length < 3) {
     return { type: 'FeatureCollection', features: [] };
   }
 

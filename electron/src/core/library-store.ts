@@ -43,23 +43,41 @@ function getLibraryPath(): string {
   return libraryPath;
 }
 
-// Generic JSON file operations
+// In-memory cache: keyed by filename → array of items
+// Single-process Electron app, so cache IS the source of truth once loaded.
+// Eliminates read-modify-write race conditions.
+const cache = new Map<string, unknown[]>();
+
+// Generic JSON file operations (with in-memory cache)
 function readJsonFile<T>(filename: string, defaultValue: T[]): T[] {
+  // Check cache first
+  const cached = cache.get(filename);
+  if (cached !== undefined) {
+    return cached as T[];
+  }
+
+  // Cache miss — load from disk
   const filePath = path.join(getLibraryPath(), filename);
   try {
     if (fs.existsSync(filePath)) {
       const data = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(data) as T[];
+      const parsed = JSON.parse(data) as T[];
+      cache.set(filename, parsed);
+      return parsed;
     }
   } catch (error) {
     log.error(`Error reading ${filename}:`, error);
   }
+  cache.set(filename, defaultValue);
   return defaultValue;
 }
 
 function writeJsonFile<T>(filename: string, data: T[]): void {
   const filePath = path.join(getLibraryPath(), filename);
   const tempPath = `${filePath}.tmp`;
+
+  // Update cache immediately (source of truth)
+  cache.set(filename, data);
 
   try {
     // Write to temp file first for atomic operation

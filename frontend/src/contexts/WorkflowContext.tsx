@@ -103,7 +103,7 @@ interface WorkflowContextType {
 
 const WorkflowContext = createContext<WorkflowContextType | null>(null);
 
-const API_BASE = '/api/v2';
+const API_BASE = '/api';
 
 export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   // Workflow mode
@@ -192,33 +192,8 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ==========================================================================
-  // Sites — transform between frontend (center: GeoPoint) and API (center_lat/center_lon)
+  // Sites — Express stores center: {lat, lon} natively, no transforms needed
   // ==========================================================================
-
-  /** Convert API site response to frontend SiteDefinition shape */
-  const siteFromApi = (apiSite: Record<string, unknown>): SiteDefinition => ({
-    ...apiSite,
-    center: { lat: apiSite.center_lat as number ?? 0, lon: apiSite.center_lon as number ?? 0 },
-    boundary_polygon: Array.isArray(apiSite.boundary_polygon)
-      ? apiSite.boundary_polygon
-      : (apiSite.boundary_polygon as Record<string, unknown>)?.points ?? [],
-  }) as unknown as SiteDefinition;
-
-  /** Convert frontend site to API request shape */
-  const siteToApi = (site: Record<string, unknown>) => {
-    const { center, boundary_polygon, ...rest } = site;
-    const c = center as { lat?: number; lon?: number } | undefined;
-    const bp = boundary_polygon as unknown[];
-    // If center object exists, use it; otherwise preserve flat center_lat/center_lon from rest
-    const centerLat = c?.lat ?? (rest.center_lat as number | undefined) ?? 0;
-    const centerLon = c?.lon ?? (rest.center_lon as number | undefined) ?? 0;
-    return {
-      ...rest,
-      center_lat: centerLat,
-      center_lon: centerLon,
-      boundary_polygon: Array.isArray(bp) && bp.length > 0 ? { points: bp } : null,
-    };
-  };
 
   const loadSites = useCallback(async () => {
     try {
@@ -226,8 +201,8 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch(`${API_BASE}/sites?limit=200`);
       if (!res.ok) throw new Error('Failed to load sites');
       const data = await res.json();
-      const items = data.items ?? data;
-      setSites(items.map(siteFromApi));
+      const items: SiteDefinition[] = data.items ?? data;
+      setSites(items);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
@@ -240,18 +215,17 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const createSite = useCallback(async (site: Omit<SiteDefinition, 'id' | 'created_at' | 'updated_at'>) => {
-    const apiPayload = siteToApi(site as Record<string, unknown>);
     const res = await fetch(`${API_BASE}/sites`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(apiPayload),
+      body: JSON.stringify(site),
     });
     if (!res.ok) {
       const errorText = await res.text();
       console.error('[WorkflowContext] createSite failed:', res.status, errorText);
       throw new Error(`Failed to create site: ${res.status} ${errorText}`);
     }
-    const newSite = siteFromApi(await res.json());
+    const newSite: SiteDefinition = await res.json();
     setSites(prev => [...prev, newSite]);
     return newSite;
   }, []);
@@ -260,10 +234,10 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     const res = await fetch(`${API_BASE}/sites/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(siteToApi(updates as Record<string, unknown>)),
+      body: JSON.stringify(updates),
     });
     if (!res.ok) return null;
-    const updated = siteFromApi(await res.json());
+    const updated: SiteDefinition = await res.json();
     setSites(prev => prev.map(s => s.id === id ? updated : s));
     if (selectedSite?.id === id) setSelectedSite(updated);
     return updated;
@@ -375,7 +349,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
 
   const loadTestSessions = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/sessions?limit=200`);
+      const res = await fetch(`${API_BASE}/test-sessions?limit=200`);
       if (!res.ok) throw new Error('Failed to load test sessions');
       const data = await res.json();
       setTestSessions(data.items ?? data);
@@ -389,7 +363,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const createTestSession = useCallback(async (session: Omit<TestSession, 'id' | 'created_at' | 'updated_at'>) => {
-    const res = await fetch(`${API_BASE}/sessions`, {
+    const res = await fetch(`${API_BASE}/test-sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(session),
@@ -406,7 +380,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateTestSessionFunc = useCallback(async (id: string, updates: Partial<TestSession>) => {
-    const res = await fetch(`${API_BASE}/sessions/${id}`, {
+    const res = await fetch(`${API_BASE}/test-sessions/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -419,7 +393,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, [activeSession]);
 
   const deleteTestSessionFunc = useCallback(async (id: string) => {
-    const res = await fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE' });
+    const res = await fetch(`${API_BASE}/test-sessions/${id}`, { method: 'DELETE' });
     if (!res.ok) return false;
     setTestSessions(prev => prev.filter(s => s.id !== id));
     if (activeSession?.id === id) setActiveSession(null);
@@ -429,7 +403,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   // Session operations
   const startSession = useCallback(async (sessionId: string) => {
     console.log('[WorkflowContext] startSession:', sessionId);
-    const res = await fetch(`${API_BASE}/sessions/${sessionId}/start`, {
+    const res = await fetch(`${API_BASE}/test-sessions/${sessionId}/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{}',
@@ -449,7 +423,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const stopSession = useCallback(async (sessionId: string) => {
-    const res = await fetch(`${API_BASE}/sessions/${sessionId}/stop`, {
+    const res = await fetch(`${API_BASE}/test-sessions/${sessionId}/stop`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{}',
@@ -481,7 +455,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addEvent = useCallback(async (sessionId: string, event: Omit<TestEvent, 'id'>) => {
-    const res = await fetch(`${API_BASE}/sessions/${sessionId}/events`, {
+    const res = await fetch(`${API_BASE}/test-sessions/${sessionId}/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(event),
@@ -505,7 +479,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, [activeSession]);
 
   const assignTracker = useCallback(async (sessionId: string, assignment: Omit<TrackerAssignment, 'id' | 'assigned_at'>) => {
-    const res = await fetch(`${API_BASE}/sessions/${sessionId}/assign-tracker`, {
+    const res = await fetch(`${API_BASE}/test-sessions/${sessionId}/assign-tracker`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(assignment),
@@ -514,7 +488,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     const newAssignment = await res.json();
 
     // Refresh session
-    const sessionRes = await fetch(`${API_BASE}/sessions/${sessionId}`);
+    const sessionRes = await fetch(`${API_BASE}/test-sessions/${sessionId}`);
     if (sessionRes.ok) {
       const updated = await sessionRes.json();
       setTestSessions(prev => prev.map(s => s.id === sessionId ? updated : s));
@@ -525,7 +499,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, [activeSession]);
 
   const addCUASPlacement = useCallback(async (sessionId: string, placement: Omit<CUASPlacement, 'id'>) => {
-    const res = await fetch(`${API_BASE}/sessions/${sessionId}/cuas-placement`, {
+    const res = await fetch(`${API_BASE}/test-sessions/${sessionId}/cuas-placement`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(placement),
@@ -534,7 +508,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     const newPlacement = await res.json();
 
     // Refresh session
-    const sessionRes = await fetch(`${API_BASE}/sessions/${sessionId}`);
+    const sessionRes = await fetch(`${API_BASE}/test-sessions/${sessionId}`);
     if (sessionRes.ok) {
       const updated = await sessionRes.json();
       setTestSessions(prev => prev.map(s => s.id === sessionId ? updated : s));

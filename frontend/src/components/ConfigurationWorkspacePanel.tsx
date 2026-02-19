@@ -41,6 +41,7 @@ import { SiteReconViewer } from './SiteReconViewer';
 import SiteGallery from './site/SiteGallery';
 import SiteDetailPanel from './site/SiteDetailPanel';
 import { useWorkflow } from '../contexts/WorkflowContext';
+import { useToastHelpers } from '../contexts/ToastContext';
 import {
   SiteDefinition,
   DroneProfile,
@@ -124,6 +125,10 @@ const CAPABILITY_OPTIONS = [
 
 export default function ConfigurationWorkspacePanel({ isOpen, onClose }: ConfigurationWorkspacePanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>('sites');
+
+  // ===== TOAST & SAVING STATE =====
+  const toast = useToastHelpers();
+  const [saving, setSaving] = useState(false);
 
   // ===== WORKFLOW CONTEXT =====
   const {
@@ -278,16 +283,18 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
   const handleSiteSave = useCallback(async () => {
     if (!editedSite || !editedSite.name) return;
 
-    // Validation (Fix 2.7): warn if no boundary but don't block save
+    // Validate center != {0,0}
+    if (editedSite.center && editedSite.center.lat === 0 && editedSite.center.lon === 0) {
+      toast.warning('Site center is at (0, 0). Draw a boundary or set a valid location.');
+    }
+
+    // Validation: warn if no boundary but don't block save
     const hasBoundary = editedSite.boundary_polygon && editedSite.boundary_polygon.length >= 3;
     if (!hasBoundary) {
-      // If center is {0,0}, don't persist a misleading center
-      if (!editedSite.center || (editedSite.center.lat === 0 && editedSite.center.lon === 0)) {
-        editedSite.center = undefined as any;
-      }
       if (!confirm('Site has no boundary polygon. Save anyway?')) return;
     }
 
+    setSaving(true);
     try {
       if (editedSite.id) {
         await updateSite(editedSite.id, editedSite);
@@ -299,10 +306,16 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
       setEditedSite(null);
       setIsDrawingMode(false);
       setDrawingType(null);
+      toast.success('Site saved');
     } catch (err) {
       console.error('Failed to save site:', err);
+      setIsDrawingMode(false);
+      setDrawingType(null);
+      toast.error(`Failed to save site: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSaving(false);
     }
-  }, [editedSite, createSite, updateSite, selectSite, setIsDrawingMode, setDrawingType]);
+  }, [editedSite, createSite, updateSite, selectSite, setIsDrawingMode, setDrawingType, toast]);
 
   const handleSiteCancel = useCallback(() => {
     setSiteEditing(false);
@@ -313,8 +326,13 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
 
   const handleSiteDelete = useCallback(async (site: SiteDefinition) => {
     if (!confirm(`Delete site "${site.name}"?`)) return;
-    await deleteSite(site.id);
-  }, [deleteSite]);
+    try {
+      await deleteSite(site.id);
+      toast.success('Site deleted');
+    } catch (err) {
+      toast.error(`Failed to delete site: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }, [deleteSite, toast]);
 
   const handleDrawBoundary = useCallback(() => {
     // Confirm before redraw if existing boundary (Fix 2.8)
@@ -413,6 +431,7 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
   const handleDroneSave = useCallback(async () => {
     if (!editedDrone || !editedDrone.name || !editedDrone.make || !editedDrone.model) return;
     const profileData = { ...editedDrone, frequency_bands: selectedBands };
+    setSaving(true);
     try {
       if (editedDrone.id) {
         await updateDroneProfile(editedDrone.id, profileData);
@@ -421,10 +440,14 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
       }
       setDroneEditing(false);
       setEditedDrone(null);
+      toast.success('Drone profile saved');
     } catch (err) {
       console.error('Failed to save drone profile:', err);
+      toast.error(`Failed to save drone profile: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSaving(false);
     }
-  }, [editedDrone, selectedBands, createDroneProfile, updateDroneProfile]);
+  }, [editedDrone, selectedBands, createDroneProfile, updateDroneProfile, toast]);
 
   const handleDroneCancel = useCallback(() => {
     setDroneEditing(false);
@@ -433,8 +456,13 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
 
   const handleDroneDelete = useCallback(async (profile: DroneProfile) => {
     if (!confirm(`Delete profile "${profile.name}"?`)) return;
-    await deleteDroneProfile(profile.id);
-  }, [deleteDroneProfile]);
+    try {
+      await deleteDroneProfile(profile.id);
+      toast.success('Drone profile deleted');
+    } catch (err) {
+      toast.error(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }, [deleteDroneProfile, toast]);
 
   const toggleBand = useCallback((band: string) => {
     setSelectedBands(prev => prev.includes(band) ? prev.filter(b => b !== band) : [...prev, band]);
@@ -463,6 +491,7 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
   const handleCuasSave = useCallback(async () => {
     if (!editedCuas || !editedCuas.name || !editedCuas.vendor) return;
     const profileData = { ...editedCuas, capabilities: selectedCapabilities };
+    setSaving(true);
     try {
       if (editedCuas.id) {
         await updateCUASProfile(editedCuas.id, profileData);
@@ -471,10 +500,14 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
       }
       setCuasEditing(false);
       setEditedCuas(null);
+      toast.success('CUAS profile saved');
     } catch (err) {
       console.error('Failed to save CUAS profile:', err);
+      toast.error(`Failed to save CUAS profile: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSaving(false);
     }
-  }, [editedCuas, selectedCapabilities, createCUASProfile, updateCUASProfile]);
+  }, [editedCuas, selectedCapabilities, createCUASProfile, updateCUASProfile, toast]);
 
   const handleCuasCancel = useCallback(() => {
     setCuasEditing(false);
@@ -483,8 +516,13 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
 
   const handleCuasDelete = useCallback(async (profile: CUASProfile) => {
     if (!confirm(`Delete "${profile.name}"?`)) return;
-    await deleteCUASProfile(profile.id);
-  }, [deleteCUASProfile]);
+    try {
+      await deleteCUASProfile(profile.id);
+      toast.success('CUAS profile deleted');
+    } catch (err) {
+      toast.error(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }, [deleteCUASProfile, toast]);
 
   const toggleCapability = useCallback((cap: string) => {
     setSelectedCapabilities(prev => prev.includes(cap) ? prev.filter(c => c !== cap) : [...prev, cap]);
@@ -822,11 +860,11 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                     variant="primary"
                     size="md"
                     onClick={handleSiteSave}
-                    disabled={!editedSite?.name}
+                    disabled={!editedSite?.name || saving}
                     style={{ flex: 1 }}
                   >
                     <Save size={14} />
-                    Save Site
+                    {saving ? 'Saving...' : 'Save Site'}
                   </GlassButton>
                 </div>
               </div>
@@ -1037,11 +1075,11 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                     variant="primary"
                     size="md"
                     onClick={handleDroneSave}
-                    disabled={!editedDrone?.name || !editedDrone?.make || !editedDrone?.model}
+                    disabled={!editedDrone?.name || !editedDrone?.make || !editedDrone?.model || saving}
                     style={{ flex: 1 }}
                   >
                     <Save size={14} />
-                    Save
+                    {saving ? 'Saving...' : 'Save'}
                   </GlassButton>
                 </div>
               </div>
@@ -1257,11 +1295,11 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                     variant="primary"
                     size="md"
                     onClick={handleCuasSave}
-                    disabled={!editedCuas?.name || !editedCuas?.vendor || !editedCuas?.effective_range_m}
+                    disabled={!editedCuas?.name || !editedCuas?.vendor || !editedCuas?.effective_range_m || saving}
                     style={{ flex: 1 }}
                   >
                     <Save size={14} />
-                    Save
+                    {saving ? 'Saving...' : 'Save'}
                   </GlassButton>
                 </div>
               </div>

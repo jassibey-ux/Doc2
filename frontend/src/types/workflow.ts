@@ -63,6 +63,7 @@ export interface SiteDefinition {
   id: string;
   name: string;
   boundary_polygon: GeoPoint[];
+  boundary?: { type: 'Polygon'; coordinates: number[][][] };
   center: GeoPoint;
   markers: SiteMarker[];
   zones: SiteZone[];

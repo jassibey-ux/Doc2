@@ -42,6 +42,7 @@ interface MapProps {
   selectedSite?: SiteDefinition | null;
   // Drawing mode props
   isDrawingMode?: boolean;
+  drawingType?: 'polygon' | 'marker' | 'zone' | null;
   onDrawingComplete?: (points: GeoPoint[]) => void;
   // CUAS placement mode props
   placingCuasId?: string | null;
@@ -244,6 +245,7 @@ export default function MapComponent({
   showCuasCoverage = true,
   selectedSite = null,
   isDrawingMode = false,
+  drawingType = null,
   onDrawingComplete,
   placingCuasId = null,
   onCuasPlaced,
@@ -1535,56 +1537,81 @@ export default function MapComponent({
     map.setLayoutProperty('osm-street-layer', 'visibility', mapStyle === 'street' ? 'visible' : 'none');
   }, [mapStyle]);
 
-  // Handle mapbox-gl-draw integration
+  // Handle mapbox-gl-draw integration (supports polygon, point, and zone modes)
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     if (isDrawingMode && !drawRef.current) {
+      // Determine mode and controls based on drawingType
+      const isPointMode = drawingType === 'marker';
+      const defaultMode = isPointMode ? 'draw_point' : 'draw_polygon';
+      const controls = isPointMode
+        ? { point: true, trash: true }
+        : { polygon: true, trash: true };
+
       // Create draw control when entering drawing mode
       const draw = new MapboxDraw({
         displayControlsDefault: false,
-        controls: {
-          polygon: true,
-          trash: true,
-        },
-        defaultMode: 'draw_polygon',
+        controls,
+        defaultMode,
       });
 
       // Add draw control to map (cast to any for MapLibre compatibility)
       map.addControl(draw as any, 'top-left');
       drawRef.current = draw;
 
-      // Listen for polygon creation
+      // Debounce timer for update events
+      let updateTimer: ReturnType<typeof setTimeout> | null = null;
+
+      // Handle feature creation (polygon or point)
       const handleCreate = (e: any) => {
+        console.log('[Map] draw.create event fired:', e.features?.length, 'features');
         const feature = e.features[0];
-        if (feature && feature.geometry.type === 'Polygon') {
+        if (!feature) return;
+
+        if (feature.geometry.type === 'Polygon') {
           const coords = feature.geometry.coordinates[0];
-          // Convert from [lng, lat] to GeoPoint {lat, lon}
           const points: GeoPoint[] = coords.slice(0, -1).map((c: number[]) => ({
             lat: c[1],
             lon: c[0],
           }));
+          console.log('[Map] Drawing complete (polygon):', points.length, 'points');
           onDrawingComplete?.(points);
+        } else if (feature.geometry.type === 'Point') {
+          const [lon, lat] = feature.geometry.coordinates;
+          console.log('[Map] Drawing complete (point):', lat, lon);
+          onDrawingComplete?.([{ lat, lon }]);
         }
       };
 
+      // Debounced update handler (fires on every vertex drag)
       const handleUpdate = (e: any) => {
-        const feature = e.features[0];
-        if (feature && feature.geometry.type === 'Polygon') {
-          const coords = feature.geometry.coordinates[0];
-          const points: GeoPoint[] = coords.slice(0, -1).map((c: number[]) => ({
-            lat: c[1],
-            lon: c[0],
-          }));
-          onDrawingComplete?.(points);
-        }
+        if (updateTimer) clearTimeout(updateTimer);
+        updateTimer = setTimeout(() => {
+          const feature = e.features[0];
+          if (!feature) return;
+
+          if (feature.geometry.type === 'Polygon') {
+            const coords = feature.geometry.coordinates[0];
+            const points: GeoPoint[] = coords.slice(0, -1).map((c: number[]) => ({
+              lat: c[1],
+              lon: c[0],
+            }));
+            onDrawingComplete?.(points);
+          } else if (feature.geometry.type === 'Point') {
+            const [lon, lat] = feature.geometry.coordinates;
+            onDrawingComplete?.([{ lat, lon }]);
+          }
+        }, 300); // 300ms debounce
       };
 
+      console.log('[Map] MapboxDraw initialized in', defaultMode, 'mode');
       map.on('draw.create', handleCreate);
       map.on('draw.update', handleUpdate);
 
       return () => {
+        if (updateTimer) clearTimeout(updateTimer);
         map.off('draw.create', handleCreate);
         map.off('draw.update', handleUpdate);
       };
@@ -1593,7 +1620,7 @@ export default function MapComponent({
       map.removeControl(drawRef.current as any);
       drawRef.current = null;
     }
-  }, [isDrawingMode, onDrawingComplete]);
+  }, [isDrawingMode, drawingType, onDrawingComplete]);
 
   // Handle CUAS placement mode
   useEffect(() => {
