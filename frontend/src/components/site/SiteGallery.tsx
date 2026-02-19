@@ -2,7 +2,7 @@
  * SiteGallery — 2-column grid of SiteCards with search, sort, and environment filter.
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Search, Plus, Grid, List, MapPin } from 'lucide-react';
 import { GlassButton, GlassInput } from '../ui/GlassUI';
 import SiteCard from './SiteCard';
@@ -33,9 +33,17 @@ const SiteGallery: React.FC<SiteGalleryProps> = ({
   onNewSite,
 }) => {
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sort, setSort] = useState<SortKey>('recent');
   const [envFilter, setEnvFilter] = useState<EnvironmentType | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Debounce search term by 300ms
+  useEffect(() => {
+    debounceRef.current = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [search]);
 
   const toggleEnvFilter = useCallback((env: EnvironmentType) => {
     setEnvFilter(prev => prev === env ? null : env);
@@ -44,9 +52,9 @@ const SiteGallery: React.FC<SiteGalleryProps> = ({
   const filteredAndSorted = useMemo(() => {
     let result = [...sites];
 
-    // Search filter
-    if (search.trim()) {
-      const term = search.toLowerCase();
+    // Search filter (debounced)
+    if (debouncedSearch.trim()) {
+      const term = debouncedSearch.toLowerCase();
       result = result.filter(s =>
         s.name.toLowerCase().includes(term) ||
         s.environment_type?.toLowerCase().includes(term)
@@ -73,7 +81,7 @@ const SiteGallery: React.FC<SiteGalleryProps> = ({
     }
 
     return result;
-  }, [sites, search, sort, envFilter]);
+  }, [sites, debouncedSearch, sort, envFilter]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
