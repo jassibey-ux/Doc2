@@ -11,6 +11,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import MapView from './components/MapView';
 import MonitoringConsole from './components/MonitoringConsole';
 import SessionConsole from './components/SessionConsole';
+import SessionPage from './components/session/SessionPage';
 import SessionAnalysisView from './components/SessionAnalysisView';
 import ReplayPage from './components/ReplayPage';
 import CRMDashboard from './components/crm/CRMDashboard';
@@ -51,7 +52,8 @@ export default function App() {
                         <Routes>
                           <Route path="/" element={<MapView />} />
                           <Route path="/monitor" element={<MonitoringConsole />} />
-                          <Route path="/session/:sessionId/live" element={<SessionConsole />} />
+                          <Route path="/session/:sessionId/live" element={<SessionPage />} />
+                          <Route path="/session/:sessionId/live-legacy" element={<SessionConsole />} />
                           <Route path="/session/:sessionId/analysis" element={<SessionAnalysisView />} />
                           <Route path="/replay" element={<ReplayPage />} />
                           <Route path="/replay/:sessionId" element={<ReplayPage />} />
