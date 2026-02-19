@@ -22,6 +22,7 @@ export function droneProfileRoutes(): Router {
       const profiles = getDroneProfiles();
       res.json(profiles);
     } catch (error) {
+      console.error('[drone-profiles] GET /drone-profiles error:', error);
       res.status(500).json({ error: 'Failed to fetch drone profiles' });
     }
   });
@@ -35,6 +36,7 @@ export function droneProfileRoutes(): Router {
       }
       res.json(profile);
     } catch (error) {
+      console.error('[drone-profiles] GET /drone-profiles/:id error:', error);
       res.status(500).json({ error: 'Failed to fetch drone profile' });
     }
   });
@@ -60,6 +62,7 @@ export function droneProfileRoutes(): Router {
       const profile = createDroneProfile(profileData);
       res.status(201).json(profile);
     } catch (error) {
+      console.error('[drone-profiles] POST /drone-profiles error:', error);
       res.status(500).json({ error: 'Failed to create drone profile' });
     }
   });
@@ -76,6 +79,7 @@ export function droneProfileRoutes(): Router {
 
       res.json(profile);
     } catch (error) {
+      console.error('[drone-profiles] PUT /drone-profiles/:id error:', error);
       res.status(500).json({ error: 'Failed to update drone profile' });
     }
   });
@@ -90,6 +94,7 @@ export function droneProfileRoutes(): Router {
 
       res.json({ success: true });
     } catch (error) {
+      console.error('[drone-profiles] DELETE /drone-profiles/:id error:', error);
       res.status(500).json({ error: 'Failed to delete drone profile' });
     }
   });

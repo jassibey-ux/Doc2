@@ -22,6 +22,7 @@ export function cuasProfileRoutes(): Router {
       const profiles = getCUASProfiles();
       res.json(profiles);
     } catch (error) {
+      console.error('[cuas-profiles] GET /cuas-profiles error:', error);
       res.status(500).json({ error: 'Failed to fetch CUAS profiles' });
     }
   });
@@ -35,6 +36,7 @@ export function cuasProfileRoutes(): Router {
       }
       res.json(profile);
     } catch (error) {
+      console.error('[cuas-profiles] GET /cuas-profiles/:id error:', error);
       res.status(500).json({ error: 'Failed to fetch CUAS profile' });
     }
   });
@@ -64,6 +66,7 @@ export function cuasProfileRoutes(): Router {
       const profile = createCUASProfile(profileData);
       res.status(201).json(profile);
     } catch (error) {
+      console.error('[cuas-profiles] POST /cuas-profiles error:', error);
       res.status(500).json({ error: 'Failed to create CUAS profile' });
     }
   });
@@ -80,6 +83,7 @@ export function cuasProfileRoutes(): Router {
 
       res.json(profile);
     } catch (error) {
+      console.error('[cuas-profiles] PUT /cuas-profiles/:id error:', error);
       res.status(500).json({ error: 'Failed to update CUAS profile' });
     }
   });
@@ -94,6 +98,7 @@ export function cuasProfileRoutes(): Router {
 
       res.json({ success: true });
     } catch (error) {
+      console.error('[cuas-profiles] DELETE /cuas-profiles/:id error:', error);
       res.status(500).json({ error: 'Failed to delete CUAS profile' });
     }
   });
@@ -115,6 +120,7 @@ export function cuasProfileRoutes(): Router {
 
       res.json(profile);
     } catch (error) {
+      console.error('[cuas-profiles] POST /cuas-profiles/:id/update-measured error:', error);
       res.status(500).json({ error: 'Failed to update measured performance' });
     }
   });
