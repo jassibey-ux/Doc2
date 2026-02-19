@@ -894,6 +894,11 @@ class EngagementJamBurst(Base):
     emitter_lon = Column(Float)
     emitter_heading_deg = Column(Float)
 
+    # Jam signal parameters
+    frequency_mhz = Column(Float)       # Primary jam frequency in MHz
+    power_dbm = Column(Float)           # Transmit power in dBm
+    bandwidth_mhz = Column(Float)       # Jam signal bandwidth in MHz
+
     # Per-target snapshots as JSON
     # [{tracker_id, lat, lon, range_m, bearing_deg, gps_status}]
     target_snapshots = Column(JSONType)

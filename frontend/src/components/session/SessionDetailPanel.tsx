@@ -7,10 +7,11 @@
  * 3. CUAS detail (CUAS clicked) - profile specs, jam history
  */
 
-import React, { useState } from 'react';
-import { X, Navigation, Crosshair } from 'lucide-react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { X, Navigation, Crosshair, Zap, ZapOff, XCircle } from 'lucide-react';
 import type { DroneSummary } from '../../types/drone';
-import type { CUASPlacement, CUASProfile, Engagement } from '../../types/workflow';
+import type { CUASPlacement, CUASProfile, Engagement, JamBurst, TrackerAssignment } from '../../types/workflow';
+import type { JamOnParams } from '../../contexts/TestSessionPhaseContext';
 import StreamingLogPanel from '../table/StreamingLogPanel';
 import type { TelemetryRow } from '../table/types';
 
@@ -46,6 +47,15 @@ interface SessionDetailPanelProps {
 
   // Engagement data for streaming log
   activeEngagements?: Map<string, Engagement>;
+
+  // CUAS engagement/jam controls
+  activeBursts?: Map<string, JamBurst>;
+  isLive?: boolean;
+  trackerAssignments?: TrackerAssignment[];
+  onCuasEngage?: (cuasPlacementId: string, trackerIds: string[]) => void;
+  onCuasJamOn?: (engagementId: string, params?: JamOnParams) => void;
+  onCuasJamOff?: (engagementId: string) => void;
+  onCuasDisengage?: (engagementId: string) => void;
 }
 
 const PANEL_WIDTH = 320;
@@ -65,6 +75,13 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
   sessionTrackerIds,
   onLogRowClick,
   activeEngagements,
+  activeBursts,
+  isLive,
+  trackerAssignments,
+  onCuasEngage,
+  onCuasJamOn,
+  onCuasJamOff,
+  onCuasDisengage,
 }) => {
   if (!context) return null;
 
@@ -111,6 +128,14 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
           isJamming={cuasJamStates.get(context.cuasId) ?? false}
           onClose={onClose}
           tacticalMode={tacticalMode}
+          activeEngagements={activeEngagements}
+          activeBursts={activeBursts}
+          isLive={isLive}
+          trackerAssignments={trackerAssignments}
+          onCuasEngage={onCuasEngage}
+          onCuasJamOn={onCuasJamOn}
+          onCuasJamOff={onCuasJamOff}
+          onCuasDisengage={onCuasDisengage}
         />
       )}
       {context.type === 'log' && (
@@ -414,8 +439,109 @@ const CuasDetail: React.FC<{
   isJamming: boolean;
   onClose: () => void;
   tacticalMode: boolean;
-}> = ({ placement, profiles, isJamming, onClose, tacticalMode }) => {
+  activeEngagements?: Map<string, Engagement>;
+  activeBursts?: Map<string, JamBurst>;
+  isLive?: boolean;
+  trackerAssignments?: TrackerAssignment[];
+  onCuasEngage?: (cuasPlacementId: string, trackerIds: string[]) => void;
+  onCuasJamOn?: (engagementId: string, params?: JamOnParams) => void;
+  onCuasJamOff?: (engagementId: string) => void;
+  onCuasDisengage?: (engagementId: string) => void;
+}> = ({
+  placement, profiles, isJamming, onClose, tacticalMode,
+  activeEngagements, activeBursts, isLive,
+  trackerAssignments, onCuasEngage, onCuasJamOn, onCuasJamOff, onCuasDisengage,
+}) => {
   const dimColor = tacticalMode ? 'rgba(74,222,128,0.5)' : '#6b7280';
+
+  // Local UI state
+  const [showTrackerPicker, setShowTrackerPicker] = useState(false);
+  const [selectedTrackerIds, setSelectedTrackerIds] = useState<string[]>([]);
+  const [showJamForm, setShowJamForm] = useState(false);
+  const [jamParams, setJamParams] = useState<JamOnParams>({});
+  const [engageLoading, setEngageLoading] = useState(false);
+  const [jamLoading, setJamLoading] = useState(false);
+
+  // Elapsed timer for active burst
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Find engagement for this CUAS placement
+  const cuasEngagement = useMemo(() => {
+    if (!activeEngagements || !placement) return undefined;
+    for (const eng of activeEngagements.values()) {
+      if (eng.cuas_placement_id === placement.id) return eng;
+    }
+    return undefined;
+  }, [activeEngagements, placement]);
+
+  // Find active burst for engagement
+  const activeBurst = useMemo(() => {
+    if (!cuasEngagement || !activeBursts) return undefined;
+    return activeBursts.get(cuasEngagement.id);
+  }, [cuasEngagement, activeBursts]);
+
+  const hasActiveBurst = !!activeBurst;
+
+  // Elapsed timer for active burst
+  useEffect(() => {
+    if (activeBurst?.jam_on_at) {
+      const start = new Date(activeBurst.jam_on_at).getTime();
+      const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000));
+      tick();
+      timerRef.current = setInterval(tick, 1000);
+      return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    } else {
+      setElapsed(0);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  }, [activeBurst?.jam_on_at]);
+
+  // Reset UI state when engagement changes
+  useEffect(() => {
+    setShowTrackerPicker(false);
+    setSelectedTrackerIds([]);
+    setShowJamForm(false);
+    setJamParams({});
+  }, [cuasEngagement?.id]);
+
+  const handleToggleTracker = useCallback((trackerId: string) => {
+    setSelectedTrackerIds(prev =>
+      prev.includes(trackerId)
+        ? prev.filter(id => id !== trackerId)
+        : [...prev, trackerId]
+    );
+  }, []);
+
+  const handleConfirmEngage = useCallback(async () => {
+    if (!placement || selectedTrackerIds.length === 0 || !onCuasEngage) return;
+    setEngageLoading(true);
+    try {
+      await onCuasEngage(placement.id, selectedTrackerIds);
+      setShowTrackerPicker(false);
+      setSelectedTrackerIds([]);
+    } finally {
+      setEngageLoading(false);
+    }
+  }, [placement, selectedTrackerIds, onCuasEngage]);
+
+  const handleConfirmJam = useCallback(async () => {
+    if (!cuasEngagement || !onCuasJamOn) return;
+    setJamLoading(true);
+    try {
+      await onCuasJamOn(cuasEngagement.id, jamParams);
+      setShowJamForm(false);
+      setJamParams({});
+    } finally {
+      setJamLoading(false);
+    }
+  }, [cuasEngagement, jamParams, onCuasJamOn]);
+
+  const formatElapsed = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
 
   if (!placement) {
     return (
@@ -480,8 +606,307 @@ const CuasDetail: React.FC<{
           <TelemetryItem label="Height AGL" value={`${placement.height_agl_m}m`} tacticalMode={tacticalMode} />
           <TelemetryItem label="Orientation" value={`${placement.orientation_deg}°`} tacticalMode={tacticalMode} />
         </div>
+
+        {/* ─── Actions ─────────────────────────────────────────────────── */}
+        {isLive && (
+          <>
+            <SectionLabel tacticalMode={tacticalMode} style={{ marginTop: 8 }}>Actions</SectionLabel>
+
+            {/* State A: No active engagement */}
+            {!cuasEngagement && (
+              <>
+                {!showTrackerPicker ? (
+                  <button
+                    onClick={() => setShowTrackerPicker(true)}
+                    style={{
+                      width: '100%', padding: '8px 12px', borderRadius: 6,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)',
+                      color: '#22c55e', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    <Crosshair size={14} /> Engage
+                  </button>
+                ) : (
+                  <div style={{
+                    border: `1px solid ${tacticalMode ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.1)'}`,
+                    borderRadius: 6, padding: 10, marginBottom: 8,
+                    background: tacticalMode ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.03)',
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: dimColor, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Select Targets
+                    </div>
+                    {(!trackerAssignments || trackerAssignments.length === 0) ? (
+                      <div style={{ fontSize: 11, color: dimColor, fontStyle: 'italic' }}>No trackers assigned</div>
+                    ) : (
+                      trackerAssignments.map(ta => (
+                        <label
+                          key={ta.tracker_id}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0',
+                            cursor: 'pointer', fontSize: 12, color: tacticalMode ? '#4ade80' : '#d1d5db',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedTrackerIds.includes(ta.tracker_id)}
+                            onChange={() => handleToggleTracker(ta.tracker_id)}
+                            style={{ accentColor: '#22c55e' }}
+                          />
+                          <span style={{
+                            width: 8, height: 8, borderRadius: '50%',
+                            background: ta.session_color || '#666', flexShrink: 0,
+                          }} />
+                          <span style={{ fontFamily: 'monospace', fontSize: 11 }}>
+                            {ta.tracker_id}
+                          </span>
+                        </label>
+                      ))
+                    )}
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      <button
+                        onClick={handleConfirmEngage}
+                        disabled={selectedTrackerIds.length === 0 || engageLoading}
+                        style={{
+                          flex: 1, padding: '6px 10px', borderRadius: 5,
+                          background: selectedTrackerIds.length > 0 ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.05)',
+                          border: `1px solid ${selectedTrackerIds.length > 0 ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                          color: selectedTrackerIds.length > 0 ? '#22c55e' : '#555',
+                          fontSize: 11, fontWeight: 600, cursor: selectedTrackerIds.length > 0 ? 'pointer' : 'not-allowed',
+                          opacity: engageLoading ? 0.6 : 1,
+                        }}
+                      >
+                        {engageLoading ? 'Engaging...' : `Confirm Engage (${selectedTrackerIds.length})`}
+                      </button>
+                      <button
+                        onClick={() => { setShowTrackerPicker(false); setSelectedTrackerIds([]); }}
+                        style={{
+                          padding: '6px 10px', borderRadius: 5,
+                          background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                          color: '#888', fontSize: 11, cursor: 'pointer',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* State B: Active engagement, no jam burst */}
+            {cuasEngagement && !hasActiveBurst && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* Engagement info badge */}
+                <div style={{
+                  padding: '6px 10px', borderRadius: 6,
+                  background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.3)',
+                  fontSize: 11, color: '#22d3ee', display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <Crosshair size={12} />
+                  Engaged: {cuasEngagement.targets?.length ?? 0} target(s)
+                </div>
+
+                {/* Jam On button / form */}
+                {!showJamForm ? (
+                  <button
+                    onClick={() => setShowJamForm(true)}
+                    style={{
+                      width: '100%', padding: '8px 12px', borderRadius: 6,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
+                      color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    <Zap size={14} /> Jam On
+                  </button>
+                ) : (
+                  <div style={{
+                    border: `1px solid ${tacticalMode ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.15)'}`,
+                    borderRadius: 6, padding: 10,
+                    background: tacticalMode ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.03)',
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: dimColor, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Jam Parameters
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <JamParamInput
+                        label="Frequency (MHz)"
+                        placeholder="e.g. 2400"
+                        value={jamParams.frequency_mhz}
+                        onChange={v => setJamParams(p => ({ ...p, frequency_mhz: v }))}
+                        tacticalMode={tacticalMode}
+                      />
+                      <JamParamInput
+                        label="Power (dBm)"
+                        placeholder="e.g. 30"
+                        value={jamParams.power_dbm}
+                        onChange={v => setJamParams(p => ({ ...p, power_dbm: v }))}
+                        tacticalMode={tacticalMode}
+                      />
+                      <JamParamInput
+                        label="Bandwidth (MHz)"
+                        placeholder="e.g. 20"
+                        value={jamParams.bandwidth_mhz}
+                        onChange={v => setJamParams(p => ({ ...p, bandwidth_mhz: v }))}
+                        tacticalMode={tacticalMode}
+                      />
+                      <div>
+                        <div style={{ fontSize: 10, color: dimColor, marginBottom: 2 }}>Notes</div>
+                        <input
+                          type="text"
+                          placeholder="Optional notes..."
+                          value={jamParams.notes ?? ''}
+                          onChange={e => setJamParams(p => ({ ...p, notes: e.target.value || undefined }))}
+                          style={{
+                            width: '100%', padding: '5px 8px', borderRadius: 4,
+                            background: tacticalMode ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.3)',
+                            border: `1px solid ${tacticalMode ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.1)'}`,
+                            color: tacticalMode ? '#4ade80' : '#e5e7eb',
+                            fontSize: 11, fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      <button
+                        onClick={handleConfirmJam}
+                        disabled={jamLoading}
+                        style={{
+                          flex: 1, padding: '6px 10px', borderRadius: 5,
+                          background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.5)',
+                          color: '#ef4444', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          opacity: jamLoading ? 0.6 : 1,
+                        }}
+                      >
+                        {jamLoading ? 'Starting...' : 'Confirm Jam'}
+                      </button>
+                      <button
+                        onClick={() => { setShowJamForm(false); setJamParams({}); }}
+                        style={{
+                          padding: '6px 10px', borderRadius: 5,
+                          background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                          color: '#888', fontSize: 11, cursor: 'pointer',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Disengage button */}
+                <button
+                  onClick={() => cuasEngagement && onCuasDisengage?.(cuasEngagement.id)}
+                  style={{
+                    width: '100%', padding: '6px 12px', borderRadius: 6,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    background: 'transparent', border: `1px solid ${tacticalMode ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.1)'}`,
+                    color: dimColor, fontSize: 11, cursor: 'pointer',
+                  }}
+                >
+                  <XCircle size={13} /> Disengage
+                </button>
+              </div>
+            )}
+
+            {/* State C: Active engagement + active burst */}
+            {cuasEngagement && hasActiveBurst && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* JAM ACTIVE indicator */}
+                <div style={{
+                  padding: '8px 10px', borderRadius: 6,
+                  background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
+                  animation: 'pulse-live 1.5s ease-in-out infinite',
+                }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', letterSpacing: 0.5 }}>
+                      JAM ACTIVE
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#ef4444', fontFamily: 'monospace' }}>
+                      {formatElapsed(elapsed)}
+                    </span>
+                  </div>
+                  {/* Show burst params if set */}
+                  {(activeBurst!.frequency_mhz || activeBurst!.power_dbm || activeBurst!.bandwidth_mhz) && (
+                    <div style={{
+                      fontSize: 10, color: 'rgba(239,68,68,0.7)', fontFamily: 'monospace', marginTop: 4,
+                    }}>
+                      {[
+                        activeBurst!.frequency_mhz && `${activeBurst!.frequency_mhz} MHz`,
+                        activeBurst!.power_dbm && `${activeBurst!.power_dbm} dBm`,
+                        activeBurst!.bandwidth_mhz && `${activeBurst!.bandwidth_mhz} MHz BW`,
+                      ].filter(Boolean).join(' / ')}
+                    </div>
+                  )}
+                </div>
+
+                {/* Jam Off button */}
+                <button
+                  onClick={() => cuasEngagement && onCuasJamOff?.(cuasEngagement.id)}
+                  style={{
+                    width: '100%', padding: '8px 12px', borderRadius: 6,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)',
+                    color: '#f59e0b', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  <ZapOff size={14} /> Jam Off
+                </button>
+
+                {/* Disengage button */}
+                <button
+                  onClick={() => cuasEngagement && onCuasDisengage?.(cuasEngagement.id)}
+                  style={{
+                    width: '100%', padding: '6px 12px', borderRadius: 6,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    background: 'transparent', border: `1px solid ${tacticalMode ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.1)'}`,
+                    color: dimColor, fontSize: 11, cursor: 'pointer',
+                  }}
+                >
+                  <XCircle size={13} /> Disengage
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </>
+  );
+};
+
+// ─── Jam Parameter Input ──────────────────────────────────────────────────────
+
+const JamParamInput: React.FC<{
+  label: string;
+  placeholder: string;
+  value: number | undefined;
+  onChange: (value: number | undefined) => void;
+  tacticalMode: boolean;
+}> = ({ label, placeholder, value, onChange, tacticalMode }) => {
+  const dimColor = tacticalMode ? 'rgba(74,222,128,0.5)' : '#6b7280';
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: dimColor, marginBottom: 2 }}>{label}</div>
+      <input
+        type="number"
+        placeholder={placeholder}
+        value={value ?? ''}
+        onChange={e => {
+          const v = e.target.value;
+          onChange(v === '' ? undefined : parseFloat(v));
+        }}
+        style={{
+          width: '100%', padding: '5px 8px', borderRadius: 4,
+          background: tacticalMode ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.3)',
+          border: `1px solid ${tacticalMode ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.1)'}`,
+          color: tacticalMode ? '#4ade80' : '#e5e7eb',
+          fontSize: 11, fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box',
+        }}
+      />
+    </div>
   );
 };
 

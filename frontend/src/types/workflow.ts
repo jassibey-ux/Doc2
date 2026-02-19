@@ -355,6 +355,9 @@ export interface JamBurst {
   emitter_lat?: number;
   emitter_lon?: number;
   emitter_heading_deg?: number;
+  frequency_mhz?: number;
+  power_dbm?: number;
+  bandwidth_mhz?: number;
   target_snapshots?: JamBurstTargetSnapshot[];
   gps_denial_detected: boolean;
   denial_onset_at?: string;

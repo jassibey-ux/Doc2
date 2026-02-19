@@ -21,6 +21,7 @@ import { APIProvider } from '@vis.gl/react-google-maps';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useWorkflow } from '../../contexts/WorkflowContext';
 import { useTestSessionPhase } from '../../contexts/TestSessionPhaseContext';
+import type { JamOnParams } from '../../contexts/TestSessionPhaseContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useSessionData } from './hooks/useSessionData';
 import { useSessionAlerts } from './hooks/useSessionAlerts';
@@ -57,7 +58,7 @@ const SessionPage: React.FC = () => {
     cuasJamStates, toggleJamState, loadSessionById,
     engagements, activeEngagements,
     quickEngage, createEngagement, engage, disengage,
-    activeBursts,
+    activeBursts, jamOn, jamOff,
   } = useTestSessionPhase();
 
   // Centralized filtered data
@@ -251,6 +252,51 @@ const SessionPage: React.FC = () => {
     }
   }, [activeEngagements, disengage, showToast]);
 
+  // ─── CUAS detail panel engagement/jam handlers ─────────────────────────────
+
+  const handleCuasEngage = useCallback(async (cuasPlacementId: string, selectedTrackerIds: string[]) => {
+    try {
+      const engagement = await createEngagement(cuasPlacementId, selectedTrackerIds);
+      if (engagement) {
+        await engage(engagement.id);
+        showToast('success', `Engaged ${selectedTrackerIds.length} target(s)`);
+      }
+    } catch {
+      showToast('error', 'Failed to create engagement');
+    }
+  }, [createEngagement, engage, showToast]);
+
+  const handleCuasJamOn = useCallback(async (engagementId: string, params?: JamOnParams) => {
+    try {
+      await jamOn(engagementId, params);
+    } catch {
+      showToast('error', 'Failed to start jam burst');
+    }
+  }, [jamOn, showToast]);
+
+  const handleCuasJamOff = useCallback(async (engagementId: string) => {
+    try {
+      await jamOff(engagementId);
+    } catch {
+      showToast('error', 'Failed to stop jam burst');
+    }
+  }, [jamOff, showToast]);
+
+  const handleCuasDisengage = useCallback(async (engagementId: string) => {
+    try {
+      const result = await disengage(engagementId);
+      if (result?.metrics) {
+        const tte = result.metrics.time_to_effect_s;
+        showToast('success', `Disengaged — TTE: ${tte ? tte.toFixed(1) + 's' : '--'}`);
+      } else {
+        showToast('success', 'Disengaged');
+      }
+      setDetailContext(null);
+    } catch {
+      showToast('error', 'Failed to disengage');
+    }
+  }, [disengage, showToast]);
+
   const handleMarkEvent = useCallback(async (type: string, note?: string) => {
     if (!activeSession) return;
     await addEvent(activeSession.id, {
@@ -427,6 +473,13 @@ const SessionPage: React.FC = () => {
             cuasJamStates={cuasJamStates}
             sessionTrackerIds={sessionTrackerIds}
             activeEngagements={activeEngagements}
+            activeBursts={activeBursts}
+            isLive={isLive}
+            trackerAssignments={activeSession?.tracker_assignments}
+            onCuasEngage={handleCuasEngage}
+            onCuasJamOn={handleCuasJamOn}
+            onCuasJamOff={handleCuasJamOff}
+            onCuasDisengage={handleCuasDisengage}
             onLogRowClick={(row) => {
               if (row.lat != null && row.lon != null) {
                 mapRef.current?.flyTo(row.lat, row.lon, row.alt_m ?? 50);

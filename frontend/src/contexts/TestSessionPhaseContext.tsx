@@ -36,6 +36,14 @@ export interface WizardSessionData {
 // CUAS jam states during active session
 export type CUASJamStates = Map<string, boolean>;
 
+// Jam-on parameters (sent as JSON body to /jam-on)
+export interface JamOnParams {
+  frequency_mhz?: number;
+  power_dbm?: number;
+  bandwidth_mhz?: number;
+  notes?: string;
+}
+
 // Context type
 interface TestSessionPhaseContextType {
   // Current phase
@@ -89,7 +97,7 @@ interface TestSessionPhaseContextType {
 
   // Jam burst controls
   activeBursts: Map<string, JamBurst>;
-  jamOn: (engagementId: string) => Promise<JamBurst | null>;
+  jamOn: (engagementId: string, params?: JamOnParams) => Promise<JamBurst | null>;
   jamOff: (engagementId: string) => Promise<JamBurst | null>;
 
   // Session actor controls
@@ -873,12 +881,12 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
   }, [engagements, refreshEngagements, setJamState]);
 
   // Jam burst controls
-  const jamOn = useCallback(async (engagementId: string): Promise<JamBurst | null> => {
+  const jamOn = useCallback(async (engagementId: string, params?: JamOnParams): Promise<JamBurst | null> => {
     try {
       const response = await fetch(`/api/v2/engagements/${engagementId}/jam-on`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: '{}',
+        body: JSON.stringify(params ?? {}),
       });
       if (!response.ok) throw new Error('Failed to start jam burst');
       const burst: JamBurst = await response.json();

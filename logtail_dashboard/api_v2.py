@@ -443,6 +443,9 @@ def burst_to_dict(b: EngagementJamBurst) -> Dict[str, Any]:
         "emitter_lat": b.emitter_lat,
         "emitter_lon": b.emitter_lon,
         "emitter_heading_deg": b.emitter_heading_deg,
+        "frequency_mhz": b.frequency_mhz,
+        "power_dbm": b.power_dbm,
+        "bandwidth_mhz": b.bandwidth_mhz,
         "target_snapshots": b.target_snapshots,
         "gps_denial_detected": b.gps_denial_detected,
         "denial_onset_at": b.denial_onset_at.isoformat() if b.denial_onset_at else None,
@@ -2360,9 +2363,16 @@ async def get_engagement_summary(
 # Jam Burst Endpoints
 # =============================================================================
 
+class JamOnRequest(BaseModel):
+    frequency_mhz: Optional[float] = None
+    power_dbm: Optional[float] = None
+    bandwidth_mhz: Optional[float] = None
+    notes: Optional[str] = None
+
 @router.post("/engagements/{engagement_id}/jam-on")
 async def jam_on(
     engagement_id: str,
+    body: Optional[JamOnRequest] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Open a new jam burst. Engagement must be active with no open burst."""
@@ -2432,7 +2442,7 @@ async def jam_on(
         target_snapshots.append(snapshot)
 
     # Create burst
-    burst = await eng_repo.create_burst({
+    burst_data = {
         "id": generate_uuid(),
         "engagement_id": engagement_id,
         "burst_seq": max_seq + 1,
@@ -2442,7 +2452,17 @@ async def jam_on(
         "emitter_heading_deg": emitter_heading,
         "target_snapshots": target_snapshots,
         "source": "live",
-    })
+    }
+    if body:
+        if body.frequency_mhz is not None:
+            burst_data["frequency_mhz"] = body.frequency_mhz
+        if body.power_dbm is not None:
+            burst_data["power_dbm"] = body.power_dbm
+        if body.bandwidth_mhz is not None:
+            burst_data["bandwidth_mhz"] = body.bandwidth_mhz
+        if body.notes is not None:
+            burst_data["notes"] = body.notes
+    burst = await eng_repo.create_burst(burst_data)
 
     # Create jam_on event
     event = TestEvent(
@@ -2454,7 +2474,10 @@ async def jam_on(
         cuas_id=engagement.cuas_placement.cuas_profile_id if engagement.cuas_placement else None,
         engagement_id=engagement.id,
         burst_id=burst.id,
-        note=f"Burst #{max_seq + 1} started",
+        note=f"Burst #{max_seq + 1} started"
+             + (f" @ {body.frequency_mhz} MHz" if body and body.frequency_mhz else "")
+             + (f" / {body.power_dbm} dBm" if body and body.power_dbm else "")
+             + (f" / {body.bandwidth_mhz} MHz BW" if body and body.bandwidth_mhz else ""),
     )
     db.add(event)
 
