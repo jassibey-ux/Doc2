@@ -312,21 +312,18 @@ export default function MapView() {
       let siteId = sessionData.siteId;
       if (!siteId && sessionData.newSiteName) {
         console.log('[SESSION CREATE] Step 1b: Creating new site:', sessionData.newSiteName);
-        // v2 SiteCreateRequest expects flat center_lat/center_lon
         const newSite = await createSite({
           name: sessionData.newSiteName,
           environment_type: 'open_field',
           boundary_polygon: [],
-          center_lat: mapCenter.lat,
-          center_lon: mapCenter.lon,
+          center: { lat: mapCenter.lat, lon: mapCenter.lon },
           markers: [],
           zones: [],
-        } as any);
+        });
         siteId = newSite.id;
         console.log('[SESSION CREATE] Step 1b: Site created:', siteId);
       }
 
-      // Build tracker assignments for v2 API (flat format)
       const trackerAssignments = sessionData.droneAssignments.map(a => ({
         tracker_id: a.trackerId,
         drone_profile_id: a.droneProfileId,
@@ -334,11 +331,9 @@ export default function MapView() {
         target_altitude_m: a.targetAltitude,
       }));
 
-      // Build CUAS placements for v2 API (flat lat/lon)
       const cuasPlacements = sessionData.cuasPlacements.map(p => ({
         cuas_profile_id: p.cuasProfileId,
-        lat: p.position.lat,
-        lon: p.position.lon,
+        position: { lat: p.position.lat, lon: p.position.lon },
         height_agl_m: p.heightAgl,
         orientation_deg: p.orientation,
         active: false,

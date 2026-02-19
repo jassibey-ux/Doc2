@@ -361,7 +361,7 @@ export default function WizardStepReview({
                           marginLeft: 'auto',
                         }}
                       >
-                        {placement.position.lat.toFixed(5)}, {placement.position.lon.toFixed(5)}
+                        {placement.position?.lat?.toFixed(5) ?? '?'}, {placement.position?.lon?.toFixed(5) ?? '?'}
                       </span>
                     </div>
                   );

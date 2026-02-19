@@ -299,7 +299,7 @@ export default function SessionSetupWizard({
   const viewer3DCuasPlacements = state.cuasPlacements.map(p => ({
     id: p.id,
     cuas_profile_id: p.cuasProfileId,
-    position: { lat: p.position.lat, lon: p.position.lon },
+    position: { lat: p.position?.lat ?? 0, lon: p.position?.lon ?? 0 },
     height_agl_m: p.heightAgl,
     orientation_deg: p.orientation,
     active: true,
