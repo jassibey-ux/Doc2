@@ -27,12 +27,12 @@ interface CuasLayerOptions {
 
 /** CUAS type to color mapping */
 const CUAS_COLORS: Record<string, string> = {
-  jammer: '#ef4444',
-  rf_sensor: '#3b82f6',
-  radar: '#f59e0b',
-  eo_ir_camera: '#8b5cf6',
-  acoustic: '#22c55e',
-  combined: '#ec4899',
+  jammer: '#e040fb',
+  rf_sensor: '#00bcd4',
+  radar: '#009688',
+  eo_ir_camera: '#26c6da',
+  acoustic: '#00e5ff',
+  combined: '#0097a7',
 };
 
 /**
@@ -76,7 +76,7 @@ export function renderCuasLayer(
     const baseColor = CUAS_COLORS[cuasType] ?? '#888888';
 
     // Marker color: red if jamming, base color otherwise, bright if engagement target
-    const markerColor = isJamming ? '#ef4444' : isEngagementTarget ? '#fbbf24' : baseColor;
+    const markerColor = isJamming ? '#e040fb' : isEngagementTarget ? '#fbbf24' : baseColor;
     const isSelected = selectedCuasId === placement.id;
 
     // Render 3D GLB model if available (follows DroneMarkerLayer3D pattern)
@@ -131,9 +131,13 @@ export function renderCuasLayer(
 
     // Create a PinElement for the marker glyph
     try {
+      const glyphEl = document.createElement('span');
+      glyphEl.textContent = '\u26E8';
+      glyphEl.style.fontSize = '14px';
       const pin = new (window as any).google.maps.marker.PinElement({
         background: markerColor,
-        borderColor: isJamming ? '#991b1b' : '#333',
+        borderColor: isJamming ? '#880e4f' : '#004d40',
+        glyph: glyphEl,
         glyphColor: '#fff',
         scale: isEngagementTarget ? 1.4 : 1.0,
       });
@@ -163,9 +167,9 @@ export function renderCuasLayer(
       }));
       polygon.altitudeMode = 'RELATIVE_TO_MESH';
       polygon.fillColor = isJamming
-        ? 'rgba(239, 68, 68, 0.12)'
+        ? 'rgba(224, 64, 251, 0.12)'
         : `${baseColor}1a`; // Add low alpha hex
-      polygon.strokeColor = isJamming ? '#ef4444' : baseColor;
+      polygon.strokeColor = isJamming ? '#e040fb' : baseColor;
       polygon.strokeWidth = 1;
       polygon.extruded = false;
       mapEl.append(polygon);
@@ -189,7 +193,7 @@ export function renderCuasLayer(
             altitude: (placement.height_agl_m ?? 2) + 1,
           }));
           ringLine.altitudeMode = 'RELATIVE_TO_MESH';
-          ringLine.strokeColor = isJamming ? 'rgba(239, 68, 68, 0.4)' : `${baseColor}66`;
+          ringLine.strokeColor = isJamming ? 'rgba(224, 64, 251, 0.4)' : `${baseColor}66`;
           ringLine.strokeWidth = 1;
           mapEl.append(ringLine);
         }

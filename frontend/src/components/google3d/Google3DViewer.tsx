@@ -103,7 +103,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
   const features = MODE_FEATURES[mode];
   const apiUsage = useApiUsageSafe();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [showLabelsInternal, setShowLabelsInternal] = useState(true);
+  const [showLabelsInternal, setShowLabelsInternal] = useState(false);
   // Use prop if provided (event mode), otherwise use internal state
   const showLabels = props.showLabels ?? showLabelsInternal;
 
@@ -478,11 +478,17 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
       {/* Map container */}
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 
-      {/* Controls Panel — top-left (non-event modes only; event mode uses CameraPresetsOverlay) */}
+      {/* Controls Panel — bottom-center toolbar (non-event modes only; event mode uses CameraPresetsOverlay) */}
       {isLoaded && (mode === 'live' || mode === 'replay' || mode === 'analysis') && (
         <div style={{
-          position: 'absolute', top: 8, left: 8,
-          display: 'flex', flexDirection: 'column', gap: 4,
+          position: 'absolute', bottom: 16, left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex', gap: 6,
+          padding: '6px 12px',
+          background: 'rgba(10, 15, 26, 0.85)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 10, zIndex: 10,
         }}>
           <ControlButton
             label={showLabels ? 'Labels: ON' : 'Labels: OFF'}

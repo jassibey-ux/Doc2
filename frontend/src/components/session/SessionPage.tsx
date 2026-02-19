@@ -35,6 +35,7 @@ import SessionQuickActions from './SessionQuickActions';
 import SessionMapArea from './SessionMapArea';
 import type { SessionMapAreaHandle } from './SessionMapArea';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import TimelineControl from '../TimelineControl';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
@@ -42,7 +43,12 @@ const SessionPage: React.FC = () => {
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId: string }>();
   const { showToast } = useToast();
-  const { currentTime, timelineStart } = useWebSocket();
+  const {
+    currentTime, setCurrentTime,
+    timelineStart, timelineEnd,
+    isLive: wsIsLive, setIsLive: wsSetIsLive,
+    timeRange, setTimeRange,
+  } = useWebSocket();
   const {
     selectedSite, cuasProfiles, droneProfiles, addEvent, sites, selectSite,
   } = useWorkflow();
@@ -437,6 +443,20 @@ const SessionPage: React.FC = () => {
             onNote={() => setShowNoteInput(true)}
           />
         </div>
+
+        {/* Timeline Control */}
+        <TimelineControl
+          isLive={wsIsLive}
+          setIsLive={wsSetIsLive}
+          timeRange={timeRange}
+          setTimeRange={setTimeRange}
+          currentTime={currentTime}
+          setCurrentTime={setCurrentTime}
+          timelineStart={timelineStart}
+          timelineEnd={timelineEnd}
+          connectionStatus={connectionStatus as 'connected' | 'disconnected' | 'connecting'}
+          engagements={engagements}
+        />
       </div>
     </APIProvider>
   );

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Settings, MonitorDot, MapPin, Zap, PlayCircle, HardDrive, BarChart3, Square, Activity, History, BookOpen, Shield } from 'lucide-react';
+import { Settings, MonitorDot, MapPin, Zap, PlayCircle, HardDrive, BarChart3, Square, Activity, History, BookOpen, Shield, FolderSearch } from 'lucide-react';
 import type { SessionPhase } from '../contexts/TestSessionPhaseContext';
 
 interface SidebarProps {
@@ -216,6 +216,20 @@ export default function Sidebar({
         }}
       >
         <History size={20} style={{ color: activePanel === 'replay' ? '#3b82f6' : undefined }} />
+      </button>
+
+      {/* Session Browser Button */}
+      <button
+        className="control-btn tooltip-btn"
+        data-tooltip="Session Browser"
+        aria-label="Session Browser"
+        onClick={() => navigate('/sessions')}
+        style={{
+          background: 'rgba(10, 15, 26, 0.85)',
+          borderColor: 'rgba(0, 150, 136, 0.4)',
+        }}
+      >
+        <FolderSearch size={20} style={{ color: '#009688' }} />
       </button>
 
       {/* Session Library Button - navigates to CRM dashboard */}
