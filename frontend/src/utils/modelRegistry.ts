@@ -152,3 +152,105 @@ export function getDroneModelOptions(): Array<{ id: string; label: string }> {
 export function getCUASModelOptions(): Array<{ id: string; label: string }> {
   return Object.values(CUAS_MODELS).map(m => ({ id: m.id, label: m.label }));
 }
+
+// ─── Vehicle Models ─────────────────────────────────────────────────────────
+
+export const VEHICLE_MODELS: Record<string, ModelAsset> = {
+  suv_response: {
+    id: 'suv_response',
+    label: 'SUV (Response)',
+    glbPath: '/models/vehicles/suv_response.glb',
+    thumbnailTopPath: '/models/thumbnails/vehicles/suv_response_top.png',
+    thumbnailProfilePath: '/models/thumbnails/vehicles/suv_response_profile.png',
+    scale: 1.0,
+    heightOffset: 0,
+  },
+  pickup_truck: {
+    id: 'pickup_truck',
+    label: 'Pickup Truck',
+    glbPath: '/models/vehicles/pickup_truck.glb',
+    thumbnailTopPath: '/models/thumbnails/vehicles/pickup_truck_top.png',
+    thumbnailProfilePath: '/models/thumbnails/vehicles/pickup_truck_profile.png',
+    scale: 1.0,
+    heightOffset: 0,
+  },
+  van_command: {
+    id: 'van_command',
+    label: 'Command Van',
+    glbPath: '/models/vehicles/van_command.glb',
+    thumbnailTopPath: '/models/thumbnails/vehicles/van_command_top.png',
+    thumbnailProfilePath: '/models/thumbnails/vehicles/van_command_profile.png',
+    scale: 1.0,
+    heightOffset: 0,
+  },
+  sedan_patrol: {
+    id: 'sedan_patrol',
+    label: 'Patrol Sedan',
+    glbPath: '/models/vehicles/sedan_patrol.glb',
+    thumbnailTopPath: '/models/thumbnails/vehicles/sedan_patrol_top.png',
+    thumbnailProfilePath: '/models/thumbnails/vehicles/sedan_patrol_profile.png',
+    scale: 1.0,
+    heightOffset: 0,
+  },
+};
+
+// ─── Equipment Models ───────────────────────────────────────────────────────
+
+export const EQUIPMENT_MODELS: Record<string, ModelAsset> = {
+  ground_station: {
+    id: 'ground_station',
+    label: 'Ground Control Station',
+    glbPath: '/models/equipment/ground_station.glb',
+    thumbnailTopPath: '/models/thumbnails/equipment/ground_station_top.png',
+    thumbnailProfilePath: '/models/thumbnails/equipment/ground_station_profile.png',
+    scale: 1.0,
+    heightOffset: 0,
+  },
+  antenna_tower: {
+    id: 'antenna_tower',
+    label: 'Antenna Tower',
+    glbPath: '/models/equipment/antenna_tower.glb',
+    thumbnailTopPath: '/models/thumbnails/equipment/antenna_tower_top.png',
+    thumbnailProfilePath: '/models/thumbnails/equipment/antenna_tower_profile.png',
+    scale: 1.0,
+    heightOffset: 0,
+  },
+  generator: {
+    id: 'generator',
+    label: 'Generator',
+    glbPath: '/models/equipment/generator.glb',
+    thumbnailTopPath: '/models/thumbnails/equipment/generator_top.png',
+    thumbnailProfilePath: '/models/thumbnails/equipment/generator_profile.png',
+    scale: 1.0,
+    heightOffset: 0,
+  },
+  barrier: {
+    id: 'barrier',
+    label: 'Jersey Barrier',
+    glbPath: '/models/equipment/barrier.glb',
+    thumbnailTopPath: '/models/thumbnails/equipment/barrier_top.png',
+    thumbnailProfilePath: '/models/thumbnails/equipment/barrier_profile.png',
+    scale: 1.0,
+    heightOffset: 0,
+  },
+};
+
+/** Look up vehicle model by ID */
+export function getVehicleModel(id: string): ModelAsset | null {
+  return VEHICLE_MODELS[id] ?? null;
+}
+
+/** Look up equipment model by ID */
+export function getEquipmentModel(id: string): ModelAsset | null {
+  return EQUIPMENT_MODELS[id] ?? null;
+}
+
+/** Get all available vehicle model IDs for dropdowns */
+export function getVehicleModelOptions(): Array<{ id: string; label: string }> {
+  return Object.values(VEHICLE_MODELS).map(m => ({ id: m.id, label: m.label }));
+}
+
+/** Get all available equipment model IDs for dropdowns */
+export function getEquipmentModelOptions(): Array<{ id: string; label: string }> {
+  return Object.values(EQUIPMENT_MODELS).map(m => ({ id: m.id, label: m.label }));
+}

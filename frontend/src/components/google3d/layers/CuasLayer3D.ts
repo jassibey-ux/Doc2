@@ -11,6 +11,7 @@ import circle from '@turf/circle';
 import type { CUASPlacement, CUASProfile } from '../../../types/workflow';
 import type { Map3DElementRef } from '../hooks/useGoogle3DMap';
 import { attachCuasClickHandler } from '../hooks/useGoogle3DClickHandler';
+import { CUAS_MODELS } from '../../../utils/modelRegistry';
 
 const CUAS_TAG = 'cuas-layer';
 
@@ -19,6 +20,7 @@ interface CuasLayerOptions {
   cuasProfiles?: CUASProfile[];
   cuasJamStates?: Map<string, boolean>;
   engagementModeCuasId?: string | null;
+  selectedCuasId?: string | null;
   showLabels?: boolean;
   onCuasClick?: (cuasPlacementId: string) => void;
 }
@@ -48,6 +50,7 @@ export function renderCuasLayer(
     cuasProfiles,
     cuasJamStates,
     engagementModeCuasId,
+    selectedCuasId,
     showLabels = true,
     onCuasClick,
   } = options;
@@ -56,7 +59,8 @@ export function renderCuasLayer(
     return () => cleanupCuasLayer(mapEl);
   }
 
-  const { Marker3DInteractiveElement, Polygon3DElement } = maps3dLib;
+  const { Marker3DInteractiveElement, Model3DInteractiveElement, Polygon3DElement } = maps3dLib;
+  const baseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) ?? '/';
 
   // Build profile lookup
   const profileMap = new Map<string, CUASProfile>();
@@ -73,8 +77,36 @@ export function renderCuasLayer(
 
     // Marker color: red if jamming, base color otherwise, bright if engagement target
     const markerColor = isJamming ? '#ef4444' : isEngagementTarget ? '#fbbf24' : baseColor;
+    const isSelected = selectedCuasId === placement.id;
 
-    // Create marker
+    // Render 3D GLB model if available (follows DroneMarkerLayer3D pattern)
+    if (Model3DInteractiveElement) {
+      const cuasAsset = CUAS_MODELS[cuasType];
+      if (cuasAsset) {
+        try {
+          const modelPath = `${baseUrl}${cuasAsset.glbPath.replace(/^\//, '')}`;
+          const model = new Model3DInteractiveElement({
+            src: modelPath,
+            position: {
+              lat: placement.position.lat,
+              lng: placement.position.lon,
+              altitude: placement.height_agl_m ?? 2,
+            },
+            altitudeMode: 'RELATIVE_TO_GROUND',
+            orientation: { heading: placement.orientation_deg ?? 0, tilt: 0, roll: 0 },
+            scale: isSelected ? (cuasAsset.scale * 12) : (cuasAsset.scale * 8),
+          });
+          model.setAttribute('data-layer', CUAS_TAG);
+          model.setAttribute('data-cuas-id', placement.id);
+          attachCuasClickHandler(model, placement.id, onCuasClick);
+          mapEl.append(model);
+        } catch {
+          // Model3DInteractiveElement may not be fully supported; fall through to marker
+        }
+      }
+    }
+
+    // Create marker (label/fallback — always rendered alongside 3D model)
     const marker = new Marker3DInteractiveElement();
     marker.setAttribute('data-layer', CUAS_TAG);
     marker.setAttribute('data-cuas-id', placement.id);
