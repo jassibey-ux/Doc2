@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { MapPin, Plus, Search, Check, Copy, ChevronDown, ChevronUp } from 'lucide-react';
-import { GlassPanel, GlassCard, GlassButton, GlassInput, Badge } from '../ui/GlassUI';
+import { Plus, Search, Copy, ChevronDown, ChevronUp } from 'lucide-react';
+import { GlassPanel, GlassButton, GlassInput } from '../ui/GlassUI';
+import SiteCard from '../site/SiteCard';
 import type { WizardState, WizardAction, CUASPlacementData } from './wizardTypes';
 import { TRACK_COLORS } from './wizardTypes';
 import type { SiteDefinition } from '../../types/workflow';
@@ -265,115 +266,31 @@ export default function WizardStepSite({ state, dispatch, sites }: WizardStepSit
         </div>
       )}
 
-      {/* Site List */}
+      {/* Site Cards */}
       {!state.isCreatingNewSite && (
         <div
           style={{
-            display: 'flex',
-            flexDirection: 'column',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
             gap: '8px',
-            maxHeight: '300px',
+            maxHeight: '320px',
             overflowY: 'auto',
           }}
         >
-          {filteredSites.map(site => {
-            const isSelected = state.selectedSiteId === site.id;
-            return (
-              <GlassCard
-                key={site.id}
-                onClick={() => handleSelectSite(site.id)}
-                style={{
-                  padding: '14px 16px',
-                  cursor: 'pointer',
-                  border: isSelected
-                    ? '1px solid #ff8c00'
-                    : '1px solid rgba(255, 255, 255, 0.1)',
-                  background: isSelected
-                    ? 'rgba(255, 140, 0, 0.1)'
-                    : 'rgba(255, 255, 255, 0.02)',
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '8px',
-                        background: isSelected
-                          ? 'rgba(255, 140, 0, 0.2)'
-                          : 'rgba(255, 255, 255, 0.05)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: isSelected ? '#ff8c00' : 'rgba(255, 255, 255, 0.5)',
-                      }}
-                    >
-                      <MapPin size={18} />
-                    </div>
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '14px',
-                          fontWeight: 500,
-                          color: '#fff',
-                        }}
-                      >
-                        {site.name}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          color: 'rgba(255, 255, 255, 0.5)',
-                          display: 'flex',
-                          gap: '8px',
-                          marginTop: '2px',
-                        }}
-                      >
-                        <span
-                          style={{
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            fontSize: '10px',
-                            textTransform: 'capitalize',
-                          }}
-                        >
-                          {site.environment_type || 'Unknown'}
-                        </span>
-                        {site.enhanced_3d && (
-                          <Badge color="green" size="sm">3D</Badge>
-                        )}
-                        {site.markers && site.markers.length > 0 && (
-                          <span>{site.markers.length} markers</span>
-                        )}
-                        {site.zones && site.zones.length > 0 && (
-                          <span>{site.zones.length} zones</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {isSelected && (
-                    <Check
-                      size={20}
-                      style={{ color: '#ff8c00' }}
-                    />
-                  )}
-                </div>
-              </GlassCard>
-            );
-          })}
+          {filteredSites.map(site => (
+            <SiteCard
+              key={site.id}
+              site={site}
+              selected={state.selectedSiteId === site.id}
+              compact
+              onClick={() => handleSelectSite(site.id)}
+            />
+          ))}
 
           {filteredSites.length === 0 && searchTerm && (
             <div
               style={{
+                gridColumn: '1 / -1',
                 padding: '24px',
                 textAlign: 'center',
                 color: 'rgba(255, 255, 255, 0.5)',
@@ -387,6 +304,7 @@ export default function WizardStepSite({ state, dispatch, sites }: WizardStepSit
           {sites.length === 0 && (
             <div
               style={{
+                gridColumn: '1 / -1',
                 padding: '24px',
                 textAlign: 'center',
                 color: 'rgba(255, 255, 255, 0.5)',

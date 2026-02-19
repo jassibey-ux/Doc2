@@ -35,19 +35,21 @@ import {
   Play,
   Square,
   Satellite,
+  Activity,
 } from 'lucide-react';
 import { GlassCard, GlassButton, Badge, GlassDivider } from './ui/GlassUI';
 import { useWorkflow } from '../contexts/WorkflowContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { pathService, ValidateResponse } from '../services/pathService';
 import { AlertMessage, TestEvent, EVENT_COLORS, AlertLevel } from '../types/workflow';
+import ApiUsageSection from './ApiUsageSection';
 
 interface UnifiedWorkspacePanelProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type TabId = 'alerts' | 'reports' | 'data-source';
+type TabId = 'alerts' | 'reports' | 'data-source' | 'api-usage';
 
 // Alert icons and colors
 const ALERT_ICONS: Record<AlertLevel, React.ReactNode> = {
@@ -406,6 +408,7 @@ export default function UnifiedWorkspacePanel({ isOpen, onClose }: UnifiedWorksp
     { id: 'alerts', label: 'Alerts', icon: <AlertTriangle size={14} />, badge: unacknowledgedAlerts.length },
     { id: 'reports', label: 'Reports', icon: <FileText size={14} /> },
     { id: 'data-source', label: 'Data Source', icon: <Database size={14} /> },
+    { id: 'api-usage', label: 'API Usage', icon: <Activity size={14} /> },
   ];
 
   // Debug logging
@@ -1074,6 +1077,13 @@ export default function UnifiedWorkspacePanel({ isOpen, onClose }: UnifiedWorksp
             >
               {isSaving ? 'Applying...' : 'Apply Changes'}
             </GlassButton>
+          </div>
+        )}
+
+        {/* ===== API USAGE TAB ===== */}
+        {activeTab === 'api-usage' && (
+          <div className="api-usage-tab-content">
+            <ApiUsageSection />
           </div>
         )}
       </div>

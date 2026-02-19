@@ -33,10 +33,17 @@ export default function WizardStepCUAS({
     const profile = cuasProfiles.find(p => p.id === profileId);
     if (!profile) return;
 
+    // Use mapCenter if meaningful, otherwise fall back to site center
+    const effectiveCenter = (mapCenter.lat !== 0 || mapCenter.lon !== 0)
+      ? mapCenter
+      : selectedSite?.center
+        ? { lat: selectedSite.center.lat, lon: selectedSite.center.lon }
+        : mapCenter;
+
     const newPlacement: CUASPlacementData = {
       id: generatePlacementId(),
       cuasProfileId: profileId,
-      position: { ...mapCenter },
+      position: { ...effectiveCenter },
       heightAgl: 0,
       orientation: 0,
     };

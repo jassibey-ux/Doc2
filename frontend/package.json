@@ -13,8 +13,13 @@
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.1",
     "@tmcw/togeojson": "^7.1.2",
+    "@turf/bearing": "^7.3.4",
+    "@turf/boolean-point-in-polygon": "^7.3.4",
+    "@turf/circle": "^7.3.4",
+    "@vis.gl/react-google-maps": "^1.7.1",
     "cesium": "^1.138.0",
     "hls.js": "^1.5.0",
+    "html2canvas": "^1.4.1",
     "lucide-react": "^0.400.0",
     "maplibre-gl": "^4.5.0",
     "mgrs": "^2.1.0",

@@ -1,7 +1,7 @@
 /**
  * Configuration Workspace Panel
  * Docked right-side panel that consolidates:
- * - Sites (from SiteDefinitionPanel)
+ * - Sites (gallery with 3D thumbnails)
  * - Drone Profiles (from DroneProfilePanel)
  * - CUAS Systems (from CUASProfilePanel)
  */
@@ -29,11 +29,13 @@ import {
   Camera,
   Layers,
   Settings,
-  Box,
 } from 'lucide-react';
 import { GlassCard, GlassButton, GlassInput, Badge, GlassDivider } from './ui/GlassUI';
-const Site3DViewer = lazy(() => import('./Site3DViewer'));
+const Google3DViewer = lazy(() => import('./google3d/Google3DViewer'));
+import { APIProvider } from '@vis.gl/react-google-maps';
 import { SiteReconViewer } from './SiteReconViewer';
+import SiteGallery from './site/SiteGallery';
+import SiteDetailPanel from './site/SiteDetailPanel';
 import { useWorkflow } from '../contexts/WorkflowContext';
 import {
   SiteDefinition,
@@ -146,7 +148,6 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
     deleteCUASProfile,
     // Site Recon
     siteReconCaptures,
-    loadSiteRecon,
     saveSiteReconImage,
   } = useWorkflow();
 
@@ -168,6 +169,7 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
   // ===== 3D / RECON STATE =====
   const [viewing3DSiteId, setViewing3DSiteId] = useState<string | null>(null);
   const [showReconViewer, setShowReconViewer] = useState<string | null>(null);
+  const [detailSiteId, setDetailSiteId] = useState<string | null>(null);
 
   // ===== SITES LOGIC =====
   useEffect(() => {
@@ -638,101 +640,40 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                   </GlassButton>
                 </div>
               </div>
+            ) : detailSiteId ? (
+              // Site Detail Panel
+              (() => {
+                const detailSite = sites.find(s => s.id === detailSiteId);
+                return detailSite ? (
+                  <SiteDetailPanel
+                    site={detailSite}
+                    onClose={() => setDetailSiteId(null)}
+                    onEdit={() => {
+                      handleSiteEdit(detailSite);
+                      setDetailSiteId(null);
+                    }}
+                    onDelete={() => {
+                      handleSiteDelete(detailSite);
+                      setDetailSiteId(null);
+                    }}
+                    onView3D={() => {
+                      setViewing3DSiteId(detailSite.id);
+                      setDetailSiteId(null);
+                    }}
+                  />
+                ) : null;
+              })()
             ) : (
-              // Site List
-              <div>
-                <GlassButton
-                  variant="primary"
-                  size="md"
-                  onClick={handleSiteNew}
-                  style={{ width: '100%', marginBottom: '12px' }}
-                >
-                  <Plus size={16} />
-                  New Site
-                </GlassButton>
-
-                {sites.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '24px', color: 'rgba(255,255,255,0.5)' }}>
-                    <MapPin size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
-                    <div style={{ fontSize: '13px' }}>No sites defined</div>
-                    <div style={{ fontSize: '11px', marginTop: '4px' }}>Create a site to get started</div>
-                  </div>
-                ) : (
-                  sites.map(site => (
-                    <GlassCard
-                      key={site.id}
-                      selected={selectedSite?.id === site.id}
-                      onClick={() => selectSite(site)}
-                      style={{ marginBottom: '8px' }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '13px', fontWeight: 500, color: '#fff', marginBottom: '4px' }}>
-                            {site.name}
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <Badge color="blue" size="sm">
-                              {site.environment_type.replace('_', ' ')}
-                            </Badge>
-                            {site.enhanced_3d && (
-                              <Badge color="green" size="sm">3D</Badge>
-                            )}
-                            {site.markers && site.markers.length > 0 && (
-                              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>
-                                {site.markers.length} markers
-                              </span>
-                            )}
-                            {site.zones && site.zones.length > 0 && (
-                              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>
-                                {site.zones.length} zones
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          {/* 3D View button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setViewing3DSiteId(site.id);
-                            }}
-                            title="3D View"
-                            style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px' }}
-                          >
-                            <Box size={14} />
-                          </button>
-                          {/* Recon button */}
-                          {site.recon_status === 'captured' && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                loadSiteRecon(site.id);
-                                setShowReconViewer(site.id);
-                              }}
-                              title="View Recon"
-                              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px' }}
-                            >
-                              <Camera size={14} />
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleSiteEdit(site); }}
-                            style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px' }}
-                          >
-                            <Edit3 size={14} />
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleSiteDelete(site); }}
-                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </GlassCard>
-                  ))
-                )}
-              </div>
+              // Site Gallery
+              <SiteGallery
+                sites={sites}
+                selectedSiteId={selectedSite?.id}
+                onSiteSelect={(site) => {
+                  selectSite(site);
+                  setDetailSiteId(site.id);
+                }}
+                onNewSite={handleSiteNew}
+              />
             )}
           </div>
         )}
@@ -1186,18 +1127,19 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
         return site3d ? (
           <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', color: '#fff' }}>Loading 3D Viewer...</div>}>
             <div style={{ position: 'fixed', inset: 0, zIndex: 3000 }}>
-              <Site3DViewer
-                site={site3d}
-                mode="preview"
-                tileMode={site3d.enhanced_3d ? 'google3d' : 'osm'}
-                initialCameraState={site3d.camera_state_3d}
-                onCaptureScreenshots={async (screenshots) => {
-                  for (const ss of screenshots) {
-                    await saveSiteReconImage(site3d.id, crypto.randomUUID(), ss.base64, ss.label, ss.cameraState);
-                  }
-                }}
-                onClose={() => setViewing3DSiteId(null)}
-              />
+              <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} version="alpha">
+                <Google3DViewer
+                  mode="preview"
+                  site={site3d}
+                  initialCameraState={site3d.camera_state_3d}
+                  onCaptureScreenshots={async (screenshots) => {
+                    for (const ss of screenshots) {
+                      await saveSiteReconImage(site3d.id, crypto.randomUUID(), ss.base64, ss.label, ss.cameraState);
+                    }
+                  }}
+                  onClose={() => setViewing3DSiteId(null)}
+                />
+              </APIProvider>
             </div>
           </Suspense>
         ) : null;
@@ -1213,9 +1155,6 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
               site={siteRecon}
               captures={captures}
               onEnhanceSite={() => {
-                if (showReconViewer) {
-                  updateSite(showReconViewer, { enhanced_3d: true });
-                }
                 setShowReconViewer(null);
                 setViewing3DSiteId(showReconViewer);
               }}

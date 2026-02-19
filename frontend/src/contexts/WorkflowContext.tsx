@@ -18,7 +18,7 @@ import {
   CameraState3D,
 } from '../types/workflow';
 
-// Drawing result passed from Map to SiteDefinitionPanel
+// Drawing result passed from Map to ConfigurationWorkspacePanel
 export interface DrawingResult {
   type: 'polygon' | 'marker' | 'zone';
   points: GeoPoint[];

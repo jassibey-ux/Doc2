@@ -22,14 +22,14 @@ import { SessionSetupWizard } from './SessionSetupWizard';
 import CUASControlPanel from './CUASControlPanel';
 import TrackLegend from './TrackLegend';
 import AnomalyAlertToast from './AnomalyAlertToast';
-import Map3DViewer from './Map3DViewer';
-import CesiumMap from './CesiumMap';
+import Google3DViewer from './google3d/Google3DViewer';
+import { APIProvider } from '@vis.gl/react-google-maps';
 import TerrainProfileChart from './TerrainProfileChart';
 import LinkBudgetPanel from './LinkBudgetPanel';
 import CoordinateBar from './CoordinateBar';
 import MapFileDropHandler from './MapFileDropHandler';
 import type { ImportedLayer } from './MapFileDropHandler';
-import { FileText, X, Globe, Map as MapIcon, Signal, Box, Target, MapPin, Globe2, Mountain, AlertTriangle, Radio, Ruler, Camera } from 'lucide-react';
+import { FileText, X, Globe, Map as MapIcon, Signal, Target, MapPin, Mountain, AlertTriangle, Radio, Ruler, Camera } from 'lucide-react';
 import { SiteReconViewer } from './SiteReconViewer';
 import type { GeoPoint } from '../types/workflow';
 
@@ -103,9 +103,8 @@ export default function MapView() {
   // Track quality visualization toggle
   const [showQualityColors, setShowQualityColors] = useState(false);
 
-  // 3D view toggle: 'none' | 'maplibre3d' | 'cesium'
-  const [show3DView, setShow3DView] = useState(false);
-  const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
+  // Google 3D Globe toggle (default: on)
+  const [showGoogle3DGlobe, setShowGoogle3DGlobe] = useState(true);
 
   // Wizard open state (for dual Cesium instance prevention)
   const [wizardIsOpen, setWizardIsOpen] = useState(false);
@@ -195,7 +194,7 @@ export default function MapView() {
 
   // Drawing mode handlers - simplified for mapbox-gl-draw
   const handleDrawingComplete = useCallback((points: GeoPoint[]) => {
-    // Store the result for SiteDefinitionPanel to consume
+    // Store the result for ConfigurationWorkspacePanel to consume
     setPendingDrawingResult({ type: 'polygon', points });
     setIsDrawingMode(false);
     setDrawingType(null);
@@ -519,74 +518,62 @@ export default function MapView() {
           onSetJamState={setJamState}
         />
 
-        {/* Main Map (wrapped in file drop handler) */}
-        <MapFileDropHandler onLayerImported={handleLayerImported}>
-          <MapComponent
-            drones={drones}
-            droneHistory={droneHistory}
-            selectedDroneId={selectedDroneId}
-            onDroneClick={handleDroneClick}
-            currentTime={currentTime}
-            timelineStart={timelineStart}
-            mapStyle={mapStyle}
-            showQualityColors={showQualityColors}
-            cuasPlacements={phaseActiveSession?.cuas_placements}
-            cuasProfiles={cuasProfiles}
-            cuasJamStates={cuasJamStates}
-            showCuasCoverage={currentPhase === 'active' || currentPhase === 'planning'}
-            selectedSite={selectedSite}
-            isDrawingMode={isDrawingMode}
-            onDrawingComplete={handleDrawingComplete}
-            placingCuasId={placingCuasId}
-            onCuasPlaced={handleCuasPlaced}
-            wizardCuasPlacements={wizardCuasPlacements}
-            wizardCuasProfiles={cuasProfiles}
-            onWizardCuasMoved={handleWizardCuasMoved}
-            flyToCenter={flyToCenter}
-            onFlyToComplete={() => setFlyToCenter(null)}
-            sdCardTracks={sdCardTracks}
-            showSDCardTracks={showSDCardTracks}
-            onCursorMove={handleCursorMove}
-            measureMode={measureMode}
-            onMeasurementAdded={handleMeasurementAdded}
-            importedLayers={importedLayers}
-            droneProfileMap={droneProfileMap}
-          />
-        </MapFileDropHandler>
-
-        {/* 3D View Overlay (MapLibre-based) */}
-        {show3DView && !showCesiumGlobe && (
-          <Map3DViewer
-            droneHistory={droneHistory}
-            currentTime={currentTime}
-            timelineStart={timelineStart}
-            onClose={() => setShow3DView(false)}
-            showQualityColors={showQualityColors}
-            mapStyle={mapStyle}
-            site={selectedSite}
-            cuasPlacements={phaseActiveSession?.cuas_placements || []}
-            cuasProfiles={cuasProfiles}
-            sdCardTracks={sdCardTracks}
-            showSDCardTracks={showSDCardTracks}
-          />
-        )}
-
-        {/* CesiumJS Globe Overlay — hidden when wizard is open to prevent dual Cesium instances */}
-        {showCesiumGlobe && !wizardIsOpen && (
-          <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
-            <CesiumMap
+        {/* Primary map: Google 3D (default) or 2D MapComponent (fallback) */}
+        {showGoogle3DGlobe && !wizardIsOpen ? (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 2 }}>
+            <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} version="alpha">
+              <Google3DViewer
+                mode="live"
+                droneHistory={droneHistory}
+                currentTime={currentTime}
+                timelineStart={timelineStart}
+                site={selectedSite}
+                cuasPlacements={phaseActiveSession?.cuas_placements || []}
+                cuasProfiles={cuasProfiles}
+                cuasJamStates={cuasJamStates}
+                initialCameraState={selectedSite?.camera_state_3d}
+                droneProfiles={droneProfiles}
+                droneProfileMap={droneProfileMap}
+                currentDroneData={drones}
+                selectedDroneId={selectedDroneId}
+                onDroneClick={handleDroneClick}
+              />
+            </APIProvider>
+          </div>
+        ) : (
+          <MapFileDropHandler onLayerImported={handleLayerImported}>
+            <MapComponent
+              drones={drones}
               droneHistory={droneHistory}
+              selectedDroneId={selectedDroneId}
+              onDroneClick={handleDroneClick}
               currentTime={currentTime}
               timelineStart={timelineStart}
-              site={selectedSite}
-              cuasPlacements={phaseActiveSession?.cuas_placements || []}
+              mapStyle={mapStyle}
+              showQualityColors={showQualityColors}
+              cuasPlacements={phaseActiveSession?.cuas_placements}
               cuasProfiles={cuasProfiles}
-              onClose={() => setShowCesiumGlobe(false)}
-              initialCameraState3D={selectedSite?.camera_state_3d}
-              droneProfiles={droneProfiles}
+              cuasJamStates={cuasJamStates}
+              showCuasCoverage={currentPhase === 'active' || currentPhase === 'planning'}
+              selectedSite={selectedSite}
+              isDrawingMode={isDrawingMode}
+              onDrawingComplete={handleDrawingComplete}
+              placingCuasId={placingCuasId}
+              onCuasPlaced={handleCuasPlaced}
+              wizardCuasPlacements={wizardCuasPlacements}
+              wizardCuasProfiles={cuasProfiles}
+              onWizardCuasMoved={handleWizardCuasMoved}
+              flyToCenter={flyToCenter}
+              onFlyToComplete={() => setFlyToCenter(null)}
+              sdCardTracks={sdCardTracks}
+              showSDCardTracks={showSDCardTracks}
+              onCursorMove={handleCursorMove}
+              measureMode={measureMode}
+              onMeasurementAdded={handleMeasurementAdded}
+              importedLayers={importedLayers}
               droneProfileMap={droneProfileMap}
             />
-          </div>
+          </MapFileDropHandler>
         )}
 
         {/* Site Recon Viewer Overlay */}
@@ -623,34 +610,20 @@ export default function MapView() {
 
         {/* Map Controls Group - Bottom Right */}
         <div className="map-controls-group">
-          {/* ── 3D View Section ── */}
-          <div className="map-controls-3d-section">
-            <span className="map-controls-section-label">3D View</span>
-            <div className="map-controls-3d-buttons">
-              <button
-                className={`map-control-btn map-control-labeled ${show3DView && !showCesiumGlobe ? 'active' : ''}`}
-                onClick={() => { setShow3DView(prev => !prev); setShowCesiumGlobe(false); }}
-                title={show3DView ? 'Switch to 2D Map' : '3D Terrain View (MapLibre)'}
-              >
-                <Box size={18} />
-                <span className="map-control-label">3D</span>
-              </button>
-
-              <button
-                className={`map-control-btn map-control-labeled ${showCesiumGlobe ? 'active' : ''}`}
-                onClick={() => { setShowCesiumGlobe(prev => !prev); setShow3DView(false); }}
-                title={showCesiumGlobe ? 'Exit Globe View' : 'CesiumJS Globe (3D Tiles + OSM Buildings)'}
-              >
-                <Globe2 size={18} />
-                <span className="map-control-label">Globe</span>
-              </button>
-            </div>
-          </div>
+          {/* ── 2D/3D Toggle ── */}
+          <button
+            className={`map-control-btn map-control-labeled ${showGoogle3DGlobe ? 'active' : ''}`}
+            onClick={() => setShowGoogle3DGlobe(prev => !prev)}
+            title={showGoogle3DGlobe ? 'Switch to 2D Map' : 'Switch to 3D Map'}
+          >
+            {showGoogle3DGlobe ? <MapIcon size={18} /> : <Globe size={18} />}
+            <span className="map-control-label">{showGoogle3DGlobe ? '2D' : '3D'}</span>
+          </button>
 
           <div className="map-controls-divider" />
 
           {/* ── Map Tools ── */}
-          {/* Map Style Toggle */}
+          {/* Map Style Toggle (only relevant in 2D mode) */}
           <button
             className={`map-control-btn ${mapStyle !== 'dark' ? 'active' : ''}`}
             onClick={() => setMapStyle(prev => prev === 'dark' ? 'satellite' : prev === 'satellite' ? 'street' : 'dark')}
