@@ -59,6 +59,7 @@ import { calculatePolygonCenter } from '../utils/siteVisualization';
 interface ConfigurationWorkspacePanelProps {
   isOpen: boolean;
   onClose: () => void;
+  onFlyToSite?: (center: { lat: number; lon: number }) => void;
 }
 
 type TabId = 'sites' | 'drones' | 'cuas';
@@ -123,7 +124,7 @@ const CAPABILITY_OPTIONS = [
   'RC 2.4GHz', 'RC 900MHz', 'LTE/4G', '5G', 'ISM Band',
 ];
 
-export default function ConfigurationWorkspacePanel({ isOpen, onClose }: ConfigurationWorkspacePanelProps) {
+export default function ConfigurationWorkspacePanel({ isOpen, onClose, onFlyToSite }: ConfigurationWorkspacePanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>('sites');
 
   // ===== TOAST & SAVING STATE =====
@@ -914,6 +915,9 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose }: Configu
                 onSiteSelect={(site) => {
                   selectSite(site);
                   setDetailSiteId(site.id);
+                  if (site.center && onFlyToSite) {
+                    onFlyToSite(site.center);
+                  }
                 }}
                 onNewSite={handleSiteNew}
               />

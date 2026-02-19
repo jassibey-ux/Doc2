@@ -5,18 +5,79 @@
  */
 
 import React from 'react';
-import { Camera, Box, Settings, Map } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Camera, Box, Settings, Map, Table2 } from 'lucide-react';
 
 interface ToolsPanelProps {
   tacticalMode: boolean;
+  onOpenLog?: () => void;
 }
 
-const ToolsPanel: React.FC<ToolsPanelProps> = ({ tacticalMode }) => {
+const ToolsPanel: React.FC<ToolsPanelProps> = ({ tacticalMode, onOpenLog }) => {
+  const navigate = useNavigate();
+  const { sessionId } = useParams<{ sessionId: string }>();
   const textColor = tacticalMode ? '#4ade80' : '#e5e7eb';
   const dimColor = tacticalMode ? 'rgba(74,222,128,0.5)' : '#6b7280';
 
   return (
     <div style={{ padding: '8px 0', fontSize: 12, color: textColor }}>
+      {/* Raw Data Table */}
+      <ToolSection
+        icon={<Table2 size={14} />}
+        title="Data Analysis"
+        tacticalMode={tacticalMode}
+      >
+        <div style={{ padding: '8px 14px' }}>
+          <button
+            onClick={() => sessionId && navigate(`/session/${sessionId}/table`)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              padding: '8px 12px',
+              borderRadius: 6,
+              background: tacticalMode ? 'rgba(34,197,94,0.1)' : 'rgba(96,165,250,0.12)',
+              border: `1px solid ${tacticalMode ? 'rgba(34,197,94,0.25)' : 'rgba(96,165,250,0.25)'}`,
+              color: tacticalMode ? '#4ade80' : '#60a5fa',
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <Table2 size={13} />
+            View Raw Telemetry Table
+          </button>
+          <div style={{ fontSize: 10, color: dimColor, marginTop: 6, lineHeight: 1.4 }}>
+            Full Excel-like table of all telemetry data with sorting, filtering, and CSV export.
+          </div>
+          {onOpenLog && (
+            <button
+              onClick={onOpenLog}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                padding: '8px 12px',
+                marginTop: 6,
+                borderRadius: 6,
+                background: tacticalMode ? 'rgba(34,197,94,0.06)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${tacticalMode ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.08)'}`,
+                color: tacticalMode ? 'rgba(74,222,128,0.7)' : '#d1d5db',
+                fontSize: 11,
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+            >
+              Live Data Log
+            </button>
+          )}
+        </div>
+      </ToolSection>
+
       {/* Camera feeds placeholder */}
       <ToolSection
         icon={<Camera size={14} />}

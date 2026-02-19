@@ -30,6 +30,7 @@ import {
   Cloud,
   Box,
   Globe,
+  Table2,
 } from 'lucide-react';
 import { GlassPanel, GlassCard, GlassButton, Badge } from './ui/GlassUI';
 import { useWorkflow } from '../contexts/WorkflowContext';
@@ -354,6 +355,10 @@ export default function SessionAnalysisView() {
           <GlassButton variant="ghost" onClick={() => { setShowCesiumGlobe(!showCesiumGlobe); if (!showCesiumGlobe) setShow3DView(false); }}>
             <Globe size={16} />
             {showCesiumGlobe ? 'Hide 3D Globe' : '3D Globe'}
+          </GlassButton>
+          <GlassButton variant="ghost" onClick={() => navigate(`/session/${sessionId}/table`)}>
+            <Table2 size={16} />
+            Raw Data
           </GlassButton>
         </div>
       </div>

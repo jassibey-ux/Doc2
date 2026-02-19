@@ -17,6 +17,7 @@ import ReplayPage from './components/ReplayPage';
 import CRMDashboard from './components/crm/CRMDashboard';
 import EventDashboard from './components/event/EventDashboard';
 import SessionBrowserPage from './components/SessionBrowserPage';
+import AnalysisTablePage from './components/table/AnalysisTablePage';
 import LoginPage from './components/LoginPage';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -56,6 +57,7 @@ export default function App() {
                           <Route path="/session/:sessionId/live" element={<SessionPage />} />
                           <Route path="/session/:sessionId/live-legacy" element={<SessionConsole />} />
                           <Route path="/session/:sessionId/analysis" element={<SessionAnalysisView />} />
+                          <Route path="/session/:sessionId/table" element={<AnalysisTablePage />} />
                           <Route path="/sessions" element={<SessionBrowserPage />} />
                           <Route path="/replay" element={<ReplayPage />} />
                           <Route path="/replay/:sessionId" element={<ReplayPage />} />

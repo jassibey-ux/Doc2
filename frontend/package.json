@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.1",
+    "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-virtual": "^3.13.18",
     "@tmcw/togeojson": "^7.1.2",
     "@turf/bearing": "^7.3.4",
     "@turf/boolean-point-in-polygon": "^7.3.4",

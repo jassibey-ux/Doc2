@@ -938,6 +938,7 @@ export default function MapView() {
       <ConfigurationWorkspacePanel
         isOpen={activePanel === 'sites' || activePanel === 'drone-profiles' || activePanel === 'cuas-profiles'}
         onClose={() => setActivePanel(null)}
+        onFlyToSite={(center) => setFlyToCenter({ lat: center.lat, lon: center.lon })}
       />
 
       {/* Session History Panel (Right-docked) */}
