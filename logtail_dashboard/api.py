@@ -842,6 +842,17 @@ class DashboardApp:
 
                 logger.info(f"Replay session loaded: {len(timeline)} frames")
 
+                # Notify frontend that frames are ready via WebSocket
+                await self._broadcast_message(
+                    WebSocketMessage(
+                        type="replay_frames_ready",
+                        data={
+                            "session_id": session.session_id,
+                            "frame_count": len(timeline),
+                        },
+                    )
+                )
+
                 return {
                     "success": True,
                     "session": {
