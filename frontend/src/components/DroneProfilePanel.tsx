@@ -283,7 +283,7 @@ export default function DroneProfilePanel({ isOpen, onClose }: DroneProfilePanel
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
                         <img
-                          src={model.thumbnailProfilePath}
+                          src={`${import.meta.env.BASE_URL ?? '/'}${model.thumbnailProfilePath.replace(/^\//, '')}`}
                           alt={model.label}
                           style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }}
                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
