@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { GlassPanel, GlassCard, GlassButton, GlassInput, Badge, GlassDivider } from './ui/GlassUI';
 import { ModelThumbnail } from './ModelThumbnail';
-import { getDroneModelOptions } from '../utils/modelRegistry';
+import { DRONE_MODELS } from '../utils/modelRegistry';
 import { useWorkflow } from '../contexts/WorkflowContext';
 import {
   DroneProfile,
@@ -229,25 +229,73 @@ export default function DroneProfilePanel({ isOpen, onClose }: DroneProfilePanel
               <label style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
                 3D Model
               </label>
-              <select
-                value={editedProfile?.model_3d || ''}
-                onChange={(e) => setEditedProfile(prev => prev ? { ...prev, model_3d: e.target.value || undefined } : null)}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '8px',
-                  color: '#fff',
-                  fontSize: '13px',
-                  outline: 'none',
-                }}
-              >
-                <option value="" style={{ background: '#1a1a2e' }}>Auto-detect</option>
-                {getDroneModelOptions().map(opt => (
-                  <option key={opt.id} value={opt.id} style={{ background: '#1a1a2e' }}>{opt.label}</option>
-                ))}
-              </select>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+                {/* Auto-detect option */}
+                <button
+                  onClick={() => setEditedProfile(prev => prev ? { ...prev, model_3d: undefined } : null)}
+                  style={{
+                    padding: '6px',
+                    borderRadius: '8px',
+                    border: !editedProfile?.model_3d ? '2px solid #ff8c00' : '1px solid rgba(255,255,255,0.1)',
+                    background: !editedProfile?.model_3d ? 'rgba(255,140,0,0.15)' : 'rgba(255,255,255,0.03)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <div style={{
+                    width: 48, height: 48,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(255,255,255,0.05)', borderRadius: 6,
+                    fontSize: '20px',
+                  }}>
+                    {'\u2728'}
+                  </div>
+                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.7)', textAlign: 'center', lineHeight: 1.2 }}>
+                    Auto
+                  </span>
+                </button>
+                {/* Model options */}
+                {Object.values(DRONE_MODELS).map(model => {
+                  const isSelected = editedProfile?.model_3d === model.id;
+                  return (
+                    <button
+                      key={model.id}
+                      onClick={() => setEditedProfile(prev => prev ? { ...prev, model_3d: model.id } : null)}
+                      style={{
+                        padding: '6px',
+                        borderRadius: '8px',
+                        border: isSelected ? '2px solid #ff8c00' : '1px solid rgba(255,255,255,0.1)',
+                        background: isSelected ? 'rgba(255,140,0,0.15)' : 'rgba(255,255,255,0.03)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <div style={{
+                        width: 48, height: 48,
+                        borderRadius: 6, overflow: 'hidden',
+                        background: 'rgba(255,255,255,0.05)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <img
+                          src={model.thumbnailProfilePath}
+                          alt={model.label}
+                          style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      </div>
+                      <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.7)', textAlign: 'center', lineHeight: 1.2 }}>
+                        {model.label.replace(/ *\(.*\)/, '')}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Expected Failsafe */}

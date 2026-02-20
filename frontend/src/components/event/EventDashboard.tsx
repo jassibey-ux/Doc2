@@ -352,6 +352,7 @@ const EventDashboard: React.FC = () => {
               selectedDroneId={selectedDroneId}
               onDroneClick={handleDroneClick}
               droneProfiles={droneProfiles}
+              droneProfileMap={new Map()}
               cuasPlacements={[]}
               cuasProfiles={cuasProfiles}
               geofenceZones={visibleZones}

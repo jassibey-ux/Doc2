@@ -71,9 +71,11 @@ export function renderDroneMarkers(
       });
     }
 
-    // Try to find a matching drone profile for 3D model
-    const droneProfile = droneProfileMap?.get(trackerId) ?? droneProfiles?.find(dp => dp.id === trackerId);
-    const droneModelAsset = droneProfile ? getDroneModel(droneProfile) : null;
+    // Try to find a matching drone profile for 3D model (fallback to generic)
+    const droneProfile = droneProfileMap?.get(trackerId)
+      ?? droneProfiles?.find(dp => dp.id === trackerId)
+      ?? { id: '__default__', name: 'Generic', make: 'Unknown', model: 'Unknown', weight_class: 'mini' as const, model_3d: 'quadcopter_generic', frequency_bands: [], expected_failsafe: 'rth' as const, created_at: '', updated_at: '' };
+    const droneModelAsset = getDroneModel(droneProfile);
     const droneGlbExists = droneModelAsset ? isModelCached(droneModelAsset.glbPath) === true : false;
     const droneHeading = currentDroneData?.get(trackerId)?.heading_deg ?? 0;
     const droneColor = Cesium.Color.fromCssColorString(baseColor);

@@ -91,11 +91,12 @@ export default function ReplayPage() {
     clearReplayBuildProgress,
   } = useWebSocket();
 
-  // Workflow context for site/CUAS profiles
+  // Workflow context for site/CUAS profiles + drone profiles
   const {
     cuasProfiles,
     sites,
     testSessions,
+    droneProfiles,
   } = useWorkflow();
 
   // Page state machine
@@ -140,6 +141,19 @@ export default function ReplayPage() {
     return map;
   }, [cuasProfiles]);
   void _profilesMap; // Suppress unused warning - may be used for CUAS features
+
+  // Build tracker_id -> DroneProfile map for 3D model resolution
+  const droneProfileMap = useMemo(() => {
+    const map = new Map<string, import('../types/workflow').DroneProfile>();
+    const assignments = testSession?.tracker_assignments;
+    if (assignments && droneProfiles) {
+      for (const a of assignments) {
+        const profile = droneProfiles.find(p => p.id === a.drone_profile_id);
+        if (profile) map.set(a.tracker_id, profile);
+      }
+    }
+    return map;
+  }, [testSession?.tracker_assignments, droneProfiles]);
 
   // Load session from URL on mount or when URL changes
   useEffect(() => {
@@ -530,6 +544,7 @@ export default function ReplayPage() {
                   cuasJamStates={new Map()}
                   showCuasCoverage={true}
                   mapStyle={mapStyle}
+                  droneProfileMap={droneProfileMap}
                 />
 
                 {show3DView && !showCesiumGlobe && (
@@ -563,6 +578,8 @@ export default function ReplayPage() {
                         selectedDroneId={selectedDroneId}
                         onDroneClick={(id) => setSelectedDroneId(id)}
                         onClose={() => setShowCesiumGlobe(false)}
+                        droneProfiles={droneProfiles}
+                        droneProfileMap={droneProfileMap}
                       />
                     </APIProvider>
                   </div>

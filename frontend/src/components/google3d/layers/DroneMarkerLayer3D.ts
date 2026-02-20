@@ -92,9 +92,9 @@ export function renderDroneMarkers(
       }
     }
 
-    // Resolve 3D model from profile → registry
+    // Resolve 3D model from profile → registry (always returns a profile with fallback)
     const profile = findDroneProfile(trackerId, droneProfileMap, currentDroneData);
-    const modelAsset = getDroneModel(profile ?? undefined);
+    const modelAsset = getDroneModel(profile);
     const modelPath = modelAsset
       ? `${baseUrl}${modelAsset.glbPath.replace(/^\//, '')}`
       : `${baseUrl}models/drones/quadcopter_generic.glb`;
@@ -262,14 +262,31 @@ function getPositionAtTime(positions: PositionPoint[], time: number): PositionPo
   return positions[lo];
 }
 
-/** Find drone profile by tracker ID */
+/** Default synthetic profile for unassigned trackers */
+const DEFAULT_DRONE_PROFILE: DroneProfile = {
+  id: '__default__',
+  name: 'Generic Drone',
+  make: 'Unknown',
+  model: 'Unknown',
+  weight_class: 'mini',
+  model_3d: 'quadcopter_generic',
+  frequency_bands: [],
+  expected_failsafe: 'rth',
+  created_at: '',
+  updated_at: '',
+};
+
+/** Find drone profile by tracker ID, falling back to default */
 function findDroneProfile(
   trackerId: string,
   droneProfileMap?: Map<string, DroneProfile>,
   _currentDroneData?: Map<string, DroneSummary>,
-): DroneProfile | null {
-  if (!droneProfileMap) return null;
-  return droneProfileMap.get(trackerId) ?? null;
+): DroneProfile {
+  if (droneProfileMap) {
+    const profile = droneProfileMap.get(trackerId);
+    if (profile) return profile;
+  }
+  return DEFAULT_DRONE_PROFILE;
 }
 
 function cleanupDroneMarkers(mapEl: Map3DElementRef): void {

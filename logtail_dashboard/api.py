@@ -1163,6 +1163,84 @@ class DashboardApp:
                 logger.error(f"Error stopping replay: {e}")
                 return {"success": False, "error": str(e)}
 
+        # ─── File-based Drone Profile CRUD ───────────────────────────
+        # Simple JSON-file storage at {log_root}/drone_profiles.json
+        # These endpoints live at /api/drone-profiles to match the
+        # frontend WorkflowContext API_BASE = '/api'.
+
+        def _drone_profiles_path(self=self) -> Path:
+            return Path(self.config.log_root_folder) / "drone_profiles.json"
+
+        def _read_drone_profiles() -> list[dict]:
+            p = _drone_profiles_path()
+            if not p.exists():
+                return []
+            try:
+                return json.loads(p.read_text())
+            except Exception:
+                return []
+
+        def _write_drone_profiles(profiles: list[dict]) -> None:
+            p = _drone_profiles_path()
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(profiles, indent=2, default=str))
+
+        @self.app.get("/api/drone-profiles")
+        async def list_drone_profiles_file():
+            """List all drone profiles (file-based)."""
+            profiles = _read_drone_profiles()
+            return {"items": profiles, "total": len(profiles)}
+
+        @self.app.get("/api/drone-profiles/{profile_id}")
+        async def get_drone_profile_file(profile_id: str):
+            """Get a single drone profile by ID."""
+            profiles = _read_drone_profiles()
+            for p in profiles:
+                if p.get("id") == profile_id:
+                    return p
+            raise HTTPException(status_code=404, detail="Drone profile not found")
+
+        @self.app.post("/api/drone-profiles")
+        async def create_drone_profile_file(request: dict):
+            """Create a new drone profile."""
+            import uuid
+            profiles = _read_drone_profiles()
+            now = datetime.now().isoformat()
+            new_profile = {
+                **request,
+                "id": str(uuid.uuid4()),
+                "created_at": now,
+                "updated_at": now,
+            }
+            profiles.append(new_profile)
+            _write_drone_profiles(profiles)
+            return new_profile
+
+        @self.app.put("/api/drone-profiles/{profile_id}")
+        async def update_drone_profile_file(profile_id: str, request: dict):
+            """Update a drone profile."""
+            profiles = _read_drone_profiles()
+            for i, p in enumerate(profiles):
+                if p.get("id") == profile_id:
+                    profiles[i] = {
+                        **p,
+                        **{k: v for k, v in request.items() if k not in ("id", "created_at")},
+                        "updated_at": datetime.now().isoformat(),
+                    }
+                    _write_drone_profiles(profiles)
+                    return profiles[i]
+            raise HTTPException(status_code=404, detail="Drone profile not found")
+
+        @self.app.delete("/api/drone-profiles/{profile_id}")
+        async def delete_drone_profile_file(profile_id: str):
+            """Delete a drone profile."""
+            profiles = _read_drone_profiles()
+            new_profiles = [p for p in profiles if p.get("id") != profile_id]
+            if len(new_profiles) == len(profiles):
+                raise HTTPException(status_code=404, detail="Drone profile not found")
+            _write_drone_profiles(new_profiles)
+            return {"success": True}
+
         @self.app.get("/")
         async def root():
             """Redirect to React dashboard."""
