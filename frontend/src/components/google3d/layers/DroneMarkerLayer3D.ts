@@ -117,26 +117,30 @@ export function renderDroneMarkers(
       }
     }
 
-    if (Model3DInteractiveElement) {
-      // Render as 3D GLB model (constructor pattern per Google docs)
-      try {
-        const model = new Model3DInteractiveElement({
-          src: modelPath,
-          position: {
+    // Render 3D GLB model (use Model3DElement with property assignment — constructor
+    // options pattern doesn't reliably render in Google 3D alpha API)
+    {
+      const { Model3DElement } = maps3dLib;
+      const ModelClass = Model3DElement ?? Model3DInteractiveElement;
+      if (ModelClass) {
+        try {
+          const model = new ModelClass();
+          model.setAttribute('data-layer', DRONE_TAG);
+          model.setAttribute('data-drone-id', trackerId);
+          model.src = modelPath;
+          model.position = {
             lat: currentPos.lat,
             lng: currentPos.lon,
             altitude: (currentPos.alt_m ?? 50) + (modelAsset?.heightOffset ?? 0),
-          },
-          altitudeMode: 'RELATIVE_TO_GROUND',
-          orientation: { heading: headingDeg - 90, tilt: pitchDeg, roll: rollDeg },
-          scale: isSelected ? modelScale * 1.3 : modelScale,
-        });
-        model.setAttribute('data-layer', DRONE_TAG);
-        model.setAttribute('data-drone-id', trackerId);
-        attachDroneClickHandler(model, trackerId, onDroneClick);
-        mapEl.append(model);
-      } catch {
-        // Model3DInteractiveElement may not be fully supported in alpha API
+          };
+          model.altitudeMode = 'RELATIVE_TO_GROUND';
+          model.orientation = { heading: headingDeg - 90, tilt: pitchDeg, roll: rollDeg };
+          model.scale = isSelected ? modelScale * 1.3 : modelScale;
+          attachDroneClickHandler(model, trackerId, onDroneClick);
+          mapEl.append(model);
+        } catch {
+          // Model3DElement may not be available in all alpha API versions
+        }
       }
     }
 
@@ -155,12 +159,43 @@ export function renderDroneMarkers(
     marker.collisionBehavior = 'OPTIONAL_AND_HIDES_LOWER_PRIORITY';
     marker.zIndex = isSelected ? 1000 : 100;
 
-    // Label
+    // Always-visible floating label (separate Marker3DElement with HTML content)
     if (showLabels) {
-      const displayName = summary?.alias ?? trackerId;
-      const alt = currentPos.alt_m != null ? `${Math.round(currentPos.alt_m)}m` : '?m';
-      const staleTag = isStale ? ' [STALE]' : '';
-      marker.title = `${displayName} · ${alt}${staleTag}`;
+      const { Marker3DElement } = maps3dLib;
+      if (Marker3DElement) {
+        const displayName = summary?.alias ?? trackerId;
+        const alt = currentPos.alt_m != null ? `${Math.round(currentPos.alt_m)}m` : '?m';
+        const staleTag = isStale ? ' [STALE]' : '';
+        const labelText = `${displayName} · ${alt}${staleTag}`;
+
+        const labelMarker = new Marker3DElement();
+        labelMarker.setAttribute('data-layer', DRONE_TAG);
+        labelMarker.setAttribute('data-drone-id', trackerId);
+        labelMarker.position = {
+          lat: currentPos.lat,
+          lng: currentPos.lon,
+          altitude: (currentPos.alt_m ?? 50) + 15,
+        };
+        labelMarker.altitudeMode = 'RELATIVE_TO_MESH';
+        labelMarker.collisionBehavior = 'OPTIONAL_AND_HIDES_LOWER_PRIORITY';
+        labelMarker.zIndex = isSelected ? 1001 : 101;
+
+        const labelDiv = document.createElement('div');
+        labelDiv.style.cssText = [
+          'background: rgba(0,0,0,0.75)',
+          'color: #fff',
+          'font: 600 11px/1.2 system-ui, sans-serif',
+          'padding: 3px 7px',
+          'border-radius: 4px',
+          'white-space: nowrap',
+          'pointer-events: none',
+          `border: 1px solid ${isSelected ? '#f59e0b' : 'rgba(255,255,255,0.2)'}`,
+          `box-shadow: 0 1px 4px rgba(0,0,0,0.4)`,
+        ].join(';');
+        labelDiv.textContent = labelText;
+        labelMarker.append(labelDiv);
+        mapEl.append(labelMarker);
+      }
     }
 
     // Pin styling
