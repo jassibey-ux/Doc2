@@ -7,6 +7,7 @@ export interface ModelAsset {
   thumbnailTopPath: string;      // top-down view PNG
   thumbnailProfilePath: string;  // 3/4 angle PNG
   scale: number;
+  google3dScale?: number;        // override scale for Google Maps 3D (if different from Cesium)
   heightOffset: number;          // meters above ground
 }
 
@@ -54,6 +55,37 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/drones/hexacopter_top.png',
     thumbnailProfilePath: '/models/thumbnails/drones/hexacopter_profile.png',
     scale: 1.2,
+    google3dScale: 12,
+    heightOffset: 0,
+  },
+  vtol: {
+    id: 'vtol',
+    label: 'VTOL Drone',
+    glbPath: '/models/drones/vtol.glb',
+    thumbnailTopPath: '/models/thumbnails/drones/vtol_top.png',
+    thumbnailProfilePath: '/models/thumbnails/drones/vtol_profile.png',
+    scale: 2.0,
+    google3dScale: 14,
+    heightOffset: 0,
+  },
+  octocopter: {
+    id: 'octocopter',
+    label: 'Octocopter',
+    glbPath: '/models/drones/octocopter.glb',
+    thumbnailTopPath: '/models/thumbnails/drones/octocopter_top.png',
+    thumbnailProfilePath: '/models/thumbnails/drones/octocopter_profile.png',
+    scale: 1.5,
+    google3dScale: 14,
+    heightOffset: 0,
+  },
+  animated_drone: {
+    id: 'animated_drone',
+    label: 'Animated Drone (Sketchfab)',
+    glbPath: '/models/drones/animated_drone.glb',
+    thumbnailTopPath: '/models/thumbnails/drones/animated_drone_top.png',
+    thumbnailProfilePath: '/models/thumbnails/drones/animated_drone_profile.png',
+    scale: 1.0,
+    google3dScale: 10,
     heightOffset: 0,
   },
 };
@@ -128,7 +160,9 @@ export function getDroneModel(profile?: DroneProfile): ModelAsset | null {
   const nameLC = `${profile.make} ${profile.model}`.toLowerCase();
   if (nameLC.includes('phantom') || nameLC.includes('mavic')) return DRONE_MODELS.quadcopter_phantom;
   if (nameLC.includes('fpv') || nameLC.includes('racing')) return DRONE_MODELS.fpv;
-  if (nameLC.includes('wing') || nameLC.includes('vtol')) return DRONE_MODELS.fixed_wing;
+  if (nameLC.includes('vtol') || nameLC.includes('tilt-rotor') || nameLC.includes('dragonfish') || nameLC.includes('wingtra')) return DRONE_MODELS.vtol;
+  if (nameLC.includes('wing')) return DRONE_MODELS.fixed_wing;
+  if (nameLC.includes('octo') || nameLC.includes('x8') || nameLC.includes('s1000')) return DRONE_MODELS.octocopter;
   if (nameLC.includes('hex') || nameLC.includes('m600')) return DRONE_MODELS.hexacopter;
 
   // Fallback by weight class

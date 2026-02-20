@@ -1,5 +1,5 @@
 import type { ModelAsset } from './modelRegistry';
-import { DRONE_MODELS, CUAS_MODELS } from './modelRegistry';
+import { DRONE_MODELS, CUAS_MODELS, VEHICLE_MODELS, EQUIPMENT_MODELS } from './modelRegistry';
 
 // ---------------------------------------------------------------------------
 // GLB existence cache — avoids 404s in the render loop
@@ -29,11 +29,13 @@ export function isModelCached(glbPath: string): boolean | undefined {
   return modelExistsCache.get(glbPath);
 }
 
-/** Batch-check all registered drone + CUAS models on Cesium init. */
+/** Batch-check all registered models on Cesium init. */
 export async function precheckAllModels(): Promise<void> {
   const allPaths = [
     ...Object.values(DRONE_MODELS).map(m => m.glbPath),
     ...Object.values(CUAS_MODELS).map(m => m.glbPath),
+    ...Object.values(VEHICLE_MODELS).map(m => m.glbPath),
+    ...Object.values(EQUIPMENT_MODELS).map(m => m.glbPath),
   ];
 
   await Promise.allSettled(allPaths.map(p => checkModelExists(p)));
@@ -96,19 +98,24 @@ export function createModelGraphicsOptions(
 
 /**
  * Create orientation quaternion for a model entity.
+ *
+ * @param pitchDeg Pitch in degrees (negative = nose down). Default 0.
+ * @param rollDeg Roll in degrees (positive = right bank). Default 0.
  */
 export function createModelOrientation(
   Cesium: any,
   longitude: number,
   latitude: number,
   altitude: number,
-  headingDeg: number
+  headingDeg: number,
+  pitchDeg: number = 0,
+  rollDeg: number = 0,
 ): any {
   const position = Cesium.Cartesian3.fromDegrees(longitude, latitude, altitude);
   const hpr = new Cesium.HeadingPitchRoll(
     Cesium.Math.toRadians(headingDeg),
-    0,
-    0
+    Cesium.Math.toRadians(pitchDeg),
+    Cesium.Math.toRadians(rollDeg),
   );
   return Cesium.Transforms.headingPitchRollQuaternion(position, hpr);
 }

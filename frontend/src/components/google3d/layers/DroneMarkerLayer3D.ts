@@ -16,6 +16,8 @@ import type { DroneProfile } from '../../../types/workflow';
 import type { Map3DElementRef } from '../hooks/useGoogle3DMap';
 import { attachDroneClickHandler } from '../hooks/useGoogle3DClickHandler';
 import { bearing } from '../../../utils/geo';
+import { getDroneModel } from '../../../utils/modelRegistry';
+import { computePitch, computeRoll } from '../../../utils/flightDynamics';
 
 const DRONE_TAG = 'drone-marker-layer';
 
@@ -90,10 +92,30 @@ export function renderDroneMarkers(
       }
     }
 
-    // Check if we have a 3D model for this drone (default to generic quadcopter)
+    // Resolve 3D model from profile → registry
     const profile = findDroneProfile(trackerId, droneProfileMap, currentDroneData);
-    const modelId = profile?.model_3d ?? 'quadcopter_generic';
-    const modelPath = `${baseUrl}models/drones/${modelId}.glb`;
+    const modelAsset = getDroneModel(profile ?? undefined);
+    const modelPath = modelAsset
+      ? `${baseUrl}${modelAsset.glbPath.replace(/^\//, '')}`
+      : `${baseUrl}models/drones/quadcopter_generic.glb`;
+    const modelScale = modelAsset?.google3dScale ?? 10;
+
+    // Compute pitch/roll from recent positions
+    let pitchDeg = 0;
+    let rollDeg = 0;
+    if (positions.length >= 2) {
+      const prev = positions.length >= 3 ? positions[positions.length - 3] : positions[positions.length - 2];
+      const curr = positions[positions.length - 1];
+      const dtSec = (curr.timestamp - prev.timestamp) / 1000;
+      if (dtSec > 0) {
+        const prevSpeed = summary?.speed_mps ?? 0;
+        const currSpeed = summary?.speed_mps ?? 0;
+        pitchDeg = computePitch(currSpeed, prevSpeed, dtSec);
+
+        const prevHeading = bearing(prev.lat, prev.lon, curr.lat, curr.lon);
+        rollDeg = computeRoll(headingDeg, prevHeading, dtSec);
+      }
+    }
 
     if (Model3DInteractiveElement) {
       // Render as 3D GLB model (constructor pattern per Google docs)
@@ -103,11 +125,11 @@ export function renderDroneMarkers(
           position: {
             lat: currentPos.lat,
             lng: currentPos.lon,
-            altitude: currentPos.alt_m ?? 50,
+            altitude: (currentPos.alt_m ?? 50) + (modelAsset?.heightOffset ?? 0),
           },
           altitudeMode: 'RELATIVE_TO_GROUND',
-          orientation: { heading: headingDeg - 90, tilt: 0, roll: 0 },
-          scale: isSelected ? 15 : 10,
+          orientation: { heading: headingDeg - 90, tilt: pitchDeg, roll: rollDeg },
+          scale: isSelected ? modelScale * 1.3 : modelScale,
         });
         model.setAttribute('data-layer', DRONE_TAG);
         model.setAttribute('data-drone-id', trackerId);

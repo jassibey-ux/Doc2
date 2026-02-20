@@ -9,6 +9,8 @@ import type { CesiumModule, CesiumViewer } from '../types';
 import { getDroneModel } from '../../../utils/modelRegistry';
 import { isModelCached, createModelGraphicsOptions, createModelOrientation } from '../../../utils/modelLoader';
 import { createDroneDataUri } from '../utils/svgDataUris';
+import { computePitch, computeRoll } from '../../../utils/flightDynamics';
+import { bearing } from '../../../utils/geo';
 
 export interface DroneMarkerLayerOptions {
   droneHistory: Map<string, PositionPoint[]>;
@@ -95,11 +97,30 @@ export function renderDroneMarkers(
     };
 
     if (droneModelAsset && droneGlbExists) {
+      // Compute pitch/roll from recent positions
+      let pitchDeg = 0;
+      let rollDeg = 0;
+      if (displayPositions.length >= 2) {
+        const prev = displayPositions.length >= 3
+          ? displayPositions[displayPositions.length - 3]
+          : displayPositions[displayPositions.length - 2];
+        const curr = displayPositions[displayPositions.length - 1];
+        const dtSec = (curr.timestamp - prev.timestamp) / 1000;
+        if (dtSec > 0) {
+          const speedMps = currentDroneData?.get(trackerId)?.speed_mps ?? 0;
+          pitchDeg = computePitch(speedMps, speedMps, dtSec);
+
+          const prevHeading = bearing(prev.lat, prev.lon, curr.lat, curr.lon);
+          rollDeg = computeRoll(droneHeading, prevHeading, dtSec);
+        }
+      }
+
       droneMarkerEntity.model = new Cesium.ModelGraphics(
         createModelGraphicsOptions(Cesium, droneModelAsset, droneHeading, isSelected)
       );
       droneMarkerEntity.orientation = createModelOrientation(
-        Cesium, lastPos.lon, lastPos.lat, altitude + 2, droneHeading
+        Cesium, lastPos.lon, lastPos.lat, altitude + 2 + (droneModelAsset.heightOffset ?? 0),
+        droneHeading, pitchDeg, rollDeg,
       );
     } else {
       droneMarkerEntity.ellipsoid = {

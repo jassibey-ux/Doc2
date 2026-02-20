@@ -14,6 +14,7 @@
  */
 
 import { bearing } from '../../utils/geo';
+import { computePitch, computeRoll, smoothValue } from '../../utils/flightDynamics';
 
 interface DroneState {
   trackerId: string;
@@ -24,10 +25,16 @@ interface DroneState {
   targetLng: number;
   targetAlt: number;
   heading: number;
+  prevHeading: number;
+  prevSpeedMps: number;
+  currentSpeedMps: number;
+  smoothedPitch: number;
+  smoothedRoll: number;
   lastUpdateTime: number;
   markerEl: any;
   modelEl: any | null;
   isStale: boolean;
+  modelScale: number;
 }
 
 interface DroneAnimationManagerOptions {
@@ -98,9 +105,11 @@ export class DroneAnimationManager {
     alt: number,
     options?: {
       heading?: number;
+      speedMps?: number;
       isStale?: boolean;
       modelSrc?: string;
       displayName?: string;
+      modelScale?: number;
     },
   ): void {
     const now = Date.now();
@@ -116,12 +125,18 @@ export class DroneAnimationManager {
     const newHeading = options?.heading ??
       bearing(state.currentLat, state.currentLng, lat, lng);
 
+    // Track previous values for flight dynamics
+    state.prevHeading = state.heading;
+    state.prevSpeedMps = state.currentSpeedMps;
+    state.currentSpeedMps = options?.speedMps ?? 0;
+
     state.targetLat = lat;
     state.targetLng = lng;
     state.targetAlt = alt;
     state.heading = newHeading;
     state.lastUpdateTime = now;
     state.isStale = options?.isStale ?? false;
+    if (options?.modelScale != null) state.modelScale = options.modelScale;
   }
 
   /** Remove a drone from the map */
@@ -149,13 +164,19 @@ export class DroneAnimationManager {
       // Check for stale drones
       if (now - state.lastUpdateTime > this.staleThresholdMs && !state.isStale) {
         state.isStale = true;
-        // Could update marker color here for stale indication
       }
 
       // Exponential smoothing interpolation
       const dx = state.targetLat - state.currentLat;
       const dy = state.targetLng - state.currentLng;
       const dz = state.targetAlt - state.currentAlt;
+
+      // Compute flight dynamics (pitch/roll)
+      const dtSec = (now - state.lastUpdateTime) / 1000 || 0.033; // fallback ~30fps
+      const targetPitch = computePitch(state.currentSpeedMps, state.prevSpeedMps, dtSec);
+      const targetRoll = computeRoll(state.heading, state.prevHeading, dtSec);
+      state.smoothedPitch = smoothValue(state.smoothedPitch, targetPitch, this.smoothing);
+      state.smoothedRoll = smoothValue(state.smoothedRoll, targetRoll, this.smoothing);
 
       // Only update if there's meaningful movement
       if (Math.abs(dx) > 1e-8 || Math.abs(dy) > 1e-8 || Math.abs(dz) > 0.01) {
@@ -177,10 +198,17 @@ export class DroneAnimationManager {
           state.modelEl.position = pos;
           state.modelEl.orientation = {
             heading: state.heading - 90,
-            tilt: 0,
-            roll: 0,
+            tilt: state.smoothedPitch,
+            roll: state.smoothedRoll,
           };
         }
+      } else if (state.modelEl) {
+        // Even if position hasn't changed, still update orientation for smoothed dynamics
+        state.modelEl.orientation = {
+          heading: state.heading - 90,
+          tilt: state.smoothedPitch,
+          roll: state.smoothedRoll,
+        };
       }
     }
 
@@ -194,9 +222,11 @@ export class DroneAnimationManager {
     alt: number,
     options?: {
       heading?: number;
+      speedMps?: number;
       isStale?: boolean;
       modelSrc?: string;
       displayName?: string;
+      modelScale?: number;
     },
   ): DroneState {
     const { Marker3DInteractiveElement, Model3DInteractiveElement } = this.maps3dLib;
@@ -226,6 +256,7 @@ export class DroneAnimationManager {
 
     // Optional 3D model
     let modelEl: any = null;
+    const scale = options?.modelScale ?? 10;
     if (options?.modelSrc && Model3DInteractiveElement) {
       modelEl = new Model3DInteractiveElement();
       modelEl.setAttribute('data-layer', 'drone-anim');
@@ -234,7 +265,7 @@ export class DroneAnimationManager {
       modelEl.position = pos;
       modelEl.altitudeMode = 'RELATIVE_TO_MESH';
       modelEl.orientation = { heading: (options?.heading ?? 0) - 90, tilt: 0, roll: 0 };
-      modelEl.scale = 10;
+      modelEl.scale = scale;
 
       if (this.onDroneClick) {
         const droneId = trackerId;
@@ -257,10 +288,16 @@ export class DroneAnimationManager {
       targetLng: lng,
       targetAlt: alt,
       heading: options?.heading ?? 0,
+      prevHeading: options?.heading ?? 0,
+      prevSpeedMps: 0,
+      currentSpeedMps: options?.speedMps ?? 0,
+      smoothedPitch: 0,
+      smoothedRoll: 0,
       lastUpdateTime: Date.now(),
       markerEl: marker,
       modelEl,
       isStale: options?.isStale ?? false,
+      modelScale: scale,
     };
   }
 }

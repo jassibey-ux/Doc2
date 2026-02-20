@@ -8,7 +8,8 @@
     "build": "tsc && vite build && node -e \"require('fs').copyFileSync('public/favicon.svg', '../electron/out/renderer/favicon.svg')\"",
     "preview": "vite preview",
     "lint": "eslint . --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "optimize-models": "node scripts/optimize-models.mjs"
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.1",
@@ -33,6 +34,10 @@
     "vite-plugin-cesium": "^1.2.23"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "^4.3.0",
+    "@gltf-transform/core": "^4.3.0",
+    "@gltf-transform/extensions": "^4.3.0",
+    "@gltf-transform/functions": "^4.3.0",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/mapbox__mapbox-gl-draw": "^1.4.9",
     "@types/react": "^18.3.5",
@@ -40,6 +45,8 @@
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.21",
+    "draco3dgltf": "^1.5.7",
+    "meshoptimizer": "^0.21.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.0",
     "three": "^0.183.0",

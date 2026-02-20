@@ -2,10 +2,10 @@
 
 This directory contains glTF/GLB 3D models for the SCENSUS UAS Dashboard.
 
-All models are procedurally generated using Three.js (`frontend/scripts/generate-models.mjs`).
-They are low-poly, vertex-colored, unlit (KHR_materials_unlit), with no textures — optimized
-for Google Maps 3D overlay rendering. Any model can be replaced with a higher-fidelity sourced
-GLB (e.g. from Sketchfab CC-BY) by dropping a file with the same name.
+Procedural models are generated using Three.js (`frontend/scripts/generate-models.mjs`) with
+PBR metallic-roughness materials (2,000–4,000 triangles each). Any model can be replaced with
+a higher-fidelity sourced GLB (e.g. from Sketchfab CC-BY) by dropping a file with the same
+name. Use `npm run optimize-models` to compress sourced models before deployment.
 
 ## Drone Models (`./drones/`)
 - `quadcopter_generic.glb` — Generic quadcopter (manually sourced)
@@ -13,6 +13,8 @@ GLB (e.g. from Sketchfab CC-BY) by dropping a file with the same name.
 - `fpv.glb` — FPV racing drone (compact low-profile frame)
 - `fixed_wing.glb` — Fixed wing UAV (fuselage + swept wings + V-tail)
 - `hexacopter.glb` — Hexacopter (6 arms + landing gear)
+- `vtol.glb` — VTOL drone (fuselage + fixed wings + 4 tilt-rotors + V-tail)
+- `octocopter.glb` — Octocopter (8 arms + coaxial rotors + large landing gear)
 
 ## CUAS Models (`./cuas/`)
 - `jammer.glb` — RF jammer (tower + cone antenna + radiating fins)
@@ -39,8 +41,25 @@ Each model has two PNG thumbnails:
 - `{model_id}_top.png` — Top-down view (for 2D map markers)
 - `{model_id}_profile.png` — 3/4 angle view (for profile panels)
 
+## Manually Sourced Models (CC-BY Attribution)
+
+When replacing a procedural model with a sourced one (e.g. from Sketchfab), add attribution
+below in the following format:
+
+| File | Source | Author | License |
+|------|--------|--------|---------|
+| `example.glb` | [Model Name](https://sketchfab.com/...) | Author Name | CC-BY 4.0 |
+
 ## Regenerating Models
 ```bash
 cd frontend
 node scripts/generate-models.mjs
+```
+
+## Optimizing Sourced Models
+```bash
+# Place raw GLBs in frontend/raw-models/
+cp ~/Downloads/my-drone.glb frontend/raw-models/quadcopter_phantom.glb
+cd frontend
+npm run optimize-models
 ```
