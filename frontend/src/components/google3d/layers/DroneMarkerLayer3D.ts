@@ -2,10 +2,10 @@
  * DroneMarkerLayer3D — Drone current-position markers on Google 3D Map.
  *
  * Renders each active drone as:
- * - Model3DInteractiveElement with GLB model (or Marker3DInteractiveElement fallback)
- * - Label with tracker ID, altitude, speed
- * - Extruded pole from ground to drone altitude
- * - Selection highlighting via model swap (no color blend in Google 3D)
+ * - Model3DElement with GLB model (property assignment pattern)
+ * - Marker3DInteractiveElement pin with extruded pole from ground to altitude
+ * - Hover label (title tooltip) with tracker ID, altitude, stale status
+ * - Selection highlighting via model scale (no color blend in Google 3D)
  *
  * For real-time updates, DroneAnimationManager handles position interpolation.
  * This layer handles initial creation and full re-render.
@@ -144,7 +144,7 @@ export function renderDroneMarkers(
       }
     }
 
-    // Always render a marker (either as primary or as label overlay)
+    // Always render a marker (pin + extruded pole from ground to drone)
     const marker = new Marker3DInteractiveElement();
     marker.setAttribute('data-layer', DRONE_TAG);
     marker.setAttribute('data-drone-id', trackerId);
@@ -156,46 +156,16 @@ export function renderDroneMarkers(
     marker.altitudeMode = 'RELATIVE_TO_MESH';
     marker.extruded = true;
     marker.drawsWhenOccluded = true;
-    marker.collisionBehavior = 'OPTIONAL_AND_HIDES_LOWER_PRIORITY';
+    marker.collisionBehavior = 'REQUIRED';
     marker.zIndex = isSelected ? 1000 : 100;
 
-    // Always-visible floating label (separate Marker3DElement with HTML content)
+    // Hover label (Google 3D alpha API does not support custom HTML content
+    // in markers — title tooltip is the only reliable label mechanism)
     if (showLabels) {
-      const { Marker3DElement } = maps3dLib;
-      if (Marker3DElement) {
-        const displayName = summary?.alias ?? trackerId;
-        const alt = currentPos.alt_m != null ? `${Math.round(currentPos.alt_m)}m` : '?m';
-        const staleTag = isStale ? ' [STALE]' : '';
-        const labelText = `${displayName} · ${alt}${staleTag}`;
-
-        const labelMarker = new Marker3DElement();
-        labelMarker.setAttribute('data-layer', DRONE_TAG);
-        labelMarker.setAttribute('data-drone-id', trackerId);
-        labelMarker.position = {
-          lat: currentPos.lat,
-          lng: currentPos.lon,
-          altitude: (currentPos.alt_m ?? 50) + 15,
-        };
-        labelMarker.altitudeMode = 'RELATIVE_TO_MESH';
-        labelMarker.collisionBehavior = 'OPTIONAL_AND_HIDES_LOWER_PRIORITY';
-        labelMarker.zIndex = isSelected ? 1001 : 101;
-
-        const labelDiv = document.createElement('div');
-        labelDiv.style.cssText = [
-          'background: rgba(0,0,0,0.75)',
-          'color: #fff',
-          'font: 600 11px/1.2 system-ui, sans-serif',
-          'padding: 3px 7px',
-          'border-radius: 4px',
-          'white-space: nowrap',
-          'pointer-events: none',
-          `border: 1px solid ${isSelected ? '#f59e0b' : 'rgba(255,255,255,0.2)'}`,
-          `box-shadow: 0 1px 4px rgba(0,0,0,0.4)`,
-        ].join(';');
-        labelDiv.textContent = labelText;
-        labelMarker.append(labelDiv);
-        mapEl.append(labelMarker);
-      }
+      const displayName = summary?.alias ?? trackerId;
+      const alt = currentPos.alt_m != null ? `${Math.round(currentPos.alt_m)}m` : '?m';
+      const staleTag = isStale ? ' [STALE]' : '';
+      marker.title = `${displayName} · ${alt}${staleTag}`;
     }
 
     // Pin styling
