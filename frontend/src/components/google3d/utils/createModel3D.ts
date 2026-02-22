@@ -7,6 +7,7 @@
  * - Heading offset from model registry
  * - Scale from registry (with selected-state override)
  * - altitudeMode: RELATIVE_TO_GROUND for all models
+ * - Base tilt of 270° to correct glTF Y-up models for Google Maps 3D ground-up
  */
 
 import type { ModelAsset } from '../../../utils/modelRegistry';
@@ -39,7 +40,7 @@ export function createModel3D(options: CreateModel3DOptions): any | null {
     baseUrl,
     position,
     headingDeg,
-    tiltDeg = 0,
+    tiltDeg = 270,
     rollDeg = 0,
     isSelected = false,
     nonInteractive = false,

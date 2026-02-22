@@ -126,7 +126,7 @@ export function renderDroneMarkers(
           altitude: (currentPos.alt_m ?? 50) + modelAsset.heightOffset,
         },
         headingDeg,
-        tiltDeg: pitchDeg,
+        tiltDeg: 270 + pitchDeg,
         rollDeg,
         isSelected,
         dataLayer: DRONE_TAG,

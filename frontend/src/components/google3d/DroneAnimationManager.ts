@@ -202,7 +202,7 @@ export class DroneAnimationManager {
           state.modelEl.position = pos;
           state.modelEl.orientation = {
             heading: state.heading + state.headingOffset,
-            tilt: state.smoothedPitch,
+            tilt: 270 + state.smoothedPitch,
             roll: state.smoothedRoll,
           };
         }
@@ -210,7 +210,7 @@ export class DroneAnimationManager {
         // Even if position hasn't changed, still update orientation for smoothed dynamics
         state.modelEl.orientation = {
           heading: state.heading + state.headingOffset,
-          tilt: state.smoothedPitch,
+          tilt: 270 + state.smoothedPitch,
           roll: state.smoothedRoll,
         };
       }
@@ -239,7 +239,7 @@ export class DroneAnimationManager {
 
     const pos = { lat, lng, altitude: alt };
     const asset = options?.modelAsset;
-    const headingOffset = asset?.headingOffset ?? -90;
+    const headingOffset = asset?.headingOffset ?? 0;
 
     // Marker (always created, serves as label + fallback)
     const marker = new Marker3DInteractiveElement();
@@ -284,7 +284,7 @@ export class DroneAnimationManager {
             src: options.modelSrc,
             position: pos,
             altitudeMode: 'RELATIVE_TO_GROUND',
-            orientation: { heading: (options?.heading ?? 0) + headingOffset, tilt: 0, roll: 0 },
+            orientation: { heading: (options?.heading ?? 0) + headingOffset, tilt: 270, roll: 0 },
             scale,
           });
         } catch {

@@ -22,7 +22,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailProfilePath: '/models/thumbnails/drones/quadcopter_generic_profile.png',
     scale: 1.0,
     google3dScale: 10,
-    headingOffset: -90,
+    headingOffset: 0,
     heightOffset: 0,
   },
   quadcopter_phantom: {
@@ -33,7 +33,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailProfilePath: '/models/thumbnails/drones/quadcopter_phantom_profile.png',
     scale: 0.8,
     google3dScale: 10,
-    headingOffset: -90,
+    headingOffset: 0,
     heightOffset: 0,
   },
   fpv: {
@@ -44,7 +44,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailProfilePath: '/models/thumbnails/drones/fpv_profile.png',
     scale: 0.6,
     google3dScale: 10,
-    headingOffset: -90,
+    headingOffset: 0,
     heightOffset: 0,
   },
   fixed_wing: {
@@ -55,7 +55,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailProfilePath: '/models/thumbnails/drones/fixed_wing_profile.png',
     scale: 1.5,
     google3dScale: 10,
-    headingOffset: -90,
+    headingOffset: 0,
     heightOffset: 0,
   },
   hexacopter: {
@@ -66,7 +66,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailProfilePath: '/models/thumbnails/drones/hexacopter_profile.png',
     scale: 1.2,
     google3dScale: 12,
-    headingOffset: -90,
+    headingOffset: 0,
     heightOffset: 0,
   },
   vtol: {
@@ -77,7 +77,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailProfilePath: '/models/thumbnails/drones/vtol_profile.png',
     scale: 2.0,
     google3dScale: 14,
-    headingOffset: -90,
+    headingOffset: 0,
     heightOffset: 0,
   },
   octocopter: {
@@ -88,7 +88,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailProfilePath: '/models/thumbnails/drones/octocopter_profile.png',
     scale: 1.5,
     google3dScale: 14,
-    headingOffset: -90,
+    headingOffset: 0,
     heightOffset: 0,
   },
   animated_drone: {
@@ -99,7 +99,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailProfilePath: '/models/thumbnails/drones/animated_drone_profile.png',
     scale: 1.0,
     google3dScale: 10,
-    headingOffset: -90,
+    headingOffset: 0,
     heightOffset: 0,
   },
 };
