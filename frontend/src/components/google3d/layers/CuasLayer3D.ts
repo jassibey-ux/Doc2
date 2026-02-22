@@ -93,6 +93,7 @@ export function renderCuasLayer(
           altitude: placement.height_agl_m ?? 2,
         },
         headingDeg: placement.orientation_deg ?? 0,
+        tiltDeg: 0,
         isSelected,
         dataLayer: CUAS_TAG,
         dataId: { key: 'data-cuas-id', value: placement.id },
