@@ -34,12 +34,12 @@ export default function WizardStepCUAS({
     const profile = cuasProfiles.find(p => p.id === profileId);
     if (!profile) return;
 
-    // Use mapCenter if meaningful, otherwise fall back to site center
-    const effectiveCenter = (mapCenter.lat !== 0 || mapCenter.lon !== 0)
-      ? mapCenter
-      : selectedSite?.center
-        ? { lat: selectedSite.center.lat, lon: selectedSite.center.lon }
-        : mapCenter;
+    // Prefer site center for ground equipment; fall back to mapCenter (drone average)
+    const effectiveCenter = selectedSite?.center
+      ? { lat: selectedSite.center.lat, lon: selectedSite.center.lon }
+      : (mapCenter.lat !== 0 || mapCenter.lon !== 0)
+        ? mapCenter
+        : { lat: 0, lon: 0 };
 
     const newPlacement: CUASPlacementData = {
       id: generatePlacementId(),

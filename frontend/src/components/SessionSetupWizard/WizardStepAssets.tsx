@@ -27,11 +27,12 @@ export default function WizardStepAssets({
 }: WizardStepAssetsProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const effectiveCenter = (mapCenter.lat !== 0 || mapCenter.lon !== 0)
-    ? mapCenter
-    : selectedSite?.center
-      ? { lat: selectedSite.center.lat, lon: selectedSite.center.lon }
-      : mapCenter;
+  // Prefer site center for ground assets; fall back to mapCenter (drone average)
+  const effectiveCenter = selectedSite?.center
+    ? { lat: selectedSite.center.lat, lon: selectedSite.center.lon }
+    : (mapCenter.lat !== 0 || mapCenter.lon !== 0)
+      ? mapCenter
+      : { lat: 0, lon: 0 };
 
   const handleAddAsset = (assetType: 'vehicle' | 'equipment', model: ModelAsset) => {
     const newPlacement: AssetPlacementData = {
