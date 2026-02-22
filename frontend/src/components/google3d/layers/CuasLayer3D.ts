@@ -80,8 +80,10 @@ export function renderCuasLayer(
     const markerColor = isJamming ? '#e040fb' : isEngagementTarget ? '#fbbf24' : baseColor;
     const isSelected = selectedCuasId === placement.id;
 
-    // Render 3D GLB model via shared factory
-    const cuasAsset = CUAS_MODELS[cuasType];
+    // Render 3D GLB model via shared factory (model_3d_override takes priority)
+    const cuasAsset = placement.model_3d_override
+      ? CUAS_MODELS[placement.model_3d_override] ?? CUAS_MODELS[cuasType]
+      : CUAS_MODELS[cuasType];
     if (cuasAsset) {
       const model = createModel3D({
         maps3dLib,

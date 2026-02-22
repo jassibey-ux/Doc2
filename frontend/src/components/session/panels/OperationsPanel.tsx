@@ -9,7 +9,8 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronRight, Radio, Zap, Circle } from 'lucide-react';
 import type { DroneSummary } from '../../../types/drone';
-import type { CUASPlacement, CUASProfile } from '../../../types/workflow';
+import type { DroneProfile, CUASPlacement, CUASProfile } from '../../../types/workflow';
+import { getDroneModel } from '../../../utils/modelRegistry';
 
 interface OperationsPanelProps {
   drones: Map<string, DroneSummary>;
@@ -21,6 +22,7 @@ interface OperationsPanelProps {
   onSelectDrone: (id: string) => void;
   onSelectCuas: (id: string) => void;
   tacticalMode: boolean;
+  droneProfileMap?: Map<string, DroneProfile>;
 }
 
 const OperationsPanel: React.FC<OperationsPanelProps> = ({
@@ -33,6 +35,7 @@ const OperationsPanel: React.FC<OperationsPanelProps> = ({
   onSelectDrone,
   onSelectCuas,
   tacticalMode,
+  droneProfileMap,
 }) => {
   const [trackersExpanded, setTrackersExpanded] = useState(true);
   const [cuasExpanded, setCuasExpanded] = useState(true);
@@ -109,6 +112,19 @@ const OperationsPanel: React.FC<OperationsPanelProps> = ({
                       fill={drone.is_stale ? '#6b7280' : '#22c55e'}
                       color={drone.is_stale ? '#6b7280' : '#22c55e'}
                     />
+                    {/* Model thumbnail */}
+                    {(() => {
+                      const profile = droneProfileMap?.get(drone.tracker_id);
+                      const modelAsset = profile ? getDroneModel(profile) : null;
+                      return modelAsset ? (
+                        <img
+                          src={`${import.meta.env.BASE_URL ?? '/'}${modelAsset.thumbnailProfilePath.replace(/^\//, '')}`}
+                          alt={modelAsset.label}
+                          style={{ width: 24, height: 24, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : null;
+                    })()}
                     {/* Tracker ID */}
                     <span style={{
                       fontFamily: 'monospace', fontSize: 12, fontWeight: 600,

@@ -14,6 +14,7 @@ import type {
   CameraState3D,
   DroneProfile,
   GeoPoint,
+  AssetPlacement,
 } from '../../types/workflow';
 import type { GeofenceZone, BlueUASDroneInfo } from '../../types/blueUas';
 
@@ -38,6 +39,9 @@ export interface Google3DViewerProps {
 
   // Click-to-place (setup mode)
   onCuasPlaced?: (position: { lat: number; lon: number; alt_m: number }) => void;
+
+  // Asset placements (vehicles/equipment)
+  assetPlacements?: AssetPlacement[];
 
   // Drone tracks
   droneHistory?: Map<string, PositionPoint[]>;

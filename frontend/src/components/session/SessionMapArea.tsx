@@ -11,7 +11,7 @@ import type { Google3DViewerHandle } from '../google3d/Google3DViewer';
 import type { DroneSummary, PositionPoint } from '../../types/drone';
 import type {
   CUASPlacement, CUASProfile, SiteDefinition,
-  Engagement, JamBurst, DroneProfile,
+  Engagement, JamBurst, DroneProfile, AssetPlacement,
 } from '../../types/workflow';
 
 interface SessionMapAreaProps {
@@ -23,7 +23,9 @@ interface SessionMapAreaProps {
   selectedDroneId: string | null;
   onDroneClick: (droneId: string) => void;
   droneProfiles: DroneProfile[];
+  droneProfileMap?: Map<string, DroneProfile>;
   cuasPlacements: CUASPlacement[];
+  assetPlacements: AssetPlacement[];
   cuasProfiles: CUASProfile[];
   cuasJamStates: Map<string, boolean>;
   onCuasClick: (cuasPlacementId: string) => void;
@@ -54,7 +56,9 @@ const SessionMapArea = React.forwardRef<SessionMapAreaHandle, SessionMapAreaProp
   selectedDroneId,
   onDroneClick,
   droneProfiles,
+  droneProfileMap,
   cuasPlacements,
+  assetPlacements,
   cuasProfiles,
   cuasJamStates,
   onCuasClick,
@@ -89,7 +93,9 @@ const SessionMapArea = React.forwardRef<SessionMapAreaHandle, SessionMapAreaProp
         selectedDroneId={selectedDroneId}
         onDroneClick={onDroneClick}
         droneProfiles={droneProfiles}
+        droneProfileMap={droneProfileMap}
         cuasPlacements={cuasPlacements}
+        assetPlacements={assetPlacements}
         cuasProfiles={cuasProfiles}
         cuasJamStates={cuasJamStates}
         onCuasClick={onCuasClick}

@@ -10,10 +10,12 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { X, Navigation, Crosshair, Zap, ZapOff, XCircle } from 'lucide-react';
 import type { DroneSummary } from '../../types/drone';
-import type { CUASPlacement, CUASProfile, Engagement, JamBurst, TrackerAssignment } from '../../types/workflow';
+import type { DroneProfile, CUASPlacement, CUASProfile, Engagement, JamBurst, TrackerAssignment } from '../../types/workflow';
 import type { JamOnParams } from '../../contexts/TestSessionPhaseContext';
 import StreamingLogPanel from '../table/StreamingLogPanel';
 import type { TelemetryRow } from '../table/types';
+import ModelThumbnailButton from '../ModelThumbnailButton';
+import { DRONE_MODELS as DRONE_MODELS_IMPORT, CUAS_MODELS as CUAS_MODELS_IMPORT } from '../../utils/modelRegistry';
 
 export type DetailContext =
   | { type: 'drone'; droneId: string }
@@ -56,6 +58,11 @@ interface SessionDetailPanelProps {
   onCuasJamOn?: (engagementId: string, params?: JamOnParams) => void;
   onCuasJamOff?: (engagementId: string) => void;
   onCuasDisengage?: (engagementId: string) => void;
+
+  // Model override
+  droneProfileMap?: Map<string, DroneProfile>;
+  onDroneModelOverride?: (trackerId: string, modelId: string | undefined) => void;
+  onCuasModelOverride?: (cuasPlacementId: string, modelId: string | undefined) => void;
 }
 
 const PANEL_WIDTH = 320;
@@ -82,6 +89,9 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
   onCuasJamOn,
   onCuasJamOff,
   onCuasDisengage,
+  droneProfileMap,
+  onDroneModelOverride,
+  onCuasModelOverride,
 }) => {
   if (!context) return null;
 
@@ -112,6 +122,8 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
           isTracking={trackingDroneId === context.droneId}
           tacticalMode={tacticalMode}
           onLogRowClick={onLogRowClick}
+          droneProfile={droneProfileMap?.get(context.droneId)}
+          onModelOverride={onDroneModelOverride ? (modelId) => onDroneModelOverride(context.droneId, modelId) : undefined}
         />
       )}
       {context.type === 'engagement' && (
@@ -136,6 +148,7 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
           onCuasJamOn={onCuasJamOn}
           onCuasJamOff={onCuasJamOff}
           onCuasDisengage={onCuasDisengage}
+          onModelOverride={onCuasModelOverride ? (modelId) => onCuasModelOverride(context.cuasId, modelId) : undefined}
         />
       )}
       {context.type === 'log' && (
@@ -164,7 +177,9 @@ const DroneDetail: React.FC<{
   isTracking: boolean;
   tacticalMode: boolean;
   onLogRowClick?: (row: TelemetryRow) => void;
-}> = ({ drone, droneId, onClose, onFlyTo, onTrack, isTracking, tacticalMode, onLogRowClick }) => {
+  droneProfile?: DroneProfile;
+  onModelOverride?: (modelId: string | undefined) => void;
+}> = ({ drone, droneId, onClose, onFlyTo, onTrack, isTracking, tacticalMode, onLogRowClick, droneProfile, onModelOverride }) => {
   const [activeTab, setActiveTab] = useState<'details' | 'logs'>('details');
   const dimColor = tacticalMode ? 'rgba(74,222,128,0.5)' : '#6b7280';
   const accentColor = tacticalMode ? '#4ade80' : '#60a5fa';
@@ -253,6 +268,26 @@ const DroneDetail: React.FC<{
             <ActionButton icon={<Navigation size={13} />} label="Fly To" onClick={onFlyTo} tacticalMode={tacticalMode} />
             <ActionButton icon={<Crosshair size={13} />} label={isTracking ? 'Tracking' : 'Track'} onClick={onTrack} active={isTracking} tacticalMode={tacticalMode} />
           </div>
+
+          {/* 3D Model */}
+          {onModelOverride && (
+            <>
+              <SectionLabel tacticalMode={tacticalMode}>3D Model</SectionLabel>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <ModelThumbnailButton
+                  modelCategory="drone"
+                  currentModelId={droneProfile?.model_3d}
+                  onModelChange={onModelOverride}
+                  size={36}
+                />
+                <span style={{ fontSize: 11, color: dimColor }}>
+                  {droneProfile?.model_3d
+                    ? (DRONE_MODELS_IMPORT[droneProfile.model_3d]?.label ?? droneProfile.model_3d)
+                    : 'Auto'}
+                </span>
+              </div>
+            </>
+          )}
 
           {/* Position */}
           {drone.lat != null && drone.lon != null && (
@@ -447,10 +482,12 @@ const CuasDetail: React.FC<{
   onCuasJamOn?: (engagementId: string, params?: JamOnParams) => void;
   onCuasJamOff?: (engagementId: string) => void;
   onCuasDisengage?: (engagementId: string) => void;
+  onModelOverride?: (modelId: string | undefined) => void;
 }> = ({
   placement, profiles, isJamming, onClose, tacticalMode,
   activeEngagements, activeBursts, isLive,
   trackerAssignments, onCuasEngage, onCuasJamOn, onCuasJamOff, onCuasDisengage,
+  onModelOverride,
 }) => {
   const dimColor = tacticalMode ? 'rgba(74,222,128,0.5)' : '#6b7280';
 
@@ -593,6 +630,27 @@ const CuasDetail: React.FC<{
               {profile.antenna_gain_dbi != null && (
                 <TelemetryItem label="Gain" value={`${profile.antenna_gain_dbi} dBi`} tacticalMode={tacticalMode} />
               )}
+            </div>
+          </>
+        )}
+
+        {/* 3D Model */}
+        {onModelOverride && (
+          <>
+            <SectionLabel tacticalMode={tacticalMode}>3D Model</SectionLabel>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <ModelThumbnailButton
+                modelCategory="cuas"
+                currentModelId={placement.model_3d_override ?? profile?.type}
+                onModelChange={onModelOverride}
+                size={36}
+                showAuto={false}
+              />
+              <span style={{ fontSize: 11, color: dimColor }}>
+                {placement.model_3d_override
+                  ? (CUAS_MODELS_IMPORT[placement.model_3d_override]?.label ?? placement.model_3d_override)
+                  : (profile?.type?.toUpperCase() ?? 'Default')}
+              </span>
             </div>
           </>
         )}

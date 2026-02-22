@@ -120,13 +120,19 @@ export default function MapView() {
   }, [isDrawingMode, showGoogle3DGlobe]);
 
   // Build tracker_id -> DroneProfile map for 2D marker thumbnails
+  // Applies model_3d_override from tracker assignment when present
   const droneProfileMap = useMemo(() => {
     const map = new Map<string, import('../types/workflow').DroneProfile>();
     const assignments = phaseActiveSession?.tracker_assignments;
     if (assignments && droneProfiles) {
       for (const a of assignments) {
         const profile = droneProfiles.find(p => p.id === a.drone_profile_id);
-        if (profile) map.set(a.tracker_id, profile);
+        if (profile) {
+          const effective = a.model_3d_override
+            ? { ...profile, model_3d: a.model_3d_override }
+            : profile;
+          map.set(a.tracker_id, effective);
+        }
       }
     }
     return map;
@@ -294,6 +300,7 @@ export default function MapView() {
       droneProfileId: string;
       color: string;
       targetAltitude?: number;
+      model3dOverride?: string;
     }>;
     cuasPlacements: Array<{
       id: string;
@@ -301,6 +308,16 @@ export default function MapView() {
       position: { lat: number; lon: number };
       heightAgl: number;
       orientation: number;
+      model3dOverride?: string;
+    }>;
+    assetPlacements?: Array<{
+      id: string;
+      assetType: 'vehicle' | 'equipment';
+      modelId: string;
+      label: string;
+      position: { lat: number; lon: number };
+      orientation: number;
+      notes?: string;
     }>;
     operatorName: string;
     weatherNotes: string;
@@ -329,6 +346,7 @@ export default function MapView() {
         drone_profile_id: a.droneProfileId,
         session_color: a.color,
         target_altitude_m: a.targetAltitude,
+        model_3d_override: a.model3dOverride,
       }));
 
       const cuasPlacements = sessionData.cuasPlacements.map(p => ({
@@ -337,6 +355,17 @@ export default function MapView() {
         height_agl_m: p.heightAgl,
         orientation_deg: p.orientation,
         active: false,
+        model_3d_override: p.model3dOverride,
+      }));
+
+      const assetPlacements = sessionData.assetPlacements?.map(a => ({
+        id: a.id,
+        asset_type: a.assetType,
+        model_id: a.modelId,
+        label: a.label,
+        position: { lat: a.position.lat, lon: a.position.lon },
+        orientation_deg: a.orientation,
+        notes: a.notes,
       }));
 
       const createPayload = {
@@ -345,6 +374,7 @@ export default function MapView() {
         status: 'planning',
         tracker_assignments: trackerAssignments,
         cuas_placements: cuasPlacements,
+        asset_placements: assetPlacements,
         operator_name: sessionData.operatorName,
         weather_notes: sessionData.weatherNotes,
       };
@@ -532,6 +562,7 @@ export default function MapView() {
                 timelineStart={timelineStart}
                 site={selectedSite}
                 cuasPlacements={phaseActiveSession?.cuas_placements || []}
+                assetPlacements={phaseActiveSession?.asset_placements || []}
                 cuasProfiles={cuasProfiles}
                 cuasJamStates={cuasJamStates}
                 initialCameraState={selectedSite?.camera_state_3d}

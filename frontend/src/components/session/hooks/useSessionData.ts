@@ -13,7 +13,7 @@ import { useWebSocket } from '../../../contexts/WebSocketContext';
 import { useWorkflow } from '../../../contexts/WorkflowContext';
 import { useTestSessionPhase } from '../../../contexts/TestSessionPhaseContext';
 import type { DroneSummary, PositionPoint } from '../../../types/drone';
-import type { CUASPlacement, CUASProfile, TestEvent, Engagement } from '../../../types/workflow';
+import type { CUASPlacement, CUASProfile, TestEvent, Engagement, AssetPlacement } from '../../../types/workflow';
 import type { AnomalyAlert } from '../../../contexts/WebSocketContext';
 
 export interface SessionData {
@@ -26,6 +26,7 @@ export interface SessionData {
   // Session metadata
   sessionTrackerIds: Set<string>;
   cuasPlacements: CUASPlacement[];
+  assetPlacements: AssetPlacement[];
   cuasProfiles: CUASProfile[];
   events: TestEvent[];
   engagements: Engagement[];
@@ -179,6 +180,9 @@ export function useSessionData(): SessionData {
   // CUAS placements from active session
   const cuasPlacements = activeSession?.cuas_placements || [];
 
+  // Asset placements (vehicles/equipment) from active session
+  const assetPlacements = activeSession?.asset_placements || [];
+
   // Events from active session
   const events = activeSession?.events || [];
 
@@ -198,6 +202,7 @@ export function useSessionData(): SessionData {
     sessionAlerts,
     sessionTrackerIds,
     cuasPlacements,
+    assetPlacements,
     cuasProfiles,
     events,
     engagements,

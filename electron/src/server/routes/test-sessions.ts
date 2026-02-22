@@ -96,6 +96,7 @@ export function testSessionRoutes(): Router {
         status: sessionData.status || 'planning',
         tracker_assignments: sessionData.tracker_assignments || [],
         cuas_placements: sessionData.cuas_placements || [],
+        asset_placements: sessionData.asset_placements || [],
         events: sessionData.events || [],
         sd_card_merged: false,
         analysis_completed: false,
@@ -120,6 +121,58 @@ export function testSessionRoutes(): Router {
       res.json(session);
     } catch (error) {
       res.status(500).json({ error: 'Failed to update test session' });
+    }
+  });
+
+  // PATCH /api/test-sessions/:id/tracker-assignment/:trackerId - Update model override for a tracker
+  router.patch('/test-sessions/:id/tracker-assignment/:trackerId', (req, res) => {
+    try {
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      const { trackerId } = req.params;
+      const { model_3d_override } = req.body;
+
+      const assignments = session.tracker_assignments?.map(a =>
+        a.tracker_id === trackerId ? { ...a, model_3d_override } : a
+      );
+
+      if (!assignments?.some(a => a.tracker_id === trackerId)) {
+        return res.status(404).json({ error: 'Tracker assignment not found' });
+      }
+
+      const updated = updateTestSession(req.params.id, { tracker_assignments: assignments });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update tracker assignment' });
+    }
+  });
+
+  // PATCH /api/test-sessions/:id/cuas-placement/:placementId - Update model override for CUAS
+  router.patch('/test-sessions/:id/cuas-placement/:placementId', (req, res) => {
+    try {
+      const session = getTestSessionById(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: 'Test session not found' });
+      }
+
+      const { placementId } = req.params;
+      const { model_3d_override } = req.body;
+
+      const placements = session.cuas_placements?.map(p =>
+        p.id === placementId ? { ...p, model_3d_override } : p
+      );
+
+      if (!placements?.some(p => p.id === placementId)) {
+        return res.status(404).json({ error: 'CUAS placement not found' });
+      }
+
+      const updated = updateTestSession(req.params.id, { cuas_placements: placements });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update CUAS placement' });
     }
   });
 

@@ -5,6 +5,7 @@ export interface DroneAssignment {
   droneProfileId: string;
   color: string;
   targetAltitude?: number;
+  model3dOverride?: string;
 }
 
 export interface CUASPlacementData {
@@ -13,6 +14,17 @@ export interface CUASPlacementData {
   position: { lat: number; lon: number };
   heightAgl: number;
   orientation: number;
+  model3dOverride?: string;
+}
+
+export interface AssetPlacementData {
+  id: string;
+  assetType: 'vehicle' | 'equipment';
+  modelId: string;
+  label: string;
+  position: { lat: number; lon: number };
+  orientation: number;
+  notes?: string;
 }
 
 export interface WizardState {
@@ -30,6 +42,9 @@ export interface WizardState {
   cuasPlacements: CUASPlacementData[];
   placementMode: boolean;
   selectedCuasProfileId: string | null;
+
+  // Step 3b: Assets (vehicles/equipment)
+  assetPlacements: AssetPlacementData[];
 
   // Step 4: Review
   sessionName: string;
@@ -56,6 +71,9 @@ export type WizardAction =
   | { type: 'ADD_CUAS_PLACEMENT'; placement: CUASPlacementData }
   | { type: 'UPDATE_CUAS_PLACEMENT'; placementId: string; updates: Partial<CUASPlacementData> }
   | { type: 'REMOVE_CUAS_PLACEMENT'; placementId: string }
+  | { type: 'ADD_ASSET_PLACEMENT'; placement: AssetPlacementData }
+  | { type: 'UPDATE_ASSET_PLACEMENT'; placementId: string; updates: Partial<AssetPlacementData> }
+  | { type: 'REMOVE_ASSET_PLACEMENT'; placementId: string }
   | { type: 'SET_SESSION_NAME'; name: string }
   | { type: 'SET_OPERATOR_NAME'; name: string }
   | { type: 'SET_WEATHER_NOTES'; notes: string }

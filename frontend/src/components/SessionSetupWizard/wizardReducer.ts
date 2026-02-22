@@ -9,6 +9,7 @@ export const initialWizardState: WizardState = {
   cuasPlacements: [],
   placementMode: false,
   selectedCuasProfileId: null,
+  assetPlacements: [],
   sessionName: '',
   operatorName: '',
   weatherNotes: '',
@@ -22,7 +23,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       return { ...state, currentStep: action.step, error: null };
 
     case 'NEXT_STEP':
-      return { ...state, currentStep: Math.min(state.currentStep + 1, 3), error: null };
+      return { ...state, currentStep: Math.min(state.currentStep + 1, 4), error: null };
 
     case 'PREVIOUS_STEP':
       return { ...state, currentStep: Math.max(state.currentStep - 1, 0), error: null };
@@ -101,6 +102,26 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
         cuasPlacements: state.cuasPlacements.filter(p => p.id !== action.placementId),
       };
 
+    case 'ADD_ASSET_PLACEMENT':
+      return {
+        ...state,
+        assetPlacements: [...state.assetPlacements, action.placement],
+      };
+
+    case 'UPDATE_ASSET_PLACEMENT':
+      return {
+        ...state,
+        assetPlacements: state.assetPlacements.map(p =>
+          p.id === action.placementId ? { ...p, ...action.updates } : p
+        ),
+      };
+
+    case 'REMOVE_ASSET_PLACEMENT':
+      return {
+        ...state,
+        assetPlacements: state.assetPlacements.filter(p => p.id !== action.placementId),
+      };
+
     case 'SET_SESSION_NAME':
       return { ...state, sessionName: action.name };
 
@@ -122,7 +143,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case 'QUICK_START':
       return {
         ...initialWizardState,
-        currentStep: 3, // Jump to Review step
+        currentStep: 4, // Jump to Review step
         selectedSiteId: action.siteId,
         isCreatingNewSite: action.siteId === null && action.newSiteName.length > 0,
         newSiteName: action.newSiteName,
@@ -162,7 +183,11 @@ export function validateStep(state: WizardState, step: number): boolean {
       // Not blocking - CUAS placement is optional
       return true;
 
-    case 3: // Review
+    case 3: // Assets (vehicles/equipment)
+      // Not blocking - asset placement is optional
+      return true;
+
+    case 4: // Review
       return state.sessionName.trim().length > 0 && state.droneAssignments.length > 0;
 
     default:
@@ -199,7 +224,11 @@ export function getValidationMessage(state: WizardState, step: number): string |
       // CUAS placement is optional
       return null;
 
-    case 3: // Review
+    case 3: // Assets
+      // Asset placement is optional
+      return null;
+
+    case 4: // Review
       if (state.sessionName.trim().length === 0) {
         return 'Enter a session name';
       }

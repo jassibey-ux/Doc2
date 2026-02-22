@@ -8,6 +8,7 @@ import WizardNavigation from './WizardNavigation';
 import WizardStepSite from './WizardStepSite';
 import WizardStepDrones from './WizardStepDrones';
 import WizardStepCUAS from './WizardStepCUAS';
+import WizardStepAssets from './WizardStepAssets';
 import WizardStepReview from './WizardStepReview';
 import { TRACK_COLORS } from './wizardTypes';
 import type { SiteDefinition, DroneProfile, CUASProfile } from '../../types/workflow';
@@ -29,6 +30,7 @@ interface SessionSetupWizardProps {
       droneProfileId: string;
       color: string;
       targetAltitude?: number;
+      model3dOverride?: string;
     }>;
     cuasPlacements: Array<{
       id: string;
@@ -36,6 +38,16 @@ interface SessionSetupWizardProps {
       position: { lat: number; lon: number };
       heightAgl: number;
       orientation: number;
+      model3dOverride?: string;
+    }>;
+    assetPlacements?: Array<{
+      id: string;
+      assetType: 'vehicle' | 'equipment';
+      modelId: string;
+      label: string;
+      position: { lat: number; lon: number };
+      orientation: number;
+      notes?: string;
     }>;
     operatorName: string;
     weatherNotes: string;
@@ -58,7 +70,7 @@ interface SessionSetupWizardProps {
   onWizardOpenChange?: (isOpen: boolean) => void;
 }
 
-const STEP_TITLES = ['Site', 'Drones', 'CUAS', 'Review'];
+const STEP_TITLES = ['Site', 'Drones', 'CUAS', 'Assets', 'Review'];
 
 // Default globe site (shows Earth when no site selected)
 const DEFAULT_GLOBE_SITE: SiteDefinition = {
@@ -104,7 +116,7 @@ export default function SessionSetupWizard({
 
   // Generate default session name when reaching review step
   useEffect(() => {
-    if (state.currentStep === 3 && !state.sessionName) {
+    if (state.currentStep === 4 && !state.sessionName) {
       const selectedSite = state.selectedSiteId
         ? sites.find(s => s.id === state.selectedSiteId)
         : null;
@@ -187,7 +199,7 @@ export default function SessionSetupWizard({
   }, [activePlacingCuasId]);
 
   const handleNext = useCallback(() => {
-    if (state.currentStep < 3) {
+    if (state.currentStep < 4) {
       dispatch({ type: 'NEXT_STEP' });
     }
   }, [state.currentStep]);
@@ -216,6 +228,7 @@ export default function SessionSetupWizard({
         newSiteName: state.isCreatingNewSite ? state.newSiteName : null,
         droneAssignments: state.droneAssignments,
         cuasPlacements: state.cuasPlacements,
+        assetPlacements: state.assetPlacements.length > 0 ? state.assetPlacements : undefined,
         operatorName: state.operatorName,
         weatherNotes: state.weatherNotes,
       });
@@ -284,7 +297,7 @@ export default function SessionSetupWizard({
   const canStartSession =
     validateStep(state, 0) &&
     validateStep(state, 1) &&
-    validateStep(state, 3);
+    validateStep(state, 4);
 
   if (!isOpen || isMinimizedForPlacement) {
     return null;
@@ -335,6 +348,15 @@ export default function SessionSetupWizard({
           />
         );
       case 3:
+        return (
+          <WizardStepAssets
+            state={state}
+            dispatch={dispatch}
+            mapCenter={mapCenter}
+            selectedSite={state.selectedSiteId ? sites.find(s => s.id === state.selectedSiteId) : undefined}
+          />
+        );
+      case 4:
         return (
           <WizardStepReview
             state={state}
@@ -409,7 +431,7 @@ export default function SessionSetupWizard({
                 marginTop: '4px',
               }}
             >
-              Step {state.currentStep + 1} of 4: {STEP_TITLES[state.currentStep]}
+              Step {state.currentStep + 1} of 5: {STEP_TITLES[state.currentStep]}
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -468,7 +490,7 @@ export default function SessionSetupWizard({
         <div style={{ padding: '0 24px 24px' }}>
           <WizardNavigation
             currentStep={state.currentStep}
-            canProceed={state.currentStep === 3 ? canStartSession : isCurrentStepValid}
+            canProceed={state.currentStep === 4 ? canStartSession : isCurrentStepValid}
             isSubmitting={state.isSubmitting}
             validationMessage={validationMessage}
             onNext={handleNext}

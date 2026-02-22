@@ -23,6 +23,7 @@ import { useGoogle3DScreenshot } from './hooks/useGoogle3DScreenshot';
 import { useGoogle3DBoundaryDrawing } from './hooks/useGoogle3DBoundaryDrawing';
 import { renderSiteBoundary } from './layers/SiteBoundaryLayer3D';
 import { renderCuasLayer } from './layers/CuasLayer3D';
+import { renderAssetLayer } from './layers/AssetLayer3D';
 import { renderDroneTracks } from './layers/DroneTrackLayer3D';
 import { renderDroneMarkers } from './layers/DroneMarkerLayer3D';
 import { renderEngagementLayer } from './layers/EngagementLayer3D';
@@ -95,6 +96,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     onBoundaryDrawn,
     initialBoundary,
     drawingMode,
+    assetPlacements,
     onMarkerPlaced,
     onReady,
     onClose,
@@ -363,6 +365,18 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
       }
     }
 
+    // Asset placements (vehicles/equipment)
+    if (assetPlacements && assetPlacements.length > 0) {
+      try {
+        cleanupRef.current.push(
+          renderAssetLayer(maps3dLib, mapEl, { assetPlacements })
+        );
+        apiUsage?.recordLayerRender('Assets');
+      } catch (err) {
+        console.warn('[Google3DViewer] Asset layer failed:', err);
+      }
+    }
+
     // Drone tracks
     let colorMap = new Map<string, string>();
     if (features.droneTracks && droneHistory && droneHistory.size > 0) {
@@ -426,7 +440,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     cuasPlacements, cuasProfiles, cuasJamStates, site, engagements,
     currentDroneData, selectedDroneId, showLabels, activeBursts,
     engagementModeCuasId, droneProfiles, droneProfileMap, mode, geofenceZones,
-    onCuasClick, onDroneClick,
+    assetPlacements, onCuasClick, onDroneClick,
   ]);
 
   // Cleanup on unmount

@@ -55,7 +55,7 @@ import {
   AntennaPattern,
 } from '../types/workflow';
 import { calculatePolygonCenter } from '../utils/siteVisualization';
-import { DRONE_MODELS } from '../utils/modelRegistry';
+import ModelPickerPopover from './ModelPickerPopover';
 
 interface ConfigurationWorkspacePanelProps {
   isOpen: boolean;
@@ -996,51 +996,13 @@ export default function ConfigurationWorkspacePanel({ isOpen, onClose, onFlyToSi
                   <label style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
                     3D Model
                   </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-                    {/* Auto-detect option */}
-                    <button
-                      onClick={() => setEditedDrone(prev => prev ? { ...prev, model_3d: undefined } : null)}
-                      style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                        padding: '8px 4px', borderRadius: '8px', cursor: 'pointer',
-                        border: !editedDrone?.model_3d ? '2px solid #ff8c00' : '1px solid rgba(255,255,255,0.1)',
-                        background: !editedDrone?.model_3d ? 'rgba(255,140,0,0.15)' : 'rgba(255,255,255,0.05)',
-                        color: '#fff', fontSize: '10px',
-                      }}
-                    >
-                      <div style={{
-                        width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '24px', opacity: 0.7,
-                      }}>
-                        {'\u2728'}
-                      </div>
-                      <span>Auto</span>
-                    </button>
-                    {Object.values(DRONE_MODELS).map(m => {
-                      const isSel = editedDrone?.model_3d === m.id;
-                      return (
-                        <button
-                          key={m.id}
-                          onClick={() => setEditedDrone(prev => prev ? { ...prev, model_3d: m.id } : null)}
-                          style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                            padding: '8px 4px', borderRadius: '8px', cursor: 'pointer',
-                            border: isSel ? '2px solid #ff8c00' : '1px solid rgba(255,255,255,0.1)',
-                            background: isSel ? 'rgba(255,140,0,0.15)' : 'rgba(255,255,255,0.05)',
-                            color: '#fff', fontSize: '10px',
-                          }}
-                        >
-                          <img
-                            src={`${import.meta.env.BASE_URL ?? '/'}${m.thumbnailProfilePath.replace(/^\//, '')}`}
-                            alt={m.label}
-                            style={{ width: 48, height: 48, objectFit: 'contain' }}
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                          />
-                          <span style={{ textAlign: 'center', lineHeight: '1.2' }}>{m.label.replace(/ *\(.*\)/, '')}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <ModelPickerPopover
+                    modelCategory="drone"
+                    selectedModelId={editedDrone?.model_3d}
+                    onSelect={(modelId) => setEditedDrone(prev => prev ? { ...prev, model_3d: modelId } : null)}
+                    showAuto
+                    mode="inline"
+                  />
                 </div>
 
                 <div style={{ marginBottom: '12px' }}>

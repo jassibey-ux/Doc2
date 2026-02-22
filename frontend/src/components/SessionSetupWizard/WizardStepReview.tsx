@@ -9,6 +9,7 @@ import {
   ChevronUp,
   Check,
   AlertCircle,
+  Car,
 } from 'lucide-react';
 import { GlassCard, GlassInput, GlassTextarea, GlassPanel } from '../ui/GlassUI';
 import type { WizardState, WizardAction } from './wizardTypes';
@@ -374,6 +375,67 @@ export default function WizardStepReview({
             )}
           </div>
         </CollapsibleSection>
+
+        {/* Assets Section */}
+        {state.assetPlacements.length > 0 && (
+          <CollapsibleSection
+            title="Vehicles & Equipment"
+            icon={<Car size={16} />}
+            count={state.assetPlacements.length}
+            isValid={true}
+          >
+            <div style={{ paddingTop: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {state.assetPlacements.map((placement, index) => (
+                  <div
+                    key={placement.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '8px 10px',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      borderRadius: '6px',
+                      borderLeft: `3px solid ${placement.assetType === 'vehicle' ? '#3b82f6' : '#8b5cf6'}`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: placement.assetType === 'vehicle' ? '#3b82f6' : '#8b5cf6',
+                        minWidth: '20px',
+                      }}
+                    >
+                      #{index + 1}
+                    </span>
+                    <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.8)' }}>
+                      {placement.label}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        color: 'rgba(255, 255, 255, 0.4)',
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {placement.assetType}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        color: 'rgba(255, 255, 255, 0.4)',
+                        marginLeft: 'auto',
+                      }}
+                    >
+                      {placement.position?.lat?.toFixed(5) ?? '?'}, {placement.position?.lon?.toFixed(5) ?? '?'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CollapsibleSection>
+        )}
       </div>
 
       {/* Additional Details */}

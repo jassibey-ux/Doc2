@@ -64,7 +64,7 @@ const SessionPage: React.FC = () => {
   // Centralized filtered data
   const {
     sessionDrones, sessionDroneHistory, sessionAlerts: rawSessionAlerts,
-    sessionTrackerIds, cuasPlacements, events,
+    sessionTrackerIds, cuasPlacements, assetPlacements, events,
     sessionName, isLive, isCompleted, connectionStatus,
   } = useSessionData();
 
@@ -282,6 +282,54 @@ const SessionPage: React.FC = () => {
     }
   }, [jamOff, showToast]);
 
+  // Build droneProfileMap for model thumbnails (applies model_3d_override)
+  const droneProfileMap = useMemo(() => {
+    const map = new Map<string, import('../../types/workflow').DroneProfile>();
+    const assignments = activeSession?.tracker_assignments;
+    if (assignments && droneProfiles) {
+      for (const a of assignments) {
+        const profile = droneProfiles.find(p => p.id === a.drone_profile_id);
+        if (profile) {
+          const effective = a.model_3d_override
+            ? { ...profile, model_3d: a.model_3d_override }
+            : profile;
+          map.set(a.tracker_id, effective);
+        }
+      }
+    }
+    return map;
+  }, [activeSession?.tracker_assignments, droneProfiles]);
+
+  // Model override handlers (PATCH to backend + refresh session)
+  const handleDroneModelOverride = useCallback(async (trackerId: string, modelId: string | undefined) => {
+    if (!activeSession) return;
+    try {
+      await fetch(`/api/test-sessions/${activeSession.id}/tracker-assignment/${trackerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model_3d_override: modelId }),
+      });
+      // Reload session to pick up updated assignments
+      loadSessionById(activeSession.id);
+    } catch (err) {
+      showToast('error', 'Failed to update model');
+    }
+  }, [activeSession, loadSessionById, showToast]);
+
+  const handleCuasModelOverride = useCallback(async (cuasPlacementId: string, modelId: string | undefined) => {
+    if (!activeSession) return;
+    try {
+      await fetch(`/api/test-sessions/${activeSession.id}/cuas-placement/${cuasPlacementId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model_3d_override: modelId }),
+      });
+      loadSessionById(activeSession.id);
+    } catch (err) {
+      showToast('error', 'Failed to update CUAS model');
+    }
+  }, [activeSession, loadSessionById, showToast]);
+
   const handleCuasDisengage = useCallback(async (engagementId: string) => {
     try {
       const result = await disengage(engagementId);
@@ -430,6 +478,7 @@ const SessionPage: React.FC = () => {
             onAcknowledgeAll={acknowledgeAll}
             onAlertClick={handleAlertClick}
             onOpenLog={() => setDetailContext({ type: 'log' })}
+            droneProfileMap={droneProfileMap}
           />
 
           {/* Map area */}
@@ -443,7 +492,9 @@ const SessionPage: React.FC = () => {
             selectedDroneId={selectedDroneId}
             onDroneClick={handleDroneClick}
             droneProfiles={droneProfiles}
+            droneProfileMap={droneProfileMap}
             cuasPlacements={cuasPlacements}
+            assetPlacements={assetPlacements}
             cuasProfiles={cuasProfiles}
             cuasJamStates={cuasJamStates}
             onCuasClick={handleCuasClick}
@@ -480,6 +531,9 @@ const SessionPage: React.FC = () => {
             onCuasJamOn={handleCuasJamOn}
             onCuasJamOff={handleCuasJamOff}
             onCuasDisengage={handleCuasDisengage}
+            droneProfileMap={droneProfileMap}
+            onDroneModelOverride={handleDroneModelOverride}
+            onCuasModelOverride={handleCuasModelOverride}
             onLogRowClick={(row) => {
               if (row.lat != null && row.lon != null) {
                 mapRef.current?.flyTo(row.lat, row.lon, row.alt_m ?? 50);

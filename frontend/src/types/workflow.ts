@@ -127,6 +127,7 @@ export interface TrackerAssignment {
   session_color: string;
   target_altitude_m?: number;
   flight_plan?: FlightPlan;
+  model_3d_override?: string;
   assigned_at: string;
 }
 
@@ -182,6 +183,20 @@ export interface CUASProfile {
   updated_at: string;
 }
 
+// =============================================================================
+// Asset Placements (Vehicles & Equipment)
+// =============================================================================
+
+export interface AssetPlacement {
+  id: string;
+  asset_type: 'vehicle' | 'equipment';
+  model_id: string;           // key into VEHICLE_MODELS or EQUIPMENT_MODELS
+  label: string;
+  position: GeoPoint;
+  orientation_deg: number;
+  notes?: string;
+}
+
 export interface CUASPlacement {
   id: string;
   cuas_profile_id: string;
@@ -190,6 +205,7 @@ export interface CUASPlacement {
   orientation_deg: number;
   elevation_deg?: number;
   active: boolean;
+  model_3d_override?: string;
   notes?: string;
 }
 
@@ -456,6 +472,7 @@ export interface TestSession {
   status: SessionStatus;
   tracker_assignments: TrackerAssignment[];
   cuas_placements: CUASPlacement[];
+  asset_placements?: AssetPlacement[];
   start_time?: string;
   end_time?: string;
   duration_seconds?: number;

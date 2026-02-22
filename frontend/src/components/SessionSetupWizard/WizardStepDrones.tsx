@@ -5,6 +5,7 @@ import type { WizardState, WizardAction, DroneAssignment } from './wizardTypes';
 import { TRACK_COLORS } from './wizardTypes';
 import type { DroneProfile } from '../../types/workflow';
 import type { DroneSummary } from '../../types/drone';
+import ModelThumbnailButton from '../ModelThumbnailButton';
 
 interface WizardStepDronesProps {
   state: WizardState;
@@ -323,6 +324,21 @@ export default function WizardStepDrones({
                       color: 'rgba(255, 255, 255, 0.6)',
                     }}
                   >
+                    {/* 3D Model picker */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <ModelThumbnailButton
+                        modelCategory="drone"
+                        currentModelId={assignment.model3dOverride ?? profile.model_3d}
+                        onModelChange={(modelId) => {
+                          dispatch({
+                            type: 'UPDATE_DRONE_ASSIGNMENT',
+                            trackerId: tracker.id,
+                            updates: { model3dOverride: modelId },
+                          });
+                        }}
+                        size={36}
+                      />
+                    </div>
                     <span>
                       <strong style={{ color: 'rgba(255, 255, 255, 0.8)' }}>Model:</strong>{' '}
                       {profile.model || 'N/A'}

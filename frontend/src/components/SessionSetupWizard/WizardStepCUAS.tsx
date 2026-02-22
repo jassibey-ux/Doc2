@@ -3,6 +3,7 @@ import { Radio, Trash2, RotateCw, Move, ChevronDown, ChevronUp, Target } from 'l
 import { GlassCard, GlassButton, GlassSelect, GlassInput } from '../ui/GlassUI';
 import type { WizardState, WizardAction, CUASPlacementData } from './wizardTypes';
 import type { SiteDefinition, CUASProfile } from '../../types/workflow';
+import ModelThumbnailButton from '../ModelThumbnailButton';
 
 interface WizardStepCUASProps {
   state: WizardState;
@@ -409,8 +410,21 @@ export default function WizardStepCUAS({
                           display: 'flex',
                           gap: '16px',
                           flexWrap: 'wrap',
+                          alignItems: 'center',
                         }}
                       >
+                        {/* 3D Model picker */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <ModelThumbnailButton
+                            modelCategory="cuas"
+                            currentModelId={placement.model3dOverride ?? profile.type}
+                            onModelChange={(modelId) => {
+                              handleUpdatePlacement(placement.id, { model3dOverride: modelId });
+                            }}
+                            size={32}
+                            showAuto={false}
+                          />
+                        </div>
                         {profile.beam_width_deg && (
                           <span>
                             <strong style={{ color: 'rgba(255, 255, 255, 0.8)' }}>

@@ -1,4 +1,4 @@
-import { MapPin, Plane, Radio, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { MapPin, Plane, Radio, Car, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { GlassButton } from '../ui/GlassUI';
 
 interface WizardStep {
@@ -11,6 +11,7 @@ const WIZARD_STEPS: WizardStep[] = [
   { id: 'site', title: 'Site', icon: <MapPin size={16} /> },
   { id: 'drones', title: 'Drones', icon: <Plane size={16} /> },
   { id: 'cuas', title: 'CUAS', icon: <Radio size={16} /> },
+  { id: 'assets', title: 'Assets', icon: <Car size={16} /> },
   { id: 'review', title: 'Review', icon: <CheckCircle size={16} /> },
 ];
 

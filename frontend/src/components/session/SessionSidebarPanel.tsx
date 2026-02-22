@@ -12,7 +12,7 @@ import EngagementPanel from './panels/EngagementPanel';
 import ActivityPanel from './panels/ActivityPanel';
 import ToolsPanel from './panels/ToolsPanel';
 import type { DroneSummary } from '../../types/drone';
-import type { CUASPlacement, CUASProfile, TestEvent, Engagement } from '../../types/workflow';
+import type { DroneProfile, CUASPlacement, CUASProfile, TestEvent, Engagement } from '../../types/workflow';
 import type { SessionAlert } from './hooks/useSessionAlerts';
 
 interface SessionSidebarPanelProps {
@@ -28,6 +28,7 @@ interface SessionSidebarPanelProps {
   selectedCuasId: string | null;
   onSelectDrone: (id: string) => void;
   onSelectCuas: (id: string) => void;
+  droneProfileMap?: Map<string, DroneProfile>;
 
   // Engagements panel
   engagements: Engagement[];
@@ -101,6 +102,7 @@ const SessionSidebarPanel: React.FC<SessionSidebarPanelProps> = ({
             onSelectDrone={props.onSelectDrone}
             onSelectCuas={props.onSelectCuas}
             tacticalMode={tacticalMode}
+            droneProfileMap={props.droneProfileMap}
           />
         )}
         {activePanel === 'engagements' && (
