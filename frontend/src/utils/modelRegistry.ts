@@ -6,8 +6,10 @@ export interface ModelAsset {
   glbPath: string;
   thumbnailTopPath: string;      // top-down view PNG
   thumbnailProfilePath: string;  // 3/4 angle PNG
-  scale: number;
-  google3dScale?: number;        // override scale for Google Maps 3D (if different from Cesium)
+  scale: number;                 // Cesium scale factor
+  google3dScale: number;         // Google Maps 3D scale (desiredSize / nativeSize)
+  google3dSelectedScale?: number; // optional override for selected state in Google 3D
+  headingOffset: number;         // degrees added to heading for correct model facing direction
   heightOffset: number;          // meters above ground
 }
 
@@ -19,6 +21,8 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/drones/quadcopter_generic_top.png',
     thumbnailProfilePath: '/models/thumbnails/drones/quadcopter_generic_profile.png',
     scale: 1.0,
+    google3dScale: 10,
+    headingOffset: -90,
     heightOffset: 0,
   },
   quadcopter_phantom: {
@@ -28,6 +32,8 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/drones/quadcopter_phantom_top.png',
     thumbnailProfilePath: '/models/thumbnails/drones/quadcopter_phantom_profile.png',
     scale: 0.8,
+    google3dScale: 10,
+    headingOffset: -90,
     heightOffset: 0,
   },
   fpv: {
@@ -37,6 +43,8 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/drones/fpv_top.png',
     thumbnailProfilePath: '/models/thumbnails/drones/fpv_profile.png',
     scale: 0.6,
+    google3dScale: 10,
+    headingOffset: -90,
     heightOffset: 0,
   },
   fixed_wing: {
@@ -46,6 +54,8 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/drones/fixed_wing_top.png',
     thumbnailProfilePath: '/models/thumbnails/drones/fixed_wing_profile.png',
     scale: 1.5,
+    google3dScale: 10,
+    headingOffset: -90,
     heightOffset: 0,
   },
   hexacopter: {
@@ -56,6 +66,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailProfilePath: '/models/thumbnails/drones/hexacopter_profile.png',
     scale: 1.2,
     google3dScale: 12,
+    headingOffset: -90,
     heightOffset: 0,
   },
   vtol: {
@@ -66,6 +77,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailProfilePath: '/models/thumbnails/drones/vtol_profile.png',
     scale: 2.0,
     google3dScale: 14,
+    headingOffset: -90,
     heightOffset: 0,
   },
   octocopter: {
@@ -76,6 +88,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailProfilePath: '/models/thumbnails/drones/octocopter_profile.png',
     scale: 1.5,
     google3dScale: 14,
+    headingOffset: -90,
     heightOffset: 0,
   },
   animated_drone: {
@@ -86,6 +99,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     thumbnailProfilePath: '/models/thumbnails/drones/animated_drone_profile.png',
     scale: 1.0,
     google3dScale: 10,
+    headingOffset: -90,
     heightOffset: 0,
   },
 };
@@ -98,6 +112,9 @@ export const CUAS_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/cuas/jammer_top.png',
     thumbnailProfilePath: '/models/thumbnails/cuas/jammer_profile.png',
     scale: 1.0,
+    google3dScale: 8,
+    google3dSelectedScale: 12,
+    headingOffset: 0,
     heightOffset: 0,
   },
   rf_sensor: {
@@ -107,6 +124,9 @@ export const CUAS_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/cuas/rf_sensor_top.png',
     thumbnailProfilePath: '/models/thumbnails/cuas/rf_sensor_profile.png',
     scale: 1.0,
+    google3dScale: 8,
+    google3dSelectedScale: 12,
+    headingOffset: 0,
     heightOffset: 0,
   },
   radar: {
@@ -116,6 +136,9 @@ export const CUAS_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/cuas/radar_top.png',
     thumbnailProfilePath: '/models/thumbnails/cuas/radar_profile.png',
     scale: 1.2,
+    google3dScale: 9.6,
+    google3dSelectedScale: 14.4,
+    headingOffset: 0,
     heightOffset: 0,
   },
   eo_ir_camera: {
@@ -125,6 +148,9 @@ export const CUAS_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/cuas/eo_ir_camera_top.png',
     thumbnailProfilePath: '/models/thumbnails/cuas/eo_ir_camera_profile.png',
     scale: 0.8,
+    google3dScale: 6.4,
+    google3dSelectedScale: 9.6,
+    headingOffset: 0,
     heightOffset: 0,
   },
   acoustic: {
@@ -134,6 +160,9 @@ export const CUAS_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/cuas/acoustic_top.png',
     thumbnailProfilePath: '/models/thumbnails/cuas/acoustic_profile.png',
     scale: 0.9,
+    google3dScale: 7.2,
+    google3dSelectedScale: 10.8,
+    headingOffset: 0,
     heightOffset: 0,
   },
   combined: {
@@ -143,6 +172,9 @@ export const CUAS_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/cuas/combined_top.png',
     thumbnailProfilePath: '/models/thumbnails/cuas/combined_profile.png',
     scale: 1.5,
+    google3dScale: 12,
+    google3dSelectedScale: 18,
+    headingOffset: 0,
     heightOffset: 0,
   },
 };
@@ -197,6 +229,8 @@ export const VEHICLE_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/vehicles/suv_response_top.png',
     thumbnailProfilePath: '/models/thumbnails/vehicles/suv_response_profile.png',
     scale: 1.0,
+    google3dScale: 1,
+    headingOffset: 0,
     heightOffset: 0,
   },
   pickup_truck: {
@@ -206,6 +240,8 @@ export const VEHICLE_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/vehicles/pickup_truck_top.png',
     thumbnailProfilePath: '/models/thumbnails/vehicles/pickup_truck_profile.png',
     scale: 1.0,
+    google3dScale: 1,
+    headingOffset: 0,
     heightOffset: 0,
   },
   van_command: {
@@ -215,6 +251,8 @@ export const VEHICLE_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/vehicles/van_command_top.png',
     thumbnailProfilePath: '/models/thumbnails/vehicles/van_command_profile.png',
     scale: 1.0,
+    google3dScale: 1,
+    headingOffset: 0,
     heightOffset: 0,
   },
   sedan_patrol: {
@@ -224,6 +262,8 @@ export const VEHICLE_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/vehicles/sedan_patrol_top.png',
     thumbnailProfilePath: '/models/thumbnails/vehicles/sedan_patrol_profile.png',
     scale: 1.0,
+    google3dScale: 1,
+    headingOffset: 0,
     heightOffset: 0,
   },
 };
@@ -238,6 +278,8 @@ export const EQUIPMENT_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/equipment/ground_station_top.png',
     thumbnailProfilePath: '/models/thumbnails/equipment/ground_station_profile.png',
     scale: 1.0,
+    google3dScale: 1,
+    headingOffset: 0,
     heightOffset: 0,
   },
   antenna_tower: {
@@ -247,6 +289,8 @@ export const EQUIPMENT_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/equipment/antenna_tower_top.png',
     thumbnailProfilePath: '/models/thumbnails/equipment/antenna_tower_profile.png',
     scale: 1.0,
+    google3dScale: 1,
+    headingOffset: 0,
     heightOffset: 0,
   },
   generator: {
@@ -256,6 +300,8 @@ export const EQUIPMENT_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/equipment/generator_top.png',
     thumbnailProfilePath: '/models/thumbnails/equipment/generator_profile.png',
     scale: 1.0,
+    google3dScale: 1,
+    headingOffset: 0,
     heightOffset: 0,
   },
   barrier: {
@@ -265,6 +311,8 @@ export const EQUIPMENT_MODELS: Record<string, ModelAsset> = {
     thumbnailTopPath: '/models/thumbnails/equipment/barrier_top.png',
     thumbnailProfilePath: '/models/thumbnails/equipment/barrier_profile.png',
     scale: 1.0,
+    google3dScale: 1,
+    headingOffset: 0,
     heightOffset: 0,
   },
 };

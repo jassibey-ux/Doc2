@@ -18,6 +18,7 @@ import { attachDroneClickHandler } from '../hooks/useGoogle3DClickHandler';
 import { bearing } from '../../../utils/geo';
 import { getDroneModel } from '../../../utils/modelRegistry';
 import { computePitch, computeRoll } from '../../../utils/flightDynamics';
+import { createModel3D } from '../utils/createModel3D';
 
 const DRONE_TAG = 'drone-marker-layer';
 
@@ -67,7 +68,7 @@ export function renderDroneMarkers(
     return () => cleanupDroneMarkers(mapEl);
   }
 
-  const { Marker3DInteractiveElement, Model3DInteractiveElement } = maps3dLib;
+  const { Marker3DInteractiveElement } = maps3dLib;
   const baseUrl = import.meta.env.BASE_URL ?? '/';
 
   for (const [trackerId, positions] of droneHistory) {
@@ -95,10 +96,6 @@ export function renderDroneMarkers(
     // Resolve 3D model from profile → registry (always returns a profile with fallback)
     const profile = findDroneProfile(trackerId, droneProfileMap, currentDroneData);
     const modelAsset = getDroneModel(profile);
-    const modelPath = modelAsset
-      ? `${baseUrl}${modelAsset.glbPath.replace(/^\//, '')}`
-      : `${baseUrl}models/drones/quadcopter_generic.glb`;
-    const modelScale = modelAsset?.google3dScale ?? 10;
 
     // Compute pitch/roll from recent positions
     let pitchDeg = 0;
@@ -117,30 +114,27 @@ export function renderDroneMarkers(
       }
     }
 
-    // Render 3D GLB model (use Model3DElement with property assignment — constructor
-    // options pattern doesn't reliably render in Google 3D alpha API)
-    {
-      const { Model3DElement } = maps3dLib;
-      const ModelClass = Model3DElement ?? Model3DInteractiveElement;
-      if (ModelClass) {
-        try {
-          const model = new ModelClass();
-          model.setAttribute('data-layer', DRONE_TAG);
-          model.setAttribute('data-drone-id', trackerId);
-          model.src = modelPath;
-          model.position = {
-            lat: currentPos.lat,
-            lng: currentPos.lon,
-            altitude: (currentPos.alt_m ?? 50) + (modelAsset?.heightOffset ?? 0),
-          };
-          model.altitudeMode = 'RELATIVE_TO_GROUND';
-          model.orientation = { heading: headingDeg - 90, tilt: pitchDeg, roll: rollDeg };
-          model.scale = isSelected ? modelScale * 1.3 : modelScale;
-          attachDroneClickHandler(model, trackerId, onDroneClick);
-          mapEl.append(model);
-        } catch {
-          // Model3DElement may not be available in all alpha API versions
-        }
+    // Render 3D GLB model via shared factory
+    if (modelAsset) {
+      const model = createModel3D({
+        maps3dLib,
+        asset: modelAsset,
+        baseUrl,
+        position: {
+          lat: currentPos.lat,
+          lng: currentPos.lon,
+          altitude: (currentPos.alt_m ?? 50) + modelAsset.heightOffset,
+        },
+        headingDeg,
+        tiltDeg: pitchDeg,
+        rollDeg,
+        isSelected,
+        dataLayer: DRONE_TAG,
+        dataId: { key: 'data-drone-id', value: trackerId },
+      });
+      if (model) {
+        attachDroneClickHandler(model, trackerId, onDroneClick);
+        mapEl.append(model);
       }
     }
 

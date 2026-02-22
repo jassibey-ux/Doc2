@@ -12,6 +12,7 @@ import type { CUASPlacement, CUASProfile } from '../../../types/workflow';
 import type { Map3DElementRef } from '../hooks/useGoogle3DMap';
 import { attachCuasClickHandler } from '../hooks/useGoogle3DClickHandler';
 import { CUAS_MODELS } from '../../../utils/modelRegistry';
+import { createModel3D } from '../utils/createModel3D';
 
 const CUAS_TAG = 'cuas-layer';
 
@@ -59,8 +60,8 @@ export function renderCuasLayer(
     return () => cleanupCuasLayer(mapEl);
   }
 
-  const { Marker3DInteractiveElement, Model3DInteractiveElement, Polygon3DElement, Polyline3DElement } = maps3dLib;
-  const baseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) ?? '/';
+  const { Marker3DInteractiveElement, Polygon3DElement, Polyline3DElement } = maps3dLib;
+  const baseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
 
   // Build profile lookup
   const profileMap = new Map<string, CUASProfile>();
@@ -79,30 +80,26 @@ export function renderCuasLayer(
     const markerColor = isJamming ? '#e040fb' : isEngagementTarget ? '#fbbf24' : baseColor;
     const isSelected = selectedCuasId === placement.id;
 
-    // Render 3D GLB model if available (follows DroneMarkerLayer3D pattern)
-    if (Model3DInteractiveElement) {
-      const cuasAsset = CUAS_MODELS[cuasType];
-      if (cuasAsset) {
-        try {
-          const modelPath = `${baseUrl}${cuasAsset.glbPath.replace(/^\//, '')}`;
-          const model = new Model3DInteractiveElement({
-            src: modelPath,
-            position: {
-              lat: placement.position.lat,
-              lng: placement.position.lon,
-              altitude: placement.height_agl_m ?? 2,
-            },
-            altitudeMode: 'RELATIVE_TO_GROUND',
-            orientation: { heading: placement.orientation_deg ?? 0, tilt: 0, roll: 0 },
-            scale: isSelected ? (cuasAsset.scale * 12) : (cuasAsset.scale * 8),
-          });
-          model.setAttribute('data-layer', CUAS_TAG);
-          model.setAttribute('data-cuas-id', placement.id);
-          attachCuasClickHandler(model, placement.id, onCuasClick);
-          mapEl.append(model);
-        } catch {
-          // Model3DInteractiveElement may not be fully supported; fall through to marker
-        }
+    // Render 3D GLB model via shared factory
+    const cuasAsset = CUAS_MODELS[cuasType];
+    if (cuasAsset) {
+      const model = createModel3D({
+        maps3dLib,
+        asset: cuasAsset,
+        baseUrl,
+        position: {
+          lat: placement.position.lat,
+          lng: placement.position.lon,
+          altitude: placement.height_agl_m ?? 2,
+        },
+        headingDeg: placement.orientation_deg ?? 0,
+        isSelected,
+        dataLayer: CUAS_TAG,
+        dataId: { key: 'data-cuas-id', value: placement.id },
+      });
+      if (model) {
+        attachCuasClickHandler(model, placement.id, onCuasClick);
+        mapEl.append(model);
       }
     }
 

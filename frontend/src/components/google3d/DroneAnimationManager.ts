@@ -15,6 +15,8 @@
 
 import { bearing } from '../../utils/geo';
 import { computePitch, computeRoll, smoothValue } from '../../utils/flightDynamics';
+import { createModel3D } from './utils/createModel3D';
+import type { ModelAsset } from '../../utils/modelRegistry';
 
 interface DroneState {
   trackerId: string;
@@ -35,6 +37,7 @@ interface DroneState {
   modelEl: any | null;
   isStale: boolean;
   modelScale: number;
+  headingOffset: number;
 }
 
 interface DroneAnimationManagerOptions {
@@ -110,6 +113,7 @@ export class DroneAnimationManager {
       modelSrc?: string;
       displayName?: string;
       modelScale?: number;
+      modelAsset?: ModelAsset;
     },
   ): void {
     const now = Date.now();
@@ -197,7 +201,7 @@ export class DroneAnimationManager {
         if (state.modelEl) {
           state.modelEl.position = pos;
           state.modelEl.orientation = {
-            heading: state.heading - 90,
+            heading: state.heading + state.headingOffset,
             tilt: state.smoothedPitch,
             roll: state.smoothedRoll,
           };
@@ -205,7 +209,7 @@ export class DroneAnimationManager {
       } else if (state.modelEl) {
         // Even if position hasn't changed, still update orientation for smoothed dynamics
         state.modelEl.orientation = {
-          heading: state.heading - 90,
+          heading: state.heading + state.headingOffset,
           tilt: state.smoothedPitch,
           roll: state.smoothedRoll,
         };
@@ -227,11 +231,15 @@ export class DroneAnimationManager {
       modelSrc?: string;
       displayName?: string;
       modelScale?: number;
+      modelAsset?: ModelAsset;
     },
   ): DroneState {
-    const { Marker3DInteractiveElement, Model3DInteractiveElement } = this.maps3dLib;
+    const { Marker3DInteractiveElement } = this.maps3dLib;
+    const baseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
 
     const pos = { lat, lng, altitude: alt };
+    const asset = options?.modelAsset;
+    const headingOffset = asset?.headingOffset ?? -90;
 
     // Marker (always created, serves as label + fallback)
     const marker = new Marker3DInteractiveElement();
@@ -254,19 +262,49 @@ export class DroneAnimationManager {
 
     this.mapEl.append(marker);
 
-    // Optional 3D model
+    // 3D model via shared factory (or legacy modelSrc fallback)
     let modelEl: any = null;
-    const scale = options?.modelScale ?? 10;
-    if (options?.modelSrc && Model3DInteractiveElement) {
-      modelEl = new Model3DInteractiveElement();
-      modelEl.setAttribute('data-layer', 'drone-anim');
-      modelEl.setAttribute('data-drone-id', trackerId);
-      modelEl.src = options.modelSrc;
-      modelEl.position = pos;
-      modelEl.altitudeMode = 'RELATIVE_TO_MESH';
-      modelEl.orientation = { heading: (options?.heading ?? 0) - 90, tilt: 0, roll: 0 };
-      modelEl.scale = scale;
+    const scale = options?.modelScale ?? asset?.google3dScale ?? 10;
+    if (asset) {
+      modelEl = createModel3D({
+        maps3dLib: this.maps3dLib,
+        asset,
+        baseUrl,
+        position: pos,
+        headingDeg: options?.heading ?? 0,
+        dataLayer: 'drone-anim',
+        dataId: { key: 'data-drone-id', value: trackerId },
+      });
+    } else if (options?.modelSrc) {
+      // Legacy fallback when no ModelAsset is provided
+      const { Model3DInteractiveElement } = this.maps3dLib;
+      if (Model3DInteractiveElement) {
+        try {
+          modelEl = new Model3DInteractiveElement({
+            src: options.modelSrc,
+            position: pos,
+            altitudeMode: 'RELATIVE_TO_GROUND',
+            orientation: { heading: (options?.heading ?? 0) + headingOffset, tilt: 0, roll: 0 },
+            scale,
+          });
+        } catch {
+          try {
+            modelEl = new Model3DInteractiveElement();
+            modelEl.src = options.modelSrc;
+            modelEl.position = pos;
+            modelEl.altitudeMode = 'RELATIVE_TO_GROUND';
+            modelEl.orientation = { heading: (options?.heading ?? 0) + headingOffset, tilt: 0, roll: 0 };
+            modelEl.scale = scale;
+          } catch { /* model unavailable */ }
+        }
+        if (modelEl) {
+          modelEl.setAttribute('data-layer', 'drone-anim');
+          modelEl.setAttribute('data-drone-id', trackerId);
+        }
+      }
+    }
 
+    if (modelEl) {
       if (this.onDroneClick) {
         const droneId = trackerId;
         const onClick = this.onDroneClick;
@@ -275,7 +313,6 @@ export class DroneAnimationManager {
           onClick(droneId);
         });
       }
-
       this.mapEl.append(modelEl);
     }
 
@@ -298,6 +335,7 @@ export class DroneAnimationManager {
       modelEl,
       isStale: options?.isStale ?? false,
       modelScale: scale,
+      headingOffset,
     };
   }
 }
