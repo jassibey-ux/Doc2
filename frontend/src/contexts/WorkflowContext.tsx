@@ -201,8 +201,8 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch(`${API_BASE}/sites?limit=200`);
       if (!res.ok) throw new Error('Failed to load sites');
       const data = await res.json();
-      const items: SiteDefinition[] = data.items ?? data;
-      setSites(items);
+      const items = data.items ?? data;
+      setSites(Array.isArray(items) ? items : []);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
@@ -260,7 +260,8 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch(`${API_BASE}/drone-profiles?limit=200`);
       if (!res.ok) throw new Error('Failed to load drone profiles');
       const data = await res.json();
-      setDroneProfiles(data.items ?? data);
+      const dpItems = data.items ?? data;
+      setDroneProfiles(Array.isArray(dpItems) ? dpItems : []);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     }
@@ -306,7 +307,8 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch(`${API_BASE}/cuas-profiles?limit=200`);
       if (!res.ok) throw new Error('Failed to load CUAS profiles');
       const data = await res.json();
-      setCUASProfiles(data.items ?? data);
+      const cpItems = data.items ?? data;
+      setCUASProfiles(Array.isArray(cpItems) ? cpItems : []);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     }
@@ -352,7 +354,8 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch(`${API_BASE}/sessions?limit=200`);
       if (!res.ok) throw new Error('Failed to load test sessions');
       const data = await res.json();
-      setTestSessions(data.items ?? data);
+      const items = data.items ?? data;
+      setTestSessions(Array.isArray(items) ? items : []);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     }
@@ -363,10 +366,31 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const createTestSession = useCallback(async (session: Omit<TestSession, 'id' | 'created_at' | 'updated_at'>) => {
+    // Transform frontend format to Python API format
+    const body: Record<string, unknown> = { ...session };
+    // CUAS placements: flatten position: {lat, lon} → flat lat, lon
+    if (Array.isArray(session.cuas_placements)) {
+      body.cuas_placements = session.cuas_placements.map((cp: any) => ({
+        cuas_profile_id: cp.cuas_profile_id,
+        lat: cp.position?.lat ?? cp.lat,
+        lon: cp.position?.lon ?? cp.lon,
+        height_agl_m: cp.height_agl_m,
+        orientation_deg: cp.orientation_deg,
+        active: cp.active ?? false,
+      }));
+    }
+    // Tracker assignments: flatten position if present
+    if (Array.isArray(session.tracker_assignments)) {
+      body.tracker_assignments = session.tracker_assignments.map((ta: any) => ({
+        tracker_id: ta.tracker_id,
+        role: ta.role,
+        label: ta.label,
+      }));
+    }
     const res = await fetch(`${API_BASE}/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(session),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const errorText = await res.text();

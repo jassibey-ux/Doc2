@@ -38,7 +38,6 @@ export default function Sidebar({
   onPanelChange,
   // hasActiveSession is now derived from sessionPhase
   // unreadAlerts - now shown in Unified Workspace Panel
-  liveTrackerCount = 0,
   sessionPhase = 'idle',
   onStartSession,
   onStopSession,
@@ -57,17 +56,11 @@ export default function Sidebar({
 
   // Determine if we should show the start session button
   const showStartSession = sessionPhase === 'idle';
-  const hasTrackers = liveTrackerCount > 0;
   const showActiveSession = sessionPhase === 'active';
   const showSessionInProgress = sessionPhase !== 'idle' && sessionPhase !== 'active';
 
-  // Handle start session click with warning if no trackers
+  // Handle start session click — allow wizard even without trackers
   const handleStartSessionClick = () => {
-    if (!hasTrackers) {
-      // Show warning alert
-      alert('No trackers connected.\n\nConnect trackers or enable Demo Mode in Settings to start a session.');
-      return;
-    }
     onStartSession?.();
   };
 
@@ -77,17 +70,15 @@ export default function Sidebar({
       {showStartSession && onStartSession && (
         <button
           className="control-btn tooltip-btn start-session-btn"
-          data-tooltip={hasTrackers ? "Start Session" : "Start Session (No Trackers)"}
+          data-tooltip="Start Session"
           aria-label="Start Test Session"
           onClick={handleStartSessionClick}
           style={{
-            // Dark background for visibility on satellite view
-            background: hasTrackers ? 'rgba(10, 15, 26, 0.85)' : 'rgba(10, 15, 26, 0.6)',
-            borderColor: hasTrackers ? '#ff8c00' : '#666',
-            opacity: hasTrackers ? 1 : 0.7,
+            background: 'rgba(10, 15, 26, 0.85)',
+            borderColor: '#ff8c00',
           }}
         >
-          <PlayCircle size={20} style={{ color: hasTrackers ? '#ff8c00' : '#888' }} />
+          <PlayCircle size={20} style={{ color: '#ff8c00' }} />
         </button>
       )}
 
