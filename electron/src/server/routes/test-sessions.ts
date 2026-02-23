@@ -17,7 +17,7 @@ import {
   getSiteById,
 } from '../../core/library-store';
 import { TestSession, TestEvent, SessionStatus } from '../../core/models/workflow';
-import { sessionDataCollector } from '../../core/session-data-collector';
+import { sessionDataCollector, EngagementData } from '../../core/session-data-collector';
 import {
   analyzeSession,
   extractJammingWindows,
@@ -246,6 +246,60 @@ export function testSessionRoutes(): Router {
 
       // Stop recording
       sessionDataCollector.stopSession(session.id);
+
+      // Fetch engagements from Python backend before CSV export (15s timeout, 1 retry)
+      let fetchedEngagements: any[] = [];
+      const fetchEngagementsFromPython = async (): Promise<any[]> => {
+        const abortCtrl = new AbortController();
+        const fetchTimeout = setTimeout(() => abortCtrl.abort(), 15000);
+        try {
+          const engRes = await fetch(`http://127.0.0.1:8083/api/v2/sessions/${session.id}/engagements`, {
+            signal: abortCtrl.signal,
+          });
+          if (!engRes.ok) throw new Error(`HTTP ${engRes.status}`);
+          const engWrapper = await engRes.json() as any;
+          const engJson = engWrapper.engagements || engWrapper || [];
+          return Array.isArray(engJson) ? engJson : [];
+        } finally {
+          clearTimeout(fetchTimeout);
+        }
+      };
+
+      try {
+        fetchedEngagements = await fetchEngagementsFromPython();
+      } catch (firstError: any) {
+        log.warn(`[CSV Export] First engagement fetch failed: ${firstError.message} — retrying in 1s...`);
+        try {
+          await new Promise(r => setTimeout(r, 1000));
+          fetchedEngagements = await fetchEngagementsFromPython();
+        } catch (retryError: any) {
+          log.warn(`[CSV Export] Retry also failed: ${retryError.message}`);
+        }
+      }
+
+      if (fetchedEngagements.length > 0) {
+        const engagements: EngagementData[] = fetchedEngagements.map((e: any) => ({
+          id: e.id,
+          cuas_placement_id: e.cuas_placement_id || undefined,
+          cuas_name: e.cuas_name || e.name || undefined,
+          target_tracker_ids: (e.targets || []).map((t: any) => t.tracker_id),
+          engage_timestamp: e.engage_timestamp || undefined,
+          disengage_timestamp: e.disengage_timestamp || undefined,
+          jam_on_at: e.jam_on_at || undefined,
+          jam_off_at: e.jam_off_at || undefined,
+          jam_duration_s: e.jam_duration_s ?? undefined,
+          time_to_effect_s: e.time_to_effect_s ?? undefined,
+          pass_fail: e.metrics?.pass_fail || undefined,
+        }));
+        sessionDataCollector.setSessionEngagements(session.id, engagements);
+        log.info(`[CSV Export] Fetched ${engagements.length} engagements for session ${session.id}`);
+
+        // Persist full engagement data to JSON store for offline access
+        updateTestSession(session.id, { engagements: fetchedEngagements });
+        log.info(`[Engagements] Persisted ${fetchedEngagements.length} engagements to JSON store for session ${session.id}`);
+      } else {
+        log.warn(`[CSV Export] No engagements fetched from Python backend`);
+      }
 
       // Export data to CSV files
       let exportSummary = {

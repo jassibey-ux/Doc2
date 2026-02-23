@@ -383,16 +383,16 @@ def session_to_dict(session: TestSession) -> Dict[str, Any]:
         "name": session.name,
         "site_id": session.site_id,
         "status": session.status,
-        "start_time": session.start_time.isoformat() if session.start_time else None,
-        "end_time": session.end_time.isoformat() if session.end_time else None,
+        "start_time": _iso_utc(session.start_time),
+        "end_time": _iso_utc(session.end_time),
         "duration_seconds": session.duration_seconds,
         "operator_name": session.operator_name,
         "weather_notes": session.weather_notes,
         "post_test_notes": session.post_test_notes,
         "classification": session.classification,
         "live_data_path": session.live_data_path,
-        "created_at": session.created_at.isoformat() if session.created_at else None,
-        "updated_at": session.updated_at.isoformat() if session.updated_at else None,
+        "created_at": _iso_utc(session.created_at),
+        "updated_at": _iso_utc(session.updated_at),
         "tags": [t.tag for t in session.tags] if hasattr(session, 'tags') and session.tags else [],
         "site": {
             "id": session.site.id,
@@ -414,7 +414,7 @@ def session_to_dict_full(session: TestSession) -> Dict[str, Any]:
             "session_color": ta.session_color,
             "target_altitude_m": ta.target_altitude_m,
             "model_3d_override": ta.model_3d_override,
-            "assigned_at": ta.assigned_at.isoformat() if ta.assigned_at else None,
+            "assigned_at": _iso_utc(ta.assigned_at),
         }
         for ta in (session.tracker_assignments or [])
     ]
@@ -442,7 +442,7 @@ def session_to_dict_full(session: TestSession) -> Dict[str, Any]:
         {
             "id": ev.id,
             "type": ev.type,
-            "timestamp": ev.timestamp.isoformat() if ev.timestamp else None,
+            "timestamp": _iso_utc(ev.timestamp),
             "source": ev.source,
             "tracker_id": ev.tracker_id,
             "note": ev.note,
@@ -464,14 +464,25 @@ def session_to_dict_full(session: TestSession) -> Dict[str, Any]:
     return result
 
 
+def _iso_utc(dt) -> "str | None":
+    """Convert a naive UTC datetime to an ISO 8601 string with Z suffix."""
+    if dt is None:
+        return None
+    s = dt.isoformat()
+    # Avoid double timezone suffix if datetime is already tz-aware
+    if s.endswith(("Z", "+00:00")) or "+" in s[19:] or "-" in s[19:]:
+        return s
+    return s + "Z"
+
+
 def burst_to_dict(b: EngagementJamBurst) -> Dict[str, Any]:
     """Convert a jam burst to a dictionary."""
     return {
         "id": b.id,
         "engagement_id": b.engagement_id,
         "burst_seq": b.burst_seq,
-        "jam_on_at": b.jam_on_at.isoformat() if b.jam_on_at else None,
-        "jam_off_at": b.jam_off_at.isoformat() if b.jam_off_at else None,
+        "jam_on_at": _iso_utc(b.jam_on_at),
+        "jam_off_at": _iso_utc(b.jam_off_at),
         "duration_s": b.duration_s,
         "emitter_lat": b.emitter_lat,
         "emitter_lon": b.emitter_lon,
@@ -481,11 +492,11 @@ def burst_to_dict(b: EngagementJamBurst) -> Dict[str, Any]:
         "bandwidth_mhz": b.bandwidth_mhz,
         "target_snapshots": b.target_snapshots,
         "gps_denial_detected": b.gps_denial_detected,
-        "denial_onset_at": b.denial_onset_at.isoformat() if b.denial_onset_at else None,
+        "denial_onset_at": _iso_utc(b.denial_onset_at),
         "time_to_effect_s": b.time_to_effect_s,
         "source": b.source,
         "notes": b.notes,
-        "created_at": b.created_at.isoformat() if b.created_at else None,
+        "created_at": _iso_utc(b.created_at),
     }
 
 
@@ -502,19 +513,19 @@ def actor_to_dict(a: SessionActor) -> Dict[str, Any]:
         "heading_deg": a.heading_deg,
         "tracker_unit_id": a.tracker_unit_id,
         "is_active": a.is_active,
-        "created_at": a.created_at.isoformat() if a.created_at else None,
-        "updated_at": a.updated_at.isoformat() if a.updated_at else None,
+        "created_at": _iso_utc(a.created_at),
+        "updated_at": _iso_utc(a.updated_at),
     }
 
 
 def _json_safe(obj):
-    """Recursively convert datetime objects to ISO strings for JSON serialization."""
+    """Recursively convert datetime objects to ISO strings (with Z suffix) for JSON serialization."""
     if isinstance(obj, dict):
         return {k: _json_safe(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_json_safe(v) for v in obj]
     if isinstance(obj, datetime):
-        return obj.isoformat()
+        return obj.isoformat() + "Z"
     return obj
 
 
@@ -537,25 +548,25 @@ def engagement_to_dict(eng: Engagement) -> Dict[str, Any]:
         "run_number": eng.run_number,
         "engagement_type": eng.engagement_type,
         "status": eng.status,
-        "engage_timestamp": eng.engage_timestamp.isoformat() if eng.engage_timestamp else None,
-        "disengage_timestamp": eng.disengage_timestamp.isoformat() if eng.disengage_timestamp else None,
+        "engage_timestamp": _iso_utc(eng.engage_timestamp),
+        "disengage_timestamp": _iso_utc(eng.disengage_timestamp),
         "cuas_lat": eng.cuas_lat,
         "cuas_lon": eng.cuas_lon,
         "cuas_alt_m": eng.cuas_alt_m,
         "cuas_orientation_deg": eng.cuas_orientation_deg,
         # Merged jam fields
-        "jam_on_at": eng.jam_on_at.isoformat() if eng.jam_on_at else None,
-        "jam_off_at": eng.jam_off_at.isoformat() if eng.jam_off_at else None,
+        "jam_on_at": _iso_utc(eng.jam_on_at),
+        "jam_off_at": _iso_utc(eng.jam_off_at),
         "jam_duration_s": eng.jam_duration_s,
         "jam_frequency_mhz": eng.jam_frequency_mhz,
         "jam_power_dbm": eng.jam_power_dbm,
         "jam_bandwidth_mhz": eng.jam_bandwidth_mhz,
         "gps_denial_detected": eng.gps_denial_detected,
-        "denial_onset_at": eng.denial_onset_at.isoformat() if eng.denial_onset_at else None,
+        "denial_onset_at": _iso_utc(eng.denial_onset_at),
         "time_to_effect_s": eng.time_to_effect_s,
         "notes": eng.notes,
-        "created_at": eng.created_at.isoformat() if eng.created_at else None,
-        "updated_at": eng.updated_at.isoformat() if eng.updated_at else None,
+        "created_at": _iso_utc(eng.created_at),
+        "updated_at": _iso_utc(eng.updated_at),
         "targets": [
             {
                 "id": t.id,
@@ -601,11 +612,11 @@ def engagement_metrics_to_dict(m: EngagementMetrics) -> Dict[str, Any]:
         "overall_score": m.overall_score,
         "data_source": m.data_source,
         "metrics_json": m.metrics_json,
-        "analyzed_at": m.analyzed_at.isoformat() if m.analyzed_at else None,
+        "analyzed_at": _iso_utc(m.analyzed_at),
         # Enhanced burst-aware fields
         "anchor_type": m.anchor_type,
-        "anchor_timestamp": m.anchor_timestamp.isoformat() if m.anchor_timestamp else None,
-        "denial_onset_timestamp": m.denial_onset_timestamp.isoformat() if m.denial_onset_timestamp else None,
+        "anchor_timestamp": _iso_utc(m.anchor_timestamp),
+        "denial_onset_timestamp": _iso_utc(m.denial_onset_timestamp),
         "reacquisition_time_s": m.reacquisition_time_s,
         "telemetry_loss_duration_s": m.telemetry_loss_duration_s,
         "per_burst_json": m.per_burst_json,
@@ -632,10 +643,10 @@ def site_to_dict(site: Site) -> Dict[str, Any]:
         "zones": site.zones,
         "classification": site.classification,
         "is_active": site.is_active,
-        "created_at": site.created_at.isoformat() if site.created_at else None,
-        "updated_at": site.updated_at.isoformat() if site.updated_at else None,
+        "created_at": _iso_utc(site.created_at),
+        "updated_at": _iso_utc(site.updated_at),
         "recon_status": site.recon_status,
-        "recon_captured_at": site.recon_captured_at.isoformat() if site.recon_captured_at else None,
+        "recon_captured_at": _iso_utc(site.recon_captured_at),
         "camera_state_3d": site.camera_state_3d,
     }
 
@@ -657,8 +668,8 @@ def drone_to_dict(profile: DroneProfile) -> Dict[str, Any]:
         "notes": profile.notes,
         "image_path": profile.image_path,
         "is_active": profile.is_active,
-        "created_at": profile.created_at.isoformat() if profile.created_at else None,
-        "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+        "created_at": _iso_utc(profile.created_at),
+        "updated_at": _iso_utc(profile.updated_at),
         "model_3d": profile.model_3d,
     }
 
@@ -683,8 +694,8 @@ def cuas_to_dict(profile: CUASProfile) -> Dict[str, Any]:
         "notes": profile.notes,
         "classification": profile.classification,
         "is_active": profile.is_active,
-        "created_at": profile.created_at.isoformat() if profile.created_at else None,
-        "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+        "created_at": _iso_utc(profile.created_at),
+        "updated_at": _iso_utc(profile.updated_at),
         "model_3d": profile.model_3d,
     }
 

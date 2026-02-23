@@ -319,11 +319,17 @@ export interface EngagementMetrics {
   analyzed_at?: string;
 }
 
+export type EmitterType = 'cuas_system' | 'actor';
+
 export interface Engagement {
   id: string;
   session_id: string;
-  cuas_placement_id: string;
+  cuas_placement_id?: string;
+  cuas_name?: string;
+  emitter_type: EmitterType;
+  emitter_id: string;
   name?: string;
+  run_number?: number;
   engagement_type: EngagementType;
   status: EngagementStatus;
   engage_timestamp?: string;
@@ -332,11 +338,44 @@ export interface Engagement {
   cuas_lon?: number;
   cuas_alt_m?: number;
   cuas_orientation_deg?: number;
+  // Merged jam fields
+  jam_on_at?: string;
+  jam_off_at?: string;
+  jam_duration_s?: number;
+  jam_frequency_mhz?: number;
+  jam_power_dbm?: number;
+  jam_bandwidth_mhz?: number;
+  gps_denial_detected?: boolean;
+  denial_onset_at?: string;
+  time_to_effect_s?: number;
   notes?: string;
   targets: EngagementTarget[];
+  bursts: EngagementJamBurst[];
   metrics?: EngagementMetrics;
   created_at: string;
   updated_at: string;
+}
+
+export interface EngagementJamBurst {
+  id: string;
+  engagement_id: string;
+  burst_seq: number;
+  jam_on_at: string;
+  jam_off_at?: string;
+  duration_s?: number;
+  emitter_lat?: number;
+  emitter_lon?: number;
+  emitter_heading_deg?: number;
+  frequency_mhz?: number;
+  power_dbm?: number;
+  bandwidth_mhz?: number;
+  target_snapshots?: unknown[];
+  gps_denial_detected: boolean;
+  denial_onset_at?: string;
+  time_to_effect_s?: number;
+  source: string;
+  notes?: string;
+  created_at?: string;
 }
 
 // =============================================================================

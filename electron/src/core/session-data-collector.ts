@@ -50,6 +50,31 @@ export interface TrackerSummary {
   };
 }
 
+/**
+ * Engagement data fetched from Python backend for CSV enrichment.
+ */
+export interface EngagementData {
+  id: string;
+  cuas_placement_id?: string;
+  cuas_name?: string;
+  target_tracker_ids: string[];
+  engage_timestamp?: string;
+  disengage_timestamp?: string;
+  jam_on_at?: string;
+  jam_off_at?: string;
+  jam_duration_s?: number;
+  time_to_effect_s?: number;
+  pass_fail?: string;
+}
+
+/** Escape a value for CSV (wrap in quotes if it contains comma, quote, or newline). */
+function csvEscape(val: string): string {
+  if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+    return `"${val.replace(/"/g, '""')}"`;
+  }
+  return val;
+}
+
 class SessionDataCollector {
   private recordings: Map<string, SessionRecording> = new Map();
   // Track which trackers are assigned to each session for filtering
@@ -463,8 +488,21 @@ class SessionDataCollector {
   }
 
   /**
+   * Engagement data for enriching CSV export.
+   * Set by the route handler before export.
+   */
+  private sessionEngagements: Map<string, EngagementData[]> = new Map();
+
+  /**
+   * Set engagement data for a session (fetched from Python backend before export).
+   */
+  setSessionEngagements(sessionId: string, engagements: EngagementData[]): void {
+    this.sessionEngagements.set(sessionId, engagements);
+  }
+
+  /**
    * Export session data to CSV files in the specified directory.
-   * Creates one CSV file per tracker + events.csv
+   * Creates one CSV file per tracker + session_events.csv + events.csv
    * @returns Array of created file paths
    */
   async exportToCSV(sessionId: string, outputDir: string): Promise<string[]> {
@@ -480,8 +518,9 @@ class SessionDataCollector {
     }
 
     const createdFiles: string[] = [];
+    const engagements = this.sessionEngagements.get(sessionId) || [];
 
-    // Export positions per tracker
+    // Export positions per tracker — with engagement context columns
     for (const [trackerId, positions] of recording.positions) {
       if (positions.length === 0) continue;
 
@@ -489,7 +528,7 @@ class SessionDataCollector {
       const filename = `tracker_${safeTrackerId}.csv`;
       const filePath = path.join(outputDir, filename);
 
-      // CSV header matching the format expected by CSVParser
+      // CSV header with engagement context columns
       const header = [
         'tracker_id',
         'time_local_received',
@@ -507,26 +546,69 @@ class SessionDataCollector {
         'baro_press_hpa',
         'fix_valid',
         'battery_mv',
+        'session_id',
+        'engagement_id',
+        'engagement_active',
+        'jam_active',
+        'cuas_id',
       ].join(',');
 
-      const rows = positions.map(p => [
-        trackerId,
-        p.timestamp,
-        '', // time_gps (not available from mock)
-        p.latitude,
-        p.longitude,
-        p.altitude_m,
-        p.speed_ms,
-        p.heading_deg,
-        '', // hdop
-        '', // satellites
-        p.rssi_dbm ?? '',
-        '', // baro_alt_m
-        '', // baro_temp_c
-        '', // baro_press_hpa
-        p.gps_quality !== 'poor' ? 'true' : 'false',
-        '', // battery_mv
-      ].join(','));
+      const rows = positions.map(p => {
+        const ts = new Date(p.timestamp).getTime();
+
+        // Find matching engagement for this tracker at this timestamp
+        let engId = '';
+        let engActive = 'false';
+        let jamActive = 'false';
+        let cuasId = '';
+
+        for (const eng of engagements) {
+          // Check if this tracker is a target of this engagement
+          const isTarget = eng.target_tracker_ids.includes(trackerId);
+          if (!isTarget) continue;
+
+          const engStart = eng.engage_timestamp ? new Date(eng.engage_timestamp).getTime() : null;
+          const engEnd = eng.disengage_timestamp ? new Date(eng.disengage_timestamp).getTime() : null;
+
+          if (engStart && ts >= engStart && (!engEnd || ts <= engEnd)) {
+            engId = eng.id;
+            engActive = 'true';
+            cuasId = eng.cuas_placement_id || '';
+
+            // Check if jam is active at this timestamp
+            const jamStart = eng.jam_on_at ? new Date(eng.jam_on_at).getTime() : null;
+            const jamEnd = eng.jam_off_at ? new Date(eng.jam_off_at).getTime() : null;
+            if (jamStart && ts >= jamStart && (!jamEnd || ts <= jamEnd)) {
+              jamActive = 'true';
+            }
+            break;
+          }
+        }
+
+        return [
+          trackerId,
+          p.timestamp,
+          '', // time_gps
+          p.latitude,
+          p.longitude,
+          p.altitude_m,
+          p.speed_ms,
+          p.heading_deg,
+          '', // hdop
+          '', // satellites
+          p.rssi_dbm ?? '',
+          '', // baro_alt_m
+          '', // baro_temp_c
+          '', // baro_press_hpa
+          p.gps_quality !== 'poor' ? 'true' : 'false',
+          '', // battery_mv
+          sessionId,
+          engId,
+          engActive,
+          jamActive,
+          cuasId,
+        ].join(',');
+      });
 
       const content = [header, ...rows].join('\n');
       fs.writeFileSync(filePath, content, 'utf-8');
@@ -534,7 +616,79 @@ class SessionDataCollector {
       log.info(`Exported ${positions.length} positions for ${trackerId} to ${filename}`);
     }
 
-    // Export events if any
+    // Export session_events.csv — structured engagement timeline
+    if (engagements.length > 0 || recording.events.length > 0) {
+      const sessionEventsPath = path.join(outputDir, 'session_events.csv');
+      const seHeader = 'session_id,event_type,timestamp,engagement_id,cuas_id,cuas_name,tracker_id,drone_name,duration_s,notes';
+      const seRows: string[] = [];
+
+      // Session start
+      seRows.push([
+        sessionId, 'session_start', recording.startTime,
+        '', '', '', '', '', '', '',
+      ].join(','));
+
+      // Engagement events
+      for (const eng of engagements) {
+        if (eng.engage_timestamp) {
+          seRows.push([
+            sessionId, 'engage', eng.engage_timestamp,
+            eng.id, eng.cuas_placement_id || '', csvEscape(eng.cuas_name || ''),
+            eng.target_tracker_ids[0] || '', '', '', '',
+          ].join(','));
+        }
+        if (eng.jam_on_at) {
+          seRows.push([
+            sessionId, 'jam_on', eng.jam_on_at,
+            eng.id, eng.cuas_placement_id || '', csvEscape(eng.cuas_name || ''),
+            eng.target_tracker_ids[0] || '', '', '', '',
+          ].join(','));
+        }
+        if (eng.jam_off_at) {
+          seRows.push([
+            sessionId, 'jam_off', eng.jam_off_at,
+            eng.id, eng.cuas_placement_id || '', '',
+            eng.target_tracker_ids[0] || '', '', eng.jam_duration_s?.toString() || '', '',
+          ].join(','));
+        }
+        if (eng.disengage_timestamp) {
+          const notes = [
+            eng.time_to_effect_s != null ? `TTE: ${eng.time_to_effect_s}s` : null,
+            eng.pass_fail ? eng.pass_fail.toUpperCase() : null,
+          ].filter(Boolean).join('; ');
+          seRows.push([
+            sessionId, 'disengage', eng.disengage_timestamp,
+            eng.id, eng.cuas_placement_id || '', '',
+            eng.target_tracker_ids[0] || '', '', '', csvEscape(notes),
+          ].join(','));
+        }
+      }
+
+      // Session stop
+      if (recording.endTime) {
+        const startMs = new Date(recording.startTime).getTime();
+        const endMs = new Date(recording.endTime).getTime();
+        const durationS = Math.round((endMs - startMs) / 1000);
+        seRows.push([
+          sessionId, 'session_stop', recording.endTime,
+          '', '', '', '', '', durationS.toString(), '',
+        ].join(','));
+      }
+
+      // Sort by timestamp
+      seRows.sort((a, b) => {
+        const tsA = a.split(',')[2] || '';
+        const tsB = b.split(',')[2] || '';
+        return tsA.localeCompare(tsB);
+      });
+
+      const seContent = [seHeader, ...seRows].join('\n');
+      fs.writeFileSync(sessionEventsPath, seContent, 'utf-8');
+      createdFiles.push(sessionEventsPath);
+      log.info(`Exported session_events.csv with ${seRows.length} rows`);
+    }
+
+    // Export raw events if any (backward compat)
     if (recording.events.length > 0) {
       const eventsPath = path.join(outputDir, 'events.csv');
       const eventsHeader = 'id,timestamp,type,tracker_id,data';
@@ -551,11 +705,51 @@ class SessionDataCollector {
       log.info(`Exported ${recording.events.length} events to events.csv`);
     }
 
+    // Export dedicated engagements.csv with all engagement fields
+    if (engagements.length > 0) {
+      const engCsvPath = path.join(outputDir, 'engagements.csv');
+      const engHeader = [
+        'engagement_id',
+        'cuas_placement_id',
+        'cuas_name',
+        'target_tracker_ids',
+        'engage_timestamp',
+        'disengage_timestamp',
+        'jam_on_at',
+        'jam_off_at',
+        'jam_duration_s',
+        'time_to_effect_s',
+        'pass_fail',
+      ].join(',');
+
+      const engRows = engagements.map(e => [
+        e.id,
+        e.cuas_placement_id || '',
+        csvEscape(e.cuas_name || ''),
+        csvEscape(e.target_tracker_ids.join(';')),
+        e.engage_timestamp || '',
+        e.disengage_timestamp || '',
+        e.jam_on_at || '',
+        e.jam_off_at || '',
+        e.jam_duration_s != null ? String(e.jam_duration_s) : '',
+        e.time_to_effect_s != null ? String(e.time_to_effect_s) : '',
+        e.pass_fail || '',
+      ].join(','));
+
+      const engContent = [engHeader, ...engRows].join('\n');
+      fs.writeFileSync(engCsvPath, engContent, 'utf-8');
+      createdFiles.push(engCsvPath);
+      log.info(`Exported ${engagements.length} engagements to engagements.csv`);
+    }
+
     // Export session metadata
     const metadataPath = path.join(outputDir, 'session.json');
     const summary = this.getSessionSummary(sessionId);
     fs.writeFileSync(metadataPath, JSON.stringify(summary, null, 2), 'utf-8');
     createdFiles.push(metadataPath);
+
+    // Cleanup engagement data
+    this.sessionEngagements.delete(sessionId);
 
     log.info(`Session ${sessionId} exported to ${outputDir}: ${createdFiles.length} files`);
     return createdFiles;

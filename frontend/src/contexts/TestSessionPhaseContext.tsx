@@ -763,36 +763,46 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
   // Engagement actions
   const refreshEngagements = useCallback(async () => {
     if (!activeSessionId) return;
-    try {
-      const response = await fetch(`/api/v2/sessions/${activeSessionId}/engagements`);
-      if (response.ok) {
-        const data = await response.json();
-        const engList: Engagement[] = data.engagements || [];
-        setEngagements(engList);
+    const response = await fetch(`/api/v2/sessions/${activeSessionId}/engagements`);
+    if (response.ok) {
+      const data = await response.json();
+      const engList: Engagement[] = data.engagements || [];
+      setEngagements(engList);
 
-        // Compute activeBursts from engagement bursts (open bursts where jam_off_at is null)
-        const openBursts = new Map<string, JamBurst>();
-        for (const eng of engList) {
-          if (eng.bursts) {
-            const openBurst = eng.bursts.find(b => !b.jam_off_at);
-            if (openBurst) {
-              openBursts.set(eng.id, openBurst);
-            }
+      // Compute activeBursts from engagement bursts (open bursts where jam_off_at is null)
+      const openBursts = new Map<string, JamBurst>();
+      for (const eng of engList) {
+        if (eng.bursts) {
+          const openBurst = eng.bursts.find(b => !b.jam_off_at);
+          if (openBurst) {
+            openBursts.set(eng.id, openBurst);
           }
         }
-        setActiveBursts(openBursts);
       }
-    } catch (error) {
-      console.error('Failed to refresh engagements:', error);
+      setActiveBursts(openBursts);
+    } else {
+      throw new Error(`Failed to fetch engagements: ${response.status}`);
     }
   }, [activeSessionId]);
 
-  // Refresh engagements when active session changes
+  // Refresh engagements when active session changes (active or completed)
   useEffect(() => {
-    if (activeSessionId && currentPhase === 'active') {
-      refreshEngagements();
+    if (!activeSessionId) return;
+
+    if (currentPhase === 'active') {
+      // Live session — always fetch from Python
+      refreshEngagements().catch(err => console.warn('[TestSessionPhase] Failed to refresh engagements:', err));
+    } else if (activeSession && (activeSession.status === 'completed' || activeSession.status === 'analyzing')) {
+      // Completed/analyzing session — try Python first, fall back to JSON store
+      refreshEngagements().catch(() => {
+        // Python unavailable — use engagements from JSON store if available
+        if (activeSession.engagements && activeSession.engagements.length > 0) {
+          console.log('[TestSessionPhase] Using cached engagements from JSON store:', activeSession.engagements.length);
+          setEngagements(activeSession.engagements);
+        }
+      });
     }
-  }, [activeSessionId, currentPhase, refreshEngagements]);
+  }, [activeSessionId, currentPhase, refreshEngagements, activeSession]);
 
   const createEngagement = useCallback(async (
     cuasPlacementId: string,
@@ -815,7 +825,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
       });
       if (!response.ok) throw new Error('Failed to create engagement');
       const engagement = await response.json();
-      await refreshEngagements();
+      await refreshEngagements().catch(() => {});
       return engagement;
     } catch (error) {
       console.error('Failed to create engagement:', error);
@@ -847,7 +857,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
         });
       }
 
-      await refreshEngagements();
+      await refreshEngagements().catch(() => {});
       await refreshSession();
       return engagement;
     } catch (error) {
@@ -871,7 +881,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
         await setJamState(engagement.cuas_placement_id, true);
       }
 
-      await refreshEngagements();
+      await refreshEngagements().catch(() => {});
       await refreshSession();
       return engagement;
     } catch (error) {
@@ -895,7 +905,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
         await setJamState(engagement.cuas_placement_id, false);
       }
 
-      await refreshEngagements();
+      await refreshEngagements().catch(() => {});
       await refreshSession();
       return engagement;
     } catch (error) {
@@ -919,7 +929,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
         await setJamState(eng.cuas_placement_id, false);
       }
 
-      await refreshEngagements();
+      await refreshEngagements().catch(() => {});
     } catch (error) {
       console.error('Failed to abort engagement:', error);
     }
