@@ -87,7 +87,7 @@ export function computeEngagementGeometries(
       emitterLon = placement.position.lon;
     }
 
-    for (const target of eng.targets) {
+    for (const target of (eng.targets ?? [])) {
       const drone = drones.get(target.tracker_id);
       if (!drone || drone.lat == null || drone.lon == null) continue;
 

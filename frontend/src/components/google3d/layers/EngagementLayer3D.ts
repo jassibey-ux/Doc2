@@ -76,7 +76,7 @@ export function renderEngagementLayer(
     if (!cuasPos) continue;
 
     // Draw line to each target
-    for (const target of engagement.targets) {
+    for (const target of (engagement.targets ?? [])) {
       const drone = currentDroneData.get(target.tracker_id);
       if (!drone?.lat || !drone?.lon) continue;
 

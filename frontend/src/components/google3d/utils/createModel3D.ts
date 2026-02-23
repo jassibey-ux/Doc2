@@ -20,6 +20,8 @@ export interface CreateModel3DOptions {
   headingDeg: number;
   tiltDeg?: number;
   rollDeg?: number;
+  /** Altitude mode for the model (default: 'RELATIVE_TO_GROUND') */
+  altitudeMode?: string;
   isSelected?: boolean;
   /** Use Model3DElement instead of Model3DInteractiveElement */
   nonInteractive?: boolean;
@@ -42,6 +44,7 @@ export function createModel3D(options: CreateModel3DOptions): any | null {
     headingDeg,
     tiltDeg = 270,
     rollDeg = 0,
+    altitudeMode = 'RELATIVE_TO_GROUND',
     isSelected = false,
     nonInteractive = false,
     dataLayer,
@@ -66,7 +69,7 @@ export function createModel3D(options: CreateModel3DOptions): any | null {
     model = new ModelClass({
       src: modelPath,
       position,
-      altitudeMode: 'RELATIVE_TO_GROUND',
+      altitudeMode,
       orientation: { heading, tilt: tiltDeg, roll: rollDeg },
       scale,
     });
@@ -76,7 +79,7 @@ export function createModel3D(options: CreateModel3DOptions): any | null {
       model = new ModelClass();
       model.src = modelPath;
       model.position = position;
-      model.altitudeMode = 'RELATIVE_TO_GROUND';
+      model.altitudeMode = altitudeMode;
       model.orientation = { heading, tilt: tiltDeg, roll: rollDeg };
       model.scale = scale;
     } catch {

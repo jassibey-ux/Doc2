@@ -23,7 +23,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     scale: 1.0,
     google3dScale: 10,
     headingOffset: 0,
-    heightOffset: 0,
+    heightOffset: 0.3,
   },
   quadcopter_phantom: {
     id: 'quadcopter_phantom',
@@ -34,7 +34,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     scale: 0.8,
     google3dScale: 10,
     headingOffset: 0,
-    heightOffset: 0,
+    heightOffset: 0.2,
   },
   fpv: {
     id: 'fpv',
@@ -45,7 +45,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     scale: 0.6,
     google3dScale: 10,
     headingOffset: 0,
-    heightOffset: 0,
+    heightOffset: 0.15,
   },
   fixed_wing: {
     id: 'fixed_wing',
@@ -56,7 +56,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     scale: 1.5,
     google3dScale: 10,
     headingOffset: 0,
-    heightOffset: 0,
+    heightOffset: 0.5,
   },
   hexacopter: {
     id: 'hexacopter',
@@ -67,7 +67,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     scale: 1.2,
     google3dScale: 12,
     headingOffset: 0,
-    heightOffset: 0,
+    heightOffset: 0.4,
   },
   vtol: {
     id: 'vtol',
@@ -78,7 +78,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     scale: 2.0,
     google3dScale: 14,
     headingOffset: 0,
-    heightOffset: 0,
+    heightOffset: 0.6,
   },
   octocopter: {
     id: 'octocopter',
@@ -89,7 +89,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     scale: 1.5,
     google3dScale: 14,
     headingOffset: 0,
-    heightOffset: 0,
+    heightOffset: 0.5,
   },
   animated_drone: {
     id: 'animated_drone',
@@ -100,7 +100,7 @@ export const DRONE_MODELS: Record<string, ModelAsset> = {
     scale: 1.0,
     google3dScale: 10,
     headingOffset: 0,
-    heightOffset: 0,
+    heightOffset: 0.3,
   },
 };
 

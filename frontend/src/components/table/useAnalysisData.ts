@@ -98,9 +98,10 @@ export function useAnalysisData(sessionId: string | undefined): AnalysisDataResu
         ? new Date(eng.disengage_timestamp).getTime()
         : Date.now();
 
-      const trackerIds = new Set(eng.targets.map(t => t.tracker_id));
+      const targets = Array.isArray(eng.targets) ? eng.targets : [];
+      const trackerIds = new Set(targets.map(t => t.tracker_id));
       const initialAltitudes = new Map<string, number>();
-      for (const t of eng.targets) {
+      for (const t of targets) {
         if (t.initial_altitude_m != null) {
           initialAltitudes.set(t.tracker_id, t.initial_altitude_m);
         }
@@ -118,7 +119,7 @@ export function useAnalysisData(sessionId: string | undefined): AnalysisDataResu
       });
 
       // Inject ENGAGE event row
-      const engTrackerId = eng.targets[0]?.tracker_id ?? 'CUAS';
+      const engTrackerId = targets[0]?.tracker_id ?? 'CUAS';
       eventRows.push(makeEventRow(startMs, engTrackerId, eng.id, 'ENGAGE'));
 
       // Inject DISENGAGE event row

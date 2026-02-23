@@ -54,7 +54,7 @@ function droneToRow(
   // Mark engagement context if available
   if (activeEngagements && activeEngagements.size > 0) {
     for (const [engId, eng] of activeEngagements) {
-      const target = eng.targets.find(t => t.tracker_id === drone.tracker_id);
+      const target = (eng.targets ?? []).find(t => t.tracker_id === drone.tracker_id);
       if (!target) continue;
 
       row.inEngagement = true;

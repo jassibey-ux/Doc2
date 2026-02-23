@@ -718,19 +718,19 @@ export default function SessionAnalysisView() {
                         formatDistance={formatDistance}
                       />
                       {/* Range Over Time + GPS Quality Charts per engagement */}
-                      {eng.cuas_placement_id && eng.targets[0]?.tracker_id && sessionId && (
+                      {eng.cuas_placement_id && eng.targets?.[0]?.tracker_id && sessionId && (
                         <>
                           <RangeOverTimeChart
                             sessionId={sessionId}
                             cuasPlacementId={eng.cuas_placement_id}
-                            trackerId={eng.targets[0].tracker_id}
+                            trackerId={eng.targets?.[0]?.tracker_id ?? ''}
                             hoverTimestamp={chartHoverTimestamp}
                             onHoverTimestamp={setChartHoverTimestamp}
                           />
                           <GPSQualityChart
                             sessionId={sessionId}
                             cuasPlacementId={eng.cuas_placement_id}
-                            trackerId={eng.targets[0].tracker_id}
+                            trackerId={eng.targets?.[0]?.tracker_id ?? ''}
                             hoverTimestamp={chartHoverTimestamp}
                             onHoverTimestamp={setChartHoverTimestamp}
                           />
@@ -935,7 +935,7 @@ function EngagementSummaryCard({ engagement, cuasProfiles, cuasPlacements, forma
   const placement = cuasPlacements.find(p => p.id === engagement.cuas_placement_id);
   const profile = placement ? cuasProfiles.find(p => p.id === placement.cuas_profile_id) : null;
   const cuasName = profile?.name || 'Unknown CUAS';
-  const targetNames = engagement.targets.map(t => t.tracker_id).join(', ');
+  const targetNames = (engagement.targets ?? []).map(t => t.tracker_id).join(', ');
   const m = engagement.metrics;
 
   const statusColor = engagement.status === 'complete' ? '#22c55e' : engagement.status === 'aborted' ? '#f97316' : '#06b6d4';
@@ -967,7 +967,7 @@ function EngagementSummaryCard({ engagement, cuasProfiles, cuasPlacements, forma
       </div>
 
       {/* Initial geometry */}
-      {engagement.targets[0]?.initial_range_m && (
+      {engagement.targets?.[0]?.initial_range_m && (
         <div style={{ display: 'flex', gap: '16px', marginBottom: '8px', fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>
           <span>Range: {Math.round(engagement.targets[0].initial_range_m)}m</span>
           {engagement.targets[0].initial_bearing_deg !== undefined && (

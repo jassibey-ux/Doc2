@@ -272,6 +272,7 @@ export class DroneAnimationManager {
         baseUrl,
         position: pos,
         headingDeg: options?.heading ?? 0,
+        altitudeMode: 'RELATIVE_TO_MESH',
         dataLayer: 'drone-anim',
         dataId: { key: 'data-drone-id', value: trackerId },
       });
@@ -283,7 +284,7 @@ export class DroneAnimationManager {
           modelEl = new Model3DInteractiveElement({
             src: options.modelSrc,
             position: pos,
-            altitudeMode: 'RELATIVE_TO_GROUND',
+            altitudeMode: 'RELATIVE_TO_MESH',
             orientation: { heading: (options?.heading ?? 0) + headingOffset, tilt: 270, roll: 0 },
             scale,
           });
@@ -292,7 +293,7 @@ export class DroneAnimationManager {
             modelEl = new Model3DInteractiveElement();
             modelEl.src = options.modelSrc;
             modelEl.position = pos;
-            modelEl.altitudeMode = 'RELATIVE_TO_GROUND';
+            modelEl.altitudeMode = 'RELATIVE_TO_MESH';
             modelEl.orientation = { heading: (options?.heading ?? 0) + headingOffset, tilt: 0, roll: 0 };
             modelEl.scale = scale;
           } catch { /* model unavailable */ }

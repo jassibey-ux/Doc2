@@ -872,36 +872,40 @@ export function testSessionRoutes(): Router {
 
           const headers = lines[0].split(',');
           for (let i = 1; i < lines.length; i++) {
-            const vals = lines[i].split(',');
-            const row: Record<string, string> = {};
-            headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+            try {
+              const vals = lines[i].split(',');
+              const row: Record<string, string> = {};
+              headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
 
-            const timestamp = row.time_local_received || '';
-            const tsMs = timestamp ? new Date(timestamp).getTime() : 0;
-            const trackerId = row.tracker_id || '';
+              const timestamp = row.time_local_received || '';
+              const tsMs = timestamp ? new Date(timestamp).getTime() : 0;
+              const trackerId = row.tracker_id || '';
 
-            allPositions.push({
-              id: `${trackerId}_${tsMs}`,
-              tracker_id: trackerId,
-              timestamp,
-              timestamp_ms: tsMs,
-              time_gps: row.time_gps || null,
-              lat: row.lat ? parseFloat(row.lat) : null,
-              lon: row.lon ? parseFloat(row.lon) : null,
-              alt_m: row.alt_m ? parseFloat(row.alt_m) : null,
-              speed_mps: row.speed_mps ? parseFloat(row.speed_mps) : null,
-              course_deg: row.course_deg ? parseFloat(row.course_deg) : null,
-              hdop: row.hdop ? parseFloat(row.hdop) : null,
-              satellites: row.satellites ? parseInt(row.satellites, 10) : null,
-              rssi_dbm: row.rssi_dbm ? parseFloat(row.rssi_dbm) : null,
-              baro_alt_m: row.baro_alt_m ? parseFloat(row.baro_alt_m) : null,
-              baro_temp_c: row.baro_temp_c ? parseFloat(row.baro_temp_c) : null,
-              baro_press_hpa: row.baro_press_hpa ? parseFloat(row.baro_press_hpa) : null,
-              fix_valid: row.fix_valid === 'true',
-              battery_mv: row.battery_mv ? parseInt(row.battery_mv, 10) : null,
-              latency_ms: row.latency_ms ? parseInt(row.latency_ms, 10) : null,
-              gps_quality: null,
-            });
+              allPositions.push({
+                id: `${trackerId}_${tsMs}`,
+                tracker_id: trackerId,
+                timestamp,
+                timestamp_ms: tsMs,
+                time_gps: row.time_gps || null,
+                lat: row.lat ? parseFloat(row.lat) : null,
+                lon: row.lon ? parseFloat(row.lon) : null,
+                alt_m: row.alt_m ? parseFloat(row.alt_m) : null,
+                speed_mps: row.speed_mps ? parseFloat(row.speed_mps) : null,
+                course_deg: row.course_deg ? parseFloat(row.course_deg) : null,
+                hdop: row.hdop ? parseFloat(row.hdop) : null,
+                satellites: row.satellites ? parseInt(row.satellites, 10) : null,
+                rssi_dbm: row.rssi_dbm ? parseFloat(row.rssi_dbm) : null,
+                baro_alt_m: row.baro_alt_m ? parseFloat(row.baro_alt_m) : null,
+                baro_temp_c: row.baro_temp_c ? parseFloat(row.baro_temp_c) : null,
+                baro_press_hpa: row.baro_press_hpa ? parseFloat(row.baro_press_hpa) : null,
+                fix_valid: row.fix_valid === 'true',
+                battery_mv: row.battery_mv ? parseInt(row.battery_mv, 10) : null,
+                latency_ms: row.latency_ms ? parseInt(row.latency_ms, 10) : null,
+                gps_quality: null,
+              });
+            } catch (rowErr) {
+              console.warn(`Skipping malformed CSV row ${i} in ${csvFile}:`, rowErr);
+            }
           }
         }
       }

@@ -194,7 +194,7 @@ const ActiveEngagementCard: React.FC<{
 
   // Live data
   const liveData = useMemo(() => {
-    if (!currentDroneData || engagement.targets.length === 0) return null;
+    if (!currentDroneData || !engagement.targets || engagement.targets.length === 0) return null;
     const target = engagement.targets[0];
     const drone = currentDroneData.get(target.tracker_id);
     if (!drone?.lat || !drone?.lon) return null;

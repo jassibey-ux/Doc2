@@ -128,6 +128,7 @@ export function renderDroneMarkers(
         headingDeg,
         tiltDeg: 270 + pitchDeg,
         rollDeg,
+        altitudeMode: 'RELATIVE_TO_MESH',
         isSelected,
         dataLayer: DRONE_TAG,
         dataId: { key: 'data-drone-id', value: trackerId },
