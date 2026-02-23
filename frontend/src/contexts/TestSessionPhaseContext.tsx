@@ -89,7 +89,7 @@ interface TestSessionPhaseContextType {
   engagements: Engagement[];
   activeEngagements: Map<string, Engagement>;
   createEngagement: (cuasPlacementId: string, targetTrackerIds: string[], name?: string) => Promise<Engagement | null>;
-  quickEngage: (cuasPlacementId?: string) => Promise<Engagement | null>;
+  quickEngage: (cuasPlacementId?: string, targetTrackerId?: string) => Promise<Engagement | null>;
   engage: (engagementId: string) => Promise<Engagement | null>;
   disengage: (engagementId: string) => Promise<Engagement | null>;
   abortEngagement: (engagementId: string) => Promise<void>;
@@ -203,7 +203,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
     }
 
     // Try testSessions lookup
-    const fromSessions = testSessions.find(s => s.id === activeSessionId);
+    const fromSessions = Array.isArray(testSessions) ? testSessions.find(s => s.id === activeSessionId) : undefined;
     if (fromSessions) return fromSessions;
 
     // Final fallback to localActiveSession even without cuas_placements
@@ -237,20 +237,26 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
 
     if (savedSessionId && savedPhase && savedPhase !== 'idle') {
       if (savedPhase === 'completed') {
-        // Keep session ID so completed sessions can be revisited,
-        // but reset phase to idle so RecordingBar doesn't show
-        console.log('[TestSessionPhase] Completed session found on startup — keeping ID, resetting phase to idle');
-        setActiveSessionId(savedSessionId);
+        console.log('[TestSessionPhase] Completed session on startup — clearing to idle');
+        // Do NOT set activeSessionId — prevents sync effect from re-discovering
+        // the completed session and overriding phase back to 'completed'
+        localStorage.removeItem(STORAGE_KEYS.ACTIVE_SESSION_ID);
         localStorage.setItem(STORAGE_KEYS.CURRENT_PHASE, 'idle');
         localStorage.removeItem(STORAGE_KEYS.PHASE_START_TIME);
         localStorage.removeItem(STORAGE_KEYS.CUAS_JAM_STATES);
-      } else {
+      } else if (savedPhase === 'active') {
+        // Only 'active' legitimately survives a reload
         setActiveSessionId(savedSessionId);
-        setCurrentPhase(savedPhase);
-
+        setCurrentPhase('active');
         if (savedPhaseStartTime) {
           setPhaseStartTime(parseInt(savedPhaseStartTime, 10));
         }
+      } else {
+        // planning, capturing, analyzing — transient states, leave phase at 'idle'
+        console.log('[TestSessionPhase] Ignoring stale phase on startup:', savedPhase);
+        setActiveSessionId(savedSessionId);
+        localStorage.setItem(STORAGE_KEYS.CURRENT_PHASE, 'idle');
+        localStorage.removeItem(STORAGE_KEYS.PHASE_START_TIME);
       }
     }
 
@@ -351,15 +357,33 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
         }
         persistState(activeSession.id, 'active', phaseStartTime || Date.now());
       }
-      // Similarly, if session is completed but phase is not, sync it
-      else if (activeSession.status === 'completed' && currentPhase !== 'completed') {
-        console.log('[TestSessionPhase] Syncing phase to completed based on session status');
-        setCurrentPhase('completed');
+      // Session completed while we were tracking it — reset to idle
+      else if (activeSession.status === 'completed' && currentPhase !== 'completed' && currentPhase !== 'idle') {
+        console.log('[TestSessionPhase] Session completed — resetting to idle');
+        setActiveSessionId(null);
+        setLocalActiveSession(null);
+        setCurrentPhase('idle');
         setPhaseStartTime(null);
-        persistState(activeSession.id, 'completed', null);
+        persistState(null, 'idle', null);
       }
     }
   }, [activeSession, currentPhase, phaseStartTime, persistState]);
+
+  // Startup validation: after testSessions load, verify stored session is still active
+  useEffect(() => {
+    if (!Array.isArray(testSessions) || testSessions.length === 0) return;
+    if (!activeSessionId) return;
+
+    const session = testSessions.find(s => s.id === activeSessionId);
+    if (!session || session.status !== 'active') {
+      console.log('[TestSessionPhase] Stored session invalid or not active — resetting to idle');
+      setActiveSessionId(null);
+      setLocalActiveSession(null);
+      setCurrentPhase('idle');
+      setPhaseStartTime(null);
+      persistState(null, 'idle', null);
+    }
+  }, [testSessions, activeSessionId, persistState]);
 
   // Persist wizard data
   const persistWizardData = useCallback((data: WizardSessionData, step: number) => {
@@ -572,7 +596,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
       } else {
         // Fallback to local testSessions array
         console.warn('[TestSessionPhase] DETAIL fetch failed, falling back to local data');
-        session = testSessions.find(s => s.id === sessionId);
+        session = Array.isArray(testSessions) ? testSessions.find(s => s.id === sessionId) : undefined;
       }
 
       if (session) {
@@ -595,20 +619,40 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
           setCuasJamStates(initialJamStates);
           persistJamStates(initialJamStates);
         } else if (session.status === 'completed') {
-          setCurrentPhase('completed');
+          // Completed sessions should reset to idle so start button shows
+          console.log('[TestSessionPhase] Session is completed — resetting to idle');
+          setCurrentPhase('idle');
           setPhaseStartTime(null);
-          persistState(sessionId, 'completed', null);
+          persistState(null, 'idle', null);
+        } else if (session.status === 'planning') {
+          // Planning sessions should also be idle (not yet started)
+          setCurrentPhase('idle');
+          setPhaseStartTime(null);
+          persistState(null, 'idle', null);
         }
       } else {
-        console.warn('[TestSessionPhase] Session not found:', sessionId);
+        console.warn('[TestSessionPhase] Session not found:', sessionId, '— resetting to idle');
+        // Session doesn't exist in Python or local data — clear stale state
+        setActiveSessionId(null);
+        setLocalActiveSession(null);
+        setCurrentPhase('idle');
+        setPhaseStartTime(null);
+        persistState(null, 'idle', null);
       }
     } catch (err) {
       console.error('[TestSessionPhase] Error loading session:', err);
       // Last resort fallback
-      const session = testSessions.find(s => s.id === sessionId);
+      const session = Array.isArray(testSessions) ? testSessions.find(s => s.id === sessionId) : undefined;
       if (session) {
         setActiveSessionId(sessionId);
         setLocalActiveSession(session);
+      } else {
+        // Can't find session anywhere — reset to idle
+        setActiveSessionId(null);
+        setLocalActiveSession(null);
+        setCurrentPhase('idle');
+        setPhaseStartTime(null);
+        persistState(null, 'idle', null);
       }
     }
   }, [testSessions, persistState, persistJamStates]);
@@ -779,7 +823,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
     }
   }, [activeSessionId, refreshEngagements]);
 
-  const quickEngage = useCallback(async (cuasPlacementId?: string): Promise<Engagement | null> => {
+  const quickEngage = useCallback(async (cuasPlacementId?: string, targetTrackerId?: string): Promise<Engagement | null> => {
     if (!activeSessionId) return null;
     try {
       const response = await fetch(`/api/v2/sessions/${activeSessionId}/engagements/quick`, {
@@ -787,6 +831,7 @@ export function TestSessionPhaseProvider({ children }: TestSessionPhaseProviderP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cuas_placement_id: cuasPlacementId || undefined,
+          target_tracker_id: targetTrackerId || undefined,
         }),
       });
       if (!response.ok) throw new Error('Failed to quick engage');
