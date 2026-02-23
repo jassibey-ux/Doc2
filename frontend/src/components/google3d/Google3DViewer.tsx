@@ -505,14 +505,16 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
       {/* Controls Panel — bottom-center toolbar (non-event modes only; event mode uses CameraPresetsOverlay) */}
       {isLoaded && (mode === 'live' || mode === 'replay' || mode === 'analysis') && (
         <div style={{
-          position: 'absolute', bottom: 16, left: '50%',
+          position: 'absolute', bottom: 10, left: '50%',
           transform: 'translateX(-50%)',
-          display: 'flex', gap: 6,
+          display: 'flex', gap: 6, justifyContent: 'center',
+          width: 'calc(100% - 160px)', maxWidth: 1400,
           padding: '6px 12px',
           background: 'rgba(10, 15, 26, 0.85)',
           backdropFilter: 'blur(12px)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 10, zIndex: 10,
+          boxSizing: 'border-box',
         }}>
           <ControlButton
             label={showLabels ? 'Labels: ON' : 'Labels: OFF'}
