@@ -255,6 +255,54 @@ const SessionStatusBar: React.FC<SessionStatusBarProps> = ({
         {tacticalMode ? <Sun size={14} /> : <Moon size={14} />}
       </button>
 
+      {/* GIS Export buttons */}
+      {isRecording && !isCompleted && (
+        <>
+          <button
+            onClick={() => {}}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '4px 10px', borderRadius: 6,
+              background: 'rgba(59, 130, 246, 0.12)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              color: '#60a5fa', cursor: 'pointer',
+              fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+            }}
+            title="Export as Shapefile"
+          >
+            Shapefile
+          </button>
+          <button
+            onClick={() => {}}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '4px 10px', borderRadius: 6,
+              background: 'rgba(34, 197, 94, 0.12)',
+              border: '1px solid rgba(34, 197, 94, 0.3)',
+              color: '#4ade80', cursor: 'pointer',
+              fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+            }}
+            title="Export as GeoJSON"
+          >
+            GeoJSON
+          </button>
+          <button
+            onClick={() => {}}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '4px 10px', borderRadius: 6,
+              background: 'rgba(168, 85, 247, 0.12)',
+              border: '1px solid rgba(168, 85, 247, 0.3)',
+              color: '#a855f7', cursor: 'pointer',
+              fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+            }}
+            title="Export as GeoPackage"
+          >
+            GeoPkg
+          </button>
+        </>
+      )}
+
       {/* Stop button (only for live sessions) */}
       {isRecording && !isCompleted && (
         <button
