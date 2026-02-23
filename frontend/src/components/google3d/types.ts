@@ -57,6 +57,7 @@ export interface Google3DViewerProps {
   // Engagements
   engagements?: Engagement[];
   activeBursts?: Map<string, JamBurst>;
+  onEngagementClick?: (engagementId: string) => void;
 
   // Screenshot capture (preview/setup modes)
   onCaptureScreenshots?: (screenshots: Array<{

@@ -36,6 +36,10 @@ interface UseGoogle3DCameraControllerOptions {
   currentDroneData?: Map<string, DroneSummary>;
   onCameraStateChange?: (state: CameraState3D) => void;
   onReady?: () => void;
+  /** When set, camera continuously tracks this drone's position. */
+  followDroneId?: string | null;
+  /** Called when follow is auto-disabled (user manually moved camera). */
+  onFollowDisabled?: () => void;
 }
 
 export function useGoogle3DCameraController({
@@ -47,6 +51,8 @@ export function useGoogle3DCameraController({
   currentDroneData,
   onCameraStateChange,
   onReady,
+  followDroneId,
+  onFollowDisabled,
 }: UseGoogle3DCameraControllerOptions) {
   const readyFired = useRef(false);
 
@@ -110,6 +116,40 @@ export function useGoogle3DCameraController({
       mapEl.tilt = 65;
     }
   }, [selectedDroneId, isLoaded]);
+
+  // Follow drone — continuously update camera center
+  const programmaticMoveRef = useRef(false);
+
+  useEffect(() => {
+    if (!followDroneId || !isLoaded || !currentDroneData) return;
+    const drone = currentDroneData.get(followDroneId);
+    if (!drone?.lat || !drone?.lon) return;
+
+    const mapEl = mapRef.current;
+    if (!mapEl) return;
+
+    // Mark as programmatic so the centerchange listener won't disable follow
+    programmaticMoveRef.current = true;
+    mapEl.center = { lat: drone.lat, lng: drone.lon, altitude: drone.alt_m ?? 50 };
+    // Reset flag after a tick so the event can fire and be ignored
+    requestAnimationFrame(() => { programmaticMoveRef.current = false; });
+  }, [followDroneId, currentDroneData, isLoaded]);
+
+  // Auto-disable follow when user manually moves the camera
+  useEffect(() => {
+    const mapEl = mapRef.current;
+    if (!mapEl || !isLoaded || !followDroneId || !onFollowDisabled) return;
+
+    const handleUserMove = () => {
+      if (programmaticMoveRef.current) return; // ignore our own moves
+      onFollowDisabled();
+    };
+
+    mapEl.addEventListener('gmp-centerchange', handleUserMove);
+    return () => {
+      mapEl.removeEventListener('gmp-centerchange', handleUserMove);
+    };
+  }, [followDroneId, isLoaded, onFollowDisabled]);
 
   // Reset camera to initial position
   const handleResetCamera = useCallback(() => {

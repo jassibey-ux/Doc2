@@ -1,16 +1,25 @@
 /**
  * EngagementLayer3D — Engagement lines between CUAS systems and drones.
  *
- * Enhanced with:
- * - Granular line colors based on GPS/connection/burst state
+ * Uses shared geo utilities (haversine, slant range, bearing) for consistent
+ * distance/bearing values across all map views (2D, Cesium, Google 3D).
+ *
+ * 3D-specific features (not shared):
+ * - Polyline3DElement with altitude + outerColor glow
+ * - Marker3DElement with collision behavior + 3D label positioning
  * - GPS denial pin icon near drone when fix_valid is false
  * - Status label near drone showing GPS + altitude delta + freshness
- * - Distance label at midpoint
  */
 
 import type { Engagement, CUASPlacement, JamBurst } from '../../../types/workflow';
 import type { DroneSummary } from '../../../types/drone';
 import type { Map3DElementRef } from '../hooks/useGoogle3DMap';
+import {
+  slantRange,
+  bearing,
+  formatDistance,
+  formatBearing,
+} from '../../../utils/geo';
 
 const ENGAGEMENT_TAG = 'engagement-layer';
 
@@ -20,17 +29,8 @@ interface EngagementLayerOptions {
   cuasPlacements: CUASPlacement[];
   currentDroneData: Map<string, DroneSummary>;
   showLabels?: boolean;
-}
-
-/** Compute 3D distance in meters between two geo positions. */
-function computeDistance(
-  lat1: number, lon1: number, alt1: number,
-  lat2: number, lon2: number, alt2: number,
-): number {
-  const dLat = (lat2 - lat1) * 111320;
-  const dLon = (lon2 - lon1) * 111320 * Math.cos(lat1 * Math.PI / 180);
-  const dAlt = alt2 - alt1;
-  return Math.sqrt(dLat * dLat + dLon * dLon + dAlt * dAlt);
+  /** Callback when an engagement line is clicked. */
+  onEngagementClick?: (engagementId: string) => void;
 }
 
 /** Interpolate position along the line from CUAS to drone (0=CUAS, 1=drone). */
@@ -56,13 +56,13 @@ export function renderEngagementLayer(
 ): () => void {
   cleanupEngagements(mapEl);
 
-  const { engagements, activeBursts, cuasPlacements, currentDroneData, showLabels = true } = options;
+  const { engagements, activeBursts, cuasPlacements, currentDroneData, showLabels = true, onEngagementClick } = options;
 
   if (!engagements || engagements.length === 0 || !maps3dLib) {
     return () => cleanupEngagements(mapEl);
   }
 
-  const { Polyline3DElement, Marker3DElement } = maps3dLib;
+  const { Polyline3DInteractiveElement, Marker3DElement } = maps3dLib;
 
   // Build placement lookup
   const placementMap = new Map<string, CUASPlacement>();
@@ -93,37 +93,25 @@ export function renderEngagementLayer(
         { lat: drone.lat, lng: drone.lon, altitude: droneAlt },
       ];
 
-      const polyline = new Polyline3DElement();
+      const polyline = new Polyline3DInteractiveElement();
       polyline.setAttribute('data-layer', ENGAGEMENT_TAG);
       polyline.setAttribute('data-engagement-id', engagement.id);
       polyline.coordinates = coords;
       polyline.altitudeMode = 'RELATIVE_TO_MESH';
 
-      // Granular line colors based on state
+      // Simplified line colors: 3 states
       if (isActive && hasBurst && gpsLost) {
-        // Active burst + GPS denied — bright red thick
+        // Active + GPS denied — bright red with glow
         polyline.strokeColor = '#ef4444';
         polyline.strokeWidth = 4;
         polyline.outerColor = '#991b1b';
         polyline.outerWidth = 7;
       } else if (isActive && hasBurst) {
-        // Active burst, GPS still OK — red solid
+        // Active + jam — red
         polyline.strokeColor = '#ef4444';
         polyline.strokeWidth = 3;
         polyline.outerColor = '#7f1d1d';
         polyline.outerWidth = 6;
-      } else if (isActive && isStale) {
-        // Active engagement, connection concern — yellow
-        polyline.strokeColor = '#eab308';
-        polyline.strokeWidth = 2;
-        polyline.outerColor = '#713f12';
-        polyline.outerWidth = 4;
-      } else if (isActive) {
-        // Active engagement, no burst — orange
-        polyline.strokeColor = '#f97316';
-        polyline.strokeWidth = 2;
-        polyline.outerColor = '#431407';
-        polyline.outerWidth = 4;
       } else {
         // Complete/historical — gray
         polyline.strokeColor = '#6b7280';
@@ -132,15 +120,30 @@ export function renderEngagementLayer(
         polyline.outerWidth = 3;
       }
 
+      polyline.drawsOccludedSegments = true;
+      if (onEngagementClick) {
+        polyline.addEventListener('gmp-click', () => onEngagementClick(engagement.id));
+      }
       mapEl.append(polyline);
 
       if (!showLabels || !Marker3DElement) continue;
 
-      // Compute distance
-      const dist = Math.round(computeDistance(
+      // Compute distance + bearing using shared geo utilities (haversine, not flat-earth)
+      const sRange = Math.round(slantRange(
         cuasPos.lat, cuasPos.lng, cuasAlt,
         drone.lat, drone.lon, droneAlt,
       ));
+      const brg = bearing(cuasPos.lat, cuasPos.lng, drone.lat, drone.lon);
+
+      // Build label consistent with shared engagementGeometry module
+      let distLabelText = `${formatDistance(sRange)} | ${formatBearing(brg)}`;
+      if (engagement.engage_timestamp) {
+        const elapsedMs = Date.now() - new Date(engagement.engage_timestamp).getTime();
+        const elapsedSec = Math.max(0, Math.floor(elapsedMs / 1000));
+        const m = Math.floor(elapsedSec / 60);
+        const s = elapsedSec % 60;
+        distLabelText += ` | ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      }
 
       // 1. Distance label at midpoint
       const midPos = lerpPos(cuasPos.lat, cuasPos.lng, cuasAlt, drone.lat, drone.lon, droneAlt, 0.5);
@@ -148,8 +151,9 @@ export function renderEngagementLayer(
       distLabel.setAttribute('data-layer', ENGAGEMENT_TAG);
       distLabel.position = midPos;
       distLabel.altitudeMode = 'RELATIVE_TO_MESH';
-      distLabel.title = `${dist}m`;
+      distLabel.title = distLabelText;
       distLabel.collisionBehavior = 'OPTIONAL_AND_HIDES_LOWER_PRIORITY';
+      distLabel.drawsWhenOccluded = true;
       distLabel.zIndex = 100;
       mapEl.append(distLabel);
 
@@ -170,6 +174,7 @@ export function renderEngagementLayer(
       statusLabel.altitudeMode = 'RELATIVE_TO_MESH';
       statusLabel.title = statusTitle;
       statusLabel.collisionBehavior = 'OPTIONAL_AND_HIDES_LOWER_PRIORITY';
+      statusLabel.drawsWhenOccluded = true;
       statusLabel.zIndex = 90;
       mapEl.append(statusLabel);
 
@@ -183,6 +188,7 @@ export function renderEngagementLayer(
           gpsPin.position = gpsPinPos;
           gpsPin.altitudeMode = 'RELATIVE_TO_MESH';
           gpsPin.title = 'GPS DENIED';
+          gpsPin.drawsWhenOccluded = true;
           gpsPin.zIndex = 110;
 
           // Create a custom glyph element for the pin
@@ -204,6 +210,7 @@ export function renderEngagementLayer(
           gpsMarker.position = gpsPinPos;
           gpsMarker.altitudeMode = 'RELATIVE_TO_MESH';
           gpsMarker.title = '✕ GPS DENIED';
+          gpsMarker.drawsWhenOccluded = true;
           gpsMarker.zIndex = 110;
           mapEl.append(gpsMarker);
         }

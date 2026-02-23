@@ -23,6 +23,8 @@ interface CuasLayerOptions {
   engagementModeCuasId?: string | null;
   selectedCuasId?: string | null;
   showLabels?: boolean;
+  /** When true, extrude coverage circles upward as 3D cylinders. */
+  show3DCoverage?: boolean;
   onCuasClick?: (cuasPlacementId: string) => void;
 }
 
@@ -53,6 +55,7 @@ export function renderCuasLayer(
     engagementModeCuasId,
     selectedCuasId,
     showLabels = true,
+    show3DCoverage,
     onCuasClick,
   } = options;
 
@@ -171,7 +174,12 @@ export function renderCuasLayer(
         : `${baseColor}1a`; // Add low alpha hex
       polygon.strokeColor = isJamming ? '#e040fb' : baseColor;
       polygon.strokeWidth = 1;
-      polygon.extruded = false;
+      if (show3DCoverage) {
+        polygon.extruded = true;
+        polygon.extrudedHeight = profile.effective_range_m * 0.3;
+      } else {
+        polygon.extruded = false;
+      }
       mapEl.append(polygon);
 
       // Range rings at 25%, 50%, 75%, 100% of effective range (when CUAS is selected)

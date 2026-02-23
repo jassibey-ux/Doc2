@@ -36,6 +36,8 @@ interface DroneTrackLayerOptions {
   enhancedHistory?: Map<string, EnhancedPositionPoint[]>;
   currentTime: number;
   timelineStart: number;
+  /** When true, extrude polylines down to ground (altitude curtains). */
+  showAltitudeCurtains?: boolean;
 }
 
 interface DroneTrackResult {
@@ -53,7 +55,7 @@ export function renderDroneTracks(
 ): DroneTrackResult & { cleanup: () => void } {
   cleanupTracks(mapEl);
 
-  const { droneHistory, enhancedHistory, currentTime, timelineStart: _timelineStart } = options;
+  const { droneHistory, enhancedHistory, currentTime, timelineStart: _timelineStart, showAltitudeCurtains } = options;
   const colorMap = new Map<string, string>();
   let hasPositions = false;
 
@@ -78,7 +80,7 @@ export function renderDroneTracks(
     const enhanced = enhancedHistory?.get(trackerId);
     if (enhanced && enhanced.length >= 2) {
       // Render quality-colored segments
-      renderQualitySegments(Polyline3DElement, mapEl, trackerId, enhanced, currentTime);
+      renderQualitySegments(Polyline3DElement, mapEl, trackerId, enhanced, currentTime, showAltitudeCurtains);
     } else {
       // Single-color polyline for the entire track
       const coords = visiblePositions.map(p => ({
@@ -96,6 +98,8 @@ export function renderDroneTracks(
       polyline.strokeWidth = 3;
       polyline.outerColor = '#000000';
       polyline.outerWidth = 1;
+      polyline.drawsOccludedSegments = true;
+      if (showAltitudeCurtains) polyline.extruded = true;
       mapEl.append(polyline);
     }
   }
@@ -113,6 +117,7 @@ function renderQualitySegments(
   trackerId: string,
   enhanced: EnhancedPositionPoint[],
   currentTime: number,
+  showAltitudeCurtains?: boolean,
 ): void {
   const visible = enhanced.filter(p => p.timestamp_ms <= currentTime);
   if (visible.length < 2) return;
@@ -143,6 +148,8 @@ function renderQualitySegments(
         polyline.strokeWidth = 3;
         polyline.outerColor = '#000000';
         polyline.outerWidth = 1;
+        polyline.drawsOccludedSegments = true;
+        if (showAltitudeCurtains) polyline.extruded = true;
         mapEl.append(polyline);
       }
 

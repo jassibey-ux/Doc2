@@ -109,6 +109,11 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
   // Use prop if provided (event mode), otherwise use internal state
   const showLabels = props.showLabels ?? showLabelsInternal;
 
+  // 3D enhancement toggles
+  const [showAltitudeCurtains, setShowAltitudeCurtains] = useState(false);
+  const [show3DCoverage, setShow3DCoverage] = useState(false);
+  const [followDroneId, setFollowDroneId] = useState<string | null>(null);
+
   // Screenshot flash feedback
   const [screenshotFlash, setScreenshotFlash] = useState(false);
 
@@ -130,6 +135,8 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     currentDroneData,
     onCameraStateChange,
     onReady,
+    followDroneId,
+    onFollowDisabled: useCallback(() => setFollowDroneId(null), []),
   });
 
   // Screenshot capture
@@ -356,6 +363,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
             cuasJamStates: features.jamStateColors ? cuasJamStates : undefined,
             engagementModeCuasId,
             showLabels,
+            show3DCoverage,
             onCuasClick,
           })
         );
@@ -386,6 +394,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
           enhancedHistory,
           currentTime: currentTime ?? Date.now(),
           timelineStart: timelineStart ?? (Date.now() - 3600000),
+          showAltitudeCurtains,
         });
         colorMap = trackResult.colorMap;
         cleanupRef.current.push(trackResult.cleanup);
@@ -428,6 +437,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
             cuasPlacements,
             currentDroneData: currentDroneData ?? new Map(),
             showLabels,
+            onEngagementClick: props.onEngagementClick,
           })
         );
         apiUsage?.recordLayerRender('Engagements');
@@ -440,7 +450,7 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
     cuasPlacements, cuasProfiles, cuasJamStates, site, engagements,
     currentDroneData, selectedDroneId, showLabels, activeBursts,
     engagementModeCuasId, droneProfiles, droneProfileMap, mode, geofenceZones,
-    assetPlacements, onCuasClick, onDroneClick,
+    assetPlacements, onCuasClick, onDroneClick, showAltitudeCurtains, show3DCoverage,
   ]);
 
   // Cleanup on unmount
@@ -508,6 +518,25 @@ const Google3DViewer = forwardRef<Google3DViewerHandle, Google3DViewerProps>((pr
             label={showLabels ? 'Labels: ON' : 'Labels: OFF'}
             active={showLabels}
             onClick={() => setShowLabelsInternal(v => !v)}
+          />
+          <ControlButton
+            label={showAltitudeCurtains ? 'Curtains: ON' : 'Curtains: OFF'}
+            active={showAltitudeCurtains}
+            onClick={() => setShowAltitudeCurtains(v => !v)}
+          />
+          <ControlButton
+            label={show3DCoverage ? '3D Coverage: ON' : '3D Coverage: OFF'}
+            active={show3DCoverage}
+            onClick={() => setShow3DCoverage(v => !v)}
+          />
+          <ControlButton
+            label={followDroneId
+              ? `Follow: ${currentDroneData?.get(followDroneId)?.alias ?? followDroneId.slice(0, 5)}`
+              : 'Follow: OFF'}
+            active={!!followDroneId}
+            onClick={() => setFollowDroneId(prev =>
+              prev ? null : (selectedDroneId ?? null)
+            )}
           />
           <ControlButton
             label="Reset Camera"
