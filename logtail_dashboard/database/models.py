@@ -421,6 +421,7 @@ class TrackerAssignment(Base):
 
     session_color = Column(String(20))  # Color assigned for this tracker in the session UI
     target_altitude_m = Column(Float)  # Target altitude for this tracker
+    model_3d_override = Column(String(255), nullable=True)  # Override 3D model for this assignment
 
     assigned_at = Column(DateTime, default=datetime.utcnow)
 
@@ -460,6 +461,7 @@ class CUASPlacement(Base):
 
     # Status
     active = Column(Boolean, default=True)
+    model_3d_override = Column(String(255), nullable=True)  # Override 3D model for this placement
     notes = Column(Text)
 
     # Geotagging (populated from mobile companion or field visit)
@@ -713,6 +715,17 @@ class Engagement(Base):
     cuas_lon = Column(Float)
     cuas_alt_m = Column(Float)
     cuas_orientation_deg = Column(Float)
+
+    # Merged jam fields (from EngagementJamBurst — since always 1:1)
+    jam_on_at = Column(DateTime)
+    jam_off_at = Column(DateTime)
+    jam_duration_s = Column(Float)
+    jam_frequency_mhz = Column(Float)
+    jam_power_dbm = Column(Float)
+    jam_bandwidth_mhz = Column(Float)
+    gps_denial_detected = Column(Boolean, default=False)
+    denial_onset_at = Column(DateTime)
+    time_to_effect_s = Column(Float)
 
     # Metadata
     notes = Column(Text)

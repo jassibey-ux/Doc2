@@ -121,6 +121,7 @@ MIGRATIONS: List[Migration] = [
     Migration(
         version=3,
         name="Add 3D model and recon fields",
+        description="Add 3D model columns to profiles and recon fields to sites",
         up_sql="""
             ALTER TABLE sites ADD COLUMN recon_status VARCHAR(20) DEFAULT 'none';
             ALTER TABLE sites ADD COLUMN recon_captured_at DATETIME;
@@ -131,6 +132,37 @@ MIGRATIONS: List[Migration] = [
         down_sql="""
             -- SQLite doesn't support DROP COLUMN before 3.35.0
             -- These columns will be ignored if not present
+        """,
+    ),
+    Migration(
+        version=4,
+        name="merge_jam_burst_into_engagement",
+        description="Add merged jam fields to engagements table (1:1 with burst)",
+        up_sql="""
+            ALTER TABLE engagements ADD COLUMN jam_on_at TIMESTAMP;
+            ALTER TABLE engagements ADD COLUMN jam_off_at TIMESTAMP;
+            ALTER TABLE engagements ADD COLUMN jam_duration_s REAL;
+            ALTER TABLE engagements ADD COLUMN jam_frequency_mhz REAL;
+            ALTER TABLE engagements ADD COLUMN jam_power_dbm REAL;
+            ALTER TABLE engagements ADD COLUMN jam_bandwidth_mhz REAL;
+            ALTER TABLE engagements ADD COLUMN gps_denial_detected BOOLEAN DEFAULT 0;
+            ALTER TABLE engagements ADD COLUMN denial_onset_at TIMESTAMP;
+            ALTER TABLE engagements ADD COLUMN time_to_effect_s REAL
+        """,
+        down_sql="""
+            -- SQLite < 3.35 cannot DROP COLUMN; columns will be ignored if unused
+        """,
+    ),
+    Migration(
+        version=5,
+        name="add_model_3d_override",
+        description="Add model_3d_override column to tracker_assignments and cuas_placements",
+        up_sql="""
+            ALTER TABLE tracker_assignments ADD COLUMN model_3d_override VARCHAR(255);
+            ALTER TABLE cuas_placements ADD COLUMN model_3d_override VARCHAR(255)
+        """,
+        down_sql="""
+            -- SQLite < 3.35 cannot DROP COLUMN; columns will be ignored if unused
         """,
     ),
 ]

@@ -21,7 +21,6 @@ import { APIProvider } from '@vis.gl/react-google-maps';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useWorkflow } from '../../contexts/WorkflowContext';
 import { useTestSessionPhase } from '../../contexts/TestSessionPhaseContext';
-import type { JamOnParams } from '../../contexts/TestSessionPhaseContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useSessionData } from './hooks/useSessionData';
 import { useSessionAlerts } from './hooks/useSessionAlerts';
@@ -55,7 +54,7 @@ const SessionPage: React.FC = () => {
   } = useWorkflow();
   const {
     currentPhase, activeSession, phaseDuration, stopTest,
-    cuasJamStates, toggleJamState, loadSessionById,
+    cuasJamStates, toggleJamState: _toggleJamState, loadSessionById,
     engagements, activeEngagements,
     quickEngage, createEngagement, engage, disengage,
     activeBursts, jamOn, jamOff,
@@ -80,15 +79,14 @@ const SessionPage: React.FC = () => {
   const [showToolbar, setShowToolbar] = useState(false);
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [noteText, setNoteText] = useState('');
+  const [selectedCuasId, setSelectedCuasId] = useState<string | null>(null);
+  const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
   const [engagementModeCuasId, setEngagementModeCuasId] = useState<string | null>(null);
   const [trackingDroneId, setTrackingDroneId] = useState<string | null>(null);
+  const [engageElapsedSeconds, setEngageElapsedSeconds] = useState(0);
 
   const mapRef = useRef<SessionMapAreaHandle>(null);
   const isNarrow = useMediaQuery('(max-width: 1600px)');
-
-  // Selected IDs for sidebar highlighting
-  const selectedDroneId = detailContext?.type === 'drone' ? detailContext.droneId : null;
-  const selectedCuasId = detailContext?.type === 'cuas' ? detailContext.cuasId : null;
 
   // Auto-collapse left panel on narrow screens when detail panel is open
   useEffect(() => {
@@ -139,6 +137,41 @@ const SessionPage: React.FC = () => {
     [sessionDrones],
   );
 
+  // Active engagement info for toolbar
+  const activeEngInfo = useMemo(() => {
+    if (activeEngagements.size === 0) return null;
+    const eng = Array.from(activeEngagements.values())[0];
+    const target = eng.targets?.[0];
+    const drone = target ? sessionDrones.get(target.tracker_id) : null;
+    const placement = cuasPlacements.find(p => p.id === eng.cuas_placement_id);
+    let distance: number | undefined;
+    if (drone?.lat != null && drone?.lon != null && placement?.position) {
+      const dLat = (drone.lat - placement.position.lat) * 111320;
+      const dLon = (drone.lon - placement.position.lon) * 111320 * Math.cos(placement.position.lat * Math.PI / 180);
+      distance = Math.sqrt(dLat * dLat + dLon * dLon);
+    }
+    return {
+      cuasName: eng.cuas_name ?? 'CUAS',
+      droneName: drone?.alias ?? target?.tracker_id ?? 'Drone',
+      distance,
+      gpsOk: drone?.fix_valid ?? true,
+      engageTimestamp: eng.engage_timestamp,
+    };
+  }, [activeEngagements, sessionDrones, cuasPlacements]);
+
+  // Elapsed timer for active engagement
+  useEffect(() => {
+    if (!activeEngInfo?.engageTimestamp) {
+      setEngageElapsedSeconds(0);
+      return;
+    }
+    const startMs = new Date(activeEngInfo.engageTimestamp).getTime();
+    const update = () => setEngageElapsedSeconds(Math.floor((Date.now() - startMs) / 1000));
+    update();
+    const interval = window.setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [activeEngInfo?.engageTimestamp]);
+
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
   const handleNavigateBack = useCallback(() => navigate('/'), [navigate]);
@@ -152,14 +185,14 @@ const SessionPage: React.FC = () => {
     }
   }, [stopTest, showToast]);
 
-  // Drone selection: if in engagement mode, create engagement
+  // Drone click: if in engagement mode, create engagement; otherwise show detail
   const handleDroneClick = useCallback(async (droneId: string) => {
     if (engagementModeCuasId) {
       try {
         const engagement = await createEngagement(engagementModeCuasId, [droneId]);
         if (engagement) {
           await engage(engagement.id);
-          showToast('success', `Engaged → ${droneId}`);
+          showToast('success', `Engaged drone ${droneId}`);
         }
       } catch {
         showToast('error', 'Failed to create engagement');
@@ -167,10 +200,15 @@ const SessionPage: React.FC = () => {
       setEngagementModeCuasId(null);
       return;
     }
+    // If no active engagement, select this drone for the toolbar
+    if (activeEngagements.size === 0) {
+      setSelectedDroneId(droneId);
+    }
     setDetailContext({ type: 'drone', droneId });
-  }, [engagementModeCuasId, createEngagement, engage, showToast]);
+  }, [engagementModeCuasId, activeEngagements, createEngagement, engage, showToast]);
 
   const handleCuasClick = useCallback((cuasId: string) => {
+    setEngagementModeCuasId(cuasId);
     setDetailContext({ type: 'cuas', cuasId });
   }, []);
 
@@ -208,34 +246,21 @@ const SessionPage: React.FC = () => {
     }
   }, [sessionDrones]);
 
-  // Quick action handlers
-  const handleJamToggle = useCallback(async () => {
-    if (cuasPlacements.length === 1) {
-      await toggleJamState(cuasPlacements[0].id);
-    } else if (cuasPlacements.length > 1) {
-      // Toggle first non-jamming, or turn off first jamming
-      const firstJamming = cuasPlacements.find(p => cuasJamStates.get(p.id));
-      const target = firstJamming || cuasPlacements[0];
-      await toggleJamState(target.id);
-    }
-  }, [cuasPlacements, cuasJamStates, toggleJamState]);
-
+  // Quick action handlers — simplified: no separate JAM toggle
   const handleEngage = useCallback(async () => {
-    if (cuasPlacements.length === 1) {
-      setEngagementModeCuasId(cuasPlacements[0].id);
-      showToast('info', 'Click a drone to engage');
-    } else if (cuasPlacements.length > 1) {
-      // If only one CUAS, use it. Otherwise enter engagement mode.
-      setEngagementModeCuasId(cuasPlacements[0].id);
-      showToast('info', 'Click a drone to engage');
-    } else {
-      try {
-        await quickEngage();
-      } catch {
-        showToast('error', 'No CUAS available to engage');
-      }
+    if (!selectedCuasId || !selectedDroneId) {
+      showToast('warning', 'Select CUAS and drone first');
+      return;
     }
-  }, [cuasPlacements, quickEngage, showToast]);
+    try {
+      const result = await quickEngage(selectedCuasId, selectedDroneId);
+      if (result) {
+        showToast('success', `Engaged → ${selectedDroneId}`);
+      }
+    } catch {
+      showToast('error', 'Failed to engage');
+    }
+  }, [selectedCuasId, selectedDroneId, quickEngage, showToast]);
 
   const handleDisengage = useCallback(async () => {
     if (activeEngagements.size === 1) {
@@ -245,6 +270,8 @@ const SessionPage: React.FC = () => {
         if (result?.metrics) {
           const tte = result.metrics.time_to_effect_s;
           showToast('success', `Disengaged — TTE: ${tte ? tte.toFixed(1) + 's' : '--'}`);
+        } else {
+          showToast('success', 'Disengaged');
         }
       } catch {
         showToast('error', 'Failed to disengage');
@@ -266,7 +293,7 @@ const SessionPage: React.FC = () => {
     }
   }, [createEngagement, engage, showToast]);
 
-  const handleCuasJamOn = useCallback(async (engagementId: string, params?: JamOnParams) => {
+  const handleCuasJamOn = useCallback(async (engagementId: string, params?: { frequency_mhz?: number; power_dbm?: number; bandwidth_mhz?: number; notes?: string }) => {
     try {
       await jamOn(engagementId, params);
     } catch {
@@ -303,11 +330,14 @@ const SessionPage: React.FC = () => {
   // Model override handlers (PATCH to backend + refresh session)
   const handleDroneModelOverride = useCallback(async (trackerId: string, modelId: string | undefined) => {
     if (!activeSession) return;
+    // Find the assignment row ID for this tracker
+    const assignment = activeSession.tracker_assignments?.find(a => a.tracker_id === trackerId);
+    if (!assignment) return;
     try {
-      await fetch(`/api/test-sessions/${activeSession.id}/tracker-assignment/${trackerId}`, {
+      await fetch(`/api/v2/sessions/${activeSession.id}/tracker-assignments/${assignment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model_3d_override: modelId }),
+        body: JSON.stringify({ model_3d_override: modelId ?? '' }),
       });
       // Reload session to pick up updated assignments
       loadSessionById(activeSession.id);
@@ -319,10 +349,10 @@ const SessionPage: React.FC = () => {
   const handleCuasModelOverride = useCallback(async (cuasPlacementId: string, modelId: string | undefined) => {
     if (!activeSession) return;
     try {
-      await fetch(`/api/test-sessions/${activeSession.id}/cuas-placement/${cuasPlacementId}`, {
+      await fetch(`/api/v2/sessions/${activeSession.id}/cuas-placements/${cuasPlacementId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model_3d_override: modelId }),
+        body: JSON.stringify({ model_3d_override: modelId ?? '' }),
       });
       loadSessionById(activeSession.id);
     } catch (err) {
@@ -364,9 +394,9 @@ const SessionPage: React.FC = () => {
     setShowNoteInput(false);
   }, [noteText, handleMarkEvent]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (J removed — jam is automatic with engage/disengage)
   useSessionKeyboard({
-    onJam: handleJamToggle,
+    onJam: () => {}, // No-op: jam is now automatic
     onEngage: handleEngage,
     onDisengage: handleDisengage,
     onLaunch: () => handleMarkEvent('launch'),
@@ -375,8 +405,8 @@ const SessionPage: React.FC = () => {
     onNote: () => setShowNoteInput(true),
     onToggleTactical: () => setTacticalMode(prev => !prev),
     onEscape: () => {
-      if (showNoteInput) { setShowNoteInput(false); return; }
       if (engagementModeCuasId) { setEngagementModeCuasId(null); return; }
+      if (showNoteInput) { setShowNoteInput(false); return; }
       if (detailContext) { handleCloseDetail(); return; }
       if (activeSidebarPanel) { setActiveSidebarPanel(null); return; }
     },
@@ -548,12 +578,21 @@ const SessionPage: React.FC = () => {
             isLive={isLive}
             isCompleted={isCompleted}
             hasActiveEngagement={activeEngagements.size > 0}
-            isJamming={isAnyJamming}
             showToolbar={showToolbar}
-            onToggleToolbar={() => setShowToolbar(prev => !prev)}
+            cuasPlacements={cuasPlacements}
+            cuasProfiles={cuasProfiles}
+            sessionDrones={sessionDrones}
+            selectedCuasId={selectedCuasId}
+            selectedDroneId={selectedDroneId}
+            onSelectCuas={setSelectedCuasId}
+            onSelectDrone={setSelectedDroneId}
+            activeCuasName={activeEngInfo?.cuasName}
+            activeDroneName={activeEngInfo?.droneName}
+            activeElapsedSeconds={activeEngagements.size > 0 ? engageElapsedSeconds : undefined}
+            activeDistanceM={activeEngInfo?.distance}
+            activeGpsOk={activeEngInfo?.gpsOk}
             onEngage={handleEngage}
             onDisengage={handleDisengage}
-            onJamToggle={handleJamToggle}
             onLaunch={() => handleMarkEvent('launch')}
             onRecover={() => handleMarkEvent('recover')}
             onFailsafe={() => handleMarkEvent('failsafe')}

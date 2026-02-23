@@ -26,6 +26,11 @@ const PYTHON_BACKEND_URL = `http://127.0.0.1:${PYTHON_BACKEND_PORT}`;
 // Match /api/v2/sessions/:id/start or /api/v2/sessions/:id/stop
 const SESSION_START_RE = /^\/api\/v2\/sessions\/([^/]+)\/start$/;
 const SESSION_STOP_RE = /^\/api\/v2\/sessions\/([^/]+)\/stop$/;
+// Match /api/v2/sessions (POST — create) — no trailing ID
+const SESSION_CREATE_RE = /^\/api\/v2\/sessions\/?$/;
+// Match /api/v2/sessions/:id/assign-tracker or /cuas-placement
+const SESSION_ASSIGN_TRACKER_RE = /^\/api\/v2\/sessions\/([^/]+)\/assign-tracker$/;
+const SESSION_CUAS_PLACEMENT_RE = /^\/api\/v2\/sessions\/([^/]+)\/cuas-placement$/;
 // Mobile companion paths — intercept for WebSocket broadcast
 const CUAS_GEOTAG_RE = /^\/api\/v2\/cuas-placements\/([^/]+)\/geotag$/;
 const SDR_READING_RE = /^\/api\/v2\/sessions\/([^/]+)\/sdr-readings$/;
@@ -232,6 +237,78 @@ async function handleSessionStop(req: Request, res: Response, sessionId: string)
 }
 
 /**
+ * Handle session CREATE: forward to Python, then cache locally for library/GPX features.
+ */
+async function handleSessionCreate(req: Request, res: Response): Promise<void> {
+  let pythonResult: { status: number; data: any };
+  try {
+    pythonResult = await forwardToPython(req);
+  } catch (e: any) {
+    log.warn(`[session-bridge] Python backend unavailable for create: ${e.message}`);
+    res.status(502).json({
+      error: 'Python backend unavailable',
+      detail: `Cannot reach backend at ${PYTHON_BACKEND_URL}`,
+      code: 'BACKEND_UNAVAILABLE',
+    });
+    return;
+  }
+
+  if (pythonResult.status >= 400) {
+    res.status(pythonResult.status).json(pythonResult.data);
+    return;
+  }
+
+  // Broadcast session_created to WebSocket clients for real-time UI updates
+  try {
+    getDashboardApp().broadcastMessage({
+      type: 'session_created',
+      data: pythonResult.data,
+    });
+  } catch (e: any) {
+    log.warn(`[session-bridge] Failed to broadcast session_created: ${e.message}`);
+  }
+
+  res.status(pythonResult.status).json(pythonResult.data);
+}
+
+/**
+ * Handle assign-tracker / cuas-placement: forward to Python, broadcast update.
+ */
+async function handleSessionSubResource(
+  req: Request,
+  res: Response,
+  sessionId: string,
+  resourceType: 'assign-tracker' | 'cuas-placement',
+): Promise<void> {
+  let pythonResult: { status: number; data: any };
+  try {
+    pythonResult = await forwardToPython(req);
+  } catch (e: any) {
+    log.warn(`[session-bridge] Python backend unavailable for ${resourceType}: ${e.message}`);
+    res.status(502).json({
+      error: 'Python backend unavailable',
+      detail: `Cannot reach backend at ${PYTHON_BACKEND_URL}`,
+      code: 'BACKEND_UNAVAILABLE',
+    });
+    return;
+  }
+
+  if (pythonResult.status < 400) {
+    // Broadcast update so other clients see it in real-time
+    try {
+      getDashboardApp().broadcastMessage({
+        type: resourceType === 'assign-tracker' ? 'tracker_assigned' : 'cuas_placed',
+        data: { session_id: sessionId, ...pythonResult.data },
+      });
+    } catch {
+      // Non-critical
+    }
+  }
+
+  res.status(pythonResult.status).json(pythonResult.data);
+}
+
+/**
  * Create middleware that bridges v2 session start/stop to Express data collection.
  * Must be registered BEFORE the Python proxy middleware.
  */
@@ -240,6 +317,12 @@ export function sessionBridgeMiddleware() {
     // Only intercept POST requests
     if (req.method !== 'POST') {
       return next();
+    }
+
+    // Session create — forward + broadcast
+    if (req.path.match(SESSION_CREATE_RE)) {
+      await handleSessionCreate(req, res);
+      return;
     }
 
     const startMatch = req.path.match(SESSION_START_RE);
@@ -253,6 +336,20 @@ export function sessionBridgeMiddleware() {
     if (stopMatch) {
       const sessionId = stopMatch[1];
       await handleSessionStop(req, res, sessionId);
+      return;
+    }
+
+    // Assign tracker — forward + broadcast
+    const assignMatch = req.path.match(SESSION_ASSIGN_TRACKER_RE);
+    if (assignMatch) {
+      await handleSessionSubResource(req, res, assignMatch[1], 'assign-tracker');
+      return;
+    }
+
+    // CUAS placement — forward + broadcast
+    const placementMatch = req.path.match(SESSION_CUAS_PLACEMENT_RE);
+    if (placementMatch) {
+      await handleSessionSubResource(req, res, placementMatch[1], 'cuas-placement');
       return;
     }
 
