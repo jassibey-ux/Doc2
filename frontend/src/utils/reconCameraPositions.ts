@@ -15,7 +15,7 @@ export function computeReconPositions(site: SiteDefinition): ReconCameraPosition
 
   // Compute site radius from boundary polygon
   let maxDist = 200; // minimum 200m
-  for (const pt of site.boundary_polygon) {
+  for (const pt of (site.boundary_polygon || [])) {
     const d = haversineDistance(center.lat, center.lon, pt.lat, pt.lon);
     if (d > maxDist) maxDist = d;
   }

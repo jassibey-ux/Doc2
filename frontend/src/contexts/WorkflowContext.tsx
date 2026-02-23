@@ -202,7 +202,22 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) throw new Error('Failed to load sites');
       const data = await res.json();
       const items = data.items ?? data;
-      setSites(Array.isArray(items) ? items : []);
+      const normalized = (Array.isArray(items) ? items : []).map((s: any) => ({
+        ...s,
+        // Compose center from center_lat/center_lon if missing (Python backend format)
+        center: s.center ?? (s.center_lat != null && s.center_lon != null
+          ? { lat: s.center_lat, lon: s.center_lon }
+          : undefined),
+        // Unwrap boundary_polygon: {points: [...]} → [...] (Python DB format)
+        boundary_polygon: Array.isArray(s.boundary_polygon)
+          ? s.boundary_polygon
+          : Array.isArray(s.boundary_polygon?.points)
+            ? s.boundary_polygon.points
+            : [],
+        markers: Array.isArray(s.markers) ? s.markers : [],
+        zones: Array.isArray(s.zones) ? s.zones : [],
+      }));
+      setSites(normalized);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {

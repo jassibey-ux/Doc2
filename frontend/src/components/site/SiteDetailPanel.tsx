@@ -108,7 +108,7 @@ const SiteDetailPanel: React.FC<SiteDetailPanelProps> = ({
           {site.environment_type.replace('_', ' ')}
         </Badge>
         <Badge color="green" size="sm">3D</Badge>
-        {site.boundary_polygon.length > 0 && (
+        {site.boundary_polygon?.length > 0 && (
           <Badge color="gray" size="sm">
             {site.boundary_polygon.length} vertices
           </Badge>

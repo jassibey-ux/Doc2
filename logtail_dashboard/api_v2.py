@@ -619,7 +619,7 @@ def site_to_dict(site: Site) -> Dict[str, Any]:
         "id": site.id,
         "name": site.name,
         "description": site.description,
-        "boundary_polygon": site.boundary_polygon,
+        "boundary_polygon": site.boundary_polygon if isinstance(site.boundary_polygon, list) else [],
         "center": {"lat": site.center_lat, "lon": site.center_lon},
         "center_lat": site.center_lat,
         "center_lon": site.center_lon,
