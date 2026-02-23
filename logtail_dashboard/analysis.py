@@ -636,9 +636,12 @@ async def compute_engagement_metrics(
     if per_burst:
         metrics_data["per_burst_json"] = per_burst
 
-    # Determine anchor timestamp from first burst
+    # Determine anchor timestamp from merged jam fields or first burst
     bursts = engagement.bursts or []
-    if bursts:
+    if engagement.jam_on_at:
+        metrics_data["anchor_type"] = "engagement_jam_on"
+        metrics_data["anchor_timestamp"] = engagement.jam_on_at
+    elif bursts:
         first_burst = min(bursts, key=lambda b: b.jam_on_at)
         metrics_data["anchor_type"] = "first_jam_on"
         metrics_data["anchor_timestamp"] = first_burst.jam_on_at

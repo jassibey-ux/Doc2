@@ -110,7 +110,15 @@ export function computeEngagementGeometries(
         lineColor = gpsHealth === 'healthy' ? '#22c55e' : gpsHealth === 'degraded' ? '#eab308' : '#ef4444';
       }
 
-      const label = `${formatDistance(hRange)} | ${formatBearing(brg)}`;
+      // Build label with elapsed timer
+      let label = `${formatDistance(hRange)} | ${formatBearing(brg)}`;
+      if (eng.engage_timestamp) {
+        const elapsedMs = Date.now() - new Date(eng.engage_timestamp).getTime();
+        const elapsedSec = Math.max(0, Math.floor(elapsedMs / 1000));
+        const m = Math.floor(elapsedSec / 60);
+        const s = elapsedSec % 60;
+        label += ` | ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      }
 
       geometries.push({
         engagementId: eng.id,

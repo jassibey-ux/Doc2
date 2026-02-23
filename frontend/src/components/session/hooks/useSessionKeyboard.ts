@@ -2,7 +2,6 @@
  * useSessionKeyboard — Keyboard shortcut handler for live session page.
  *
  * Shortcuts:
- *   J - Toggle jam (jam_on / jam_off)
  *   E - Engage
  *   D - Disengage
  *   L - Launch
@@ -10,6 +9,8 @@
  *   F - Failsafe
  *   N - Note
  *   T - Toggle tactical mode
+ *   Tab - Cycle drones
+ *   Shift+Tab - Cycle CUAS
  *   ESC - Deselect / close panels
  *   Space - Toggle quick actions toolbar
  */
@@ -17,7 +18,7 @@
 import { useEffect } from 'react';
 
 export interface SessionKeyboardActions {
-  onJam: () => void;
+  onJam: () => void;  // Kept for backward compat but no-op
   onEngage: () => void;
   onDisengage: () => void;
   onLaunch: () => void;
@@ -27,6 +28,8 @@ export interface SessionKeyboardActions {
   onToggleTactical: () => void;
   onEscape: () => void;
   onToggleToolbar: () => void;
+  onCycleDrone?: () => void;
+  onCycleCuas?: () => void;
 }
 
 export function useSessionKeyboard(
@@ -46,14 +49,10 @@ export function useSessionKeyboard(
         return;
       }
 
-      // Don't capture with modifier keys (except shift)
+      // Don't capture with modifier keys (except shift for Tab)
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       switch (e.key.toLowerCase()) {
-        case 'j':
-          e.preventDefault();
-          actions.onJam();
-          break;
         case 'e':
           e.preventDefault();
           actions.onEngage();
@@ -81,6 +80,14 @@ export function useSessionKeyboard(
         case 't':
           e.preventDefault();
           actions.onToggleTactical();
+          break;
+        case 'tab':
+          e.preventDefault();
+          if (e.shiftKey) {
+            actions.onCycleCuas?.();
+          } else {
+            actions.onCycleDrone?.();
+          }
           break;
         case 'escape':
           e.preventDefault();

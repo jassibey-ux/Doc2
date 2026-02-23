@@ -457,9 +457,19 @@ export interface Engagement {
   cuas_lon?: number;
   cuas_alt_m?: number;
   cuas_orientation_deg?: number;
+  // Merged jam fields (since always 1 burst per engagement)
+  jam_on_at?: string;
+  jam_off_at?: string;
+  jam_duration_s?: number;
+  jam_frequency_mhz?: number;
+  jam_power_dbm?: number;
+  jam_bandwidth_mhz?: number;
+  gps_denial_detected?: boolean;
+  denial_onset_at?: string;
+  time_to_effect_s?: number;
   notes?: string;
   targets: EngagementTarget[];
-  bursts: JamBurst[];
+  bursts: JamBurst[];  // Empty for new engagements, populated for old ones
   metrics?: EngagementMetrics;
   created_at: string;
   updated_at: string;
@@ -598,7 +608,6 @@ export const EVENT_COLORS: Record<EventType, string> = {
 export const EVENT_SHORTCUTS: Partial<Record<EventType, string>> = {
   engage: 'e',
   disengage: 'd',
-  jam_on: 'j',
   launch: 'l',
   recover: 'r',
   failsafe: 'f',

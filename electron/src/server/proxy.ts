@@ -27,7 +27,7 @@ async function checkPythonHealth(): Promise<boolean> {
   }
   lastHealthCheck = now;
   try {
-    const res = await fetch(`${PYTHON_BACKEND_URL}/health`, {
+    const res = await fetch(`${PYTHON_BACKEND_URL}/api/v2/health`, {
       signal: AbortSignal.timeout(500),
     });
     pythonAvailable = res.ok;
