@@ -232,6 +232,7 @@ export type EventType =
   | 'geofence_breach'
   | 'link_lost'
   | 'link_restored'
+  | 'gps_anomaly'
   | 'custom';
 
 export type EventSource = 'manual' | 'auto_detected';
@@ -598,6 +599,7 @@ export const EVENT_COLORS: Record<EventType, string> = {
   geofence_breach: '#b91c1c', // Darker red
   link_lost: '#991b1b',   // Very dark red
   link_restored: '#166534', // Dark green
+  gps_anomaly: '#f59e0b', // Amber
   custom: '#6b7280',      // Gray
 };
 

@@ -33,7 +33,7 @@ const ALERT_DEDUP_WINDOW_MS = 30_000;
 
 const ALERT_EVENT_TYPES: Set<string> = new Set([
   'geofence_breach', 'link_lost', 'gps_lost', 'altitude_anomaly',
-  'position_jump', 'failsafe',
+  'position_jump', 'failsafe', 'gps_anomaly',
 ]);
 
 const EVENT_SEVERITY: Partial<Record<EventType, AlertLevel>> = {
@@ -43,6 +43,7 @@ const EVENT_SEVERITY: Partial<Record<EventType, AlertLevel>> = {
   altitude_anomaly: 'warning',
   position_jump: 'warning',
   failsafe: 'critical',
+  gps_anomaly: 'warning',
 };
 
 export function useSessionAlerts(

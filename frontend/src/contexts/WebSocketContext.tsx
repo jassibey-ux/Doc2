@@ -431,6 +431,14 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
             break;
           }
 
+          case 'engagement_started':
+          case 'engagement_completed': {
+            // Engagement lifecycle — trigger same refresh as burst events
+            console.log(`Engagement ${message.type}:`, message.data.engagement_id);
+            onEngagementMetricsReadyRef.current?.({ engagement_id: message.data.engagement_id as string });
+            break;
+          }
+
           case 'burst_opened': {
             const burst = message.data as unknown as JamBurst;
             console.log('Burst opened:', burst.id);

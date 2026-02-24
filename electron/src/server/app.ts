@@ -415,6 +415,7 @@ export class DashboardApp {
       stale_since: state.stale_since,
       low_battery: state.low_battery,
       battery_critical: state.battery_critical,
+      baro_alt_m: state.baro_alt_m,
       gps_health: {
         health_status: state.gps_health.health_status,
         fix_valid: state.gps_health.fix_valid,

@@ -48,6 +48,7 @@ const SessionPage: React.FC = () => {
     timelineStart, timelineEnd,
     isLive: wsIsLive, setIsLive: wsSetIsLive,
     timeRange, setTimeRange,
+    setOnBurstOpened, setOnBurstClosed, setOnEngagementMetricsReady,
   } = useWebSocket();
   const {
     selectedSite, cuasProfiles, droneProfiles, addEvent, sites, selectSite,
@@ -57,7 +58,7 @@ const SessionPage: React.FC = () => {
     cuasJamStates, toggleJamState: _toggleJamState, loadSessionById,
     engagements, activeEngagements,
     quickEngage, createEngagement, engage, disengage,
-    activeBursts, jamOn, jamOff,
+    activeBursts, jamOn, jamOff, refreshEngagements,
   } = useTestSessionPhase();
 
   // Centralized filtered data
@@ -171,6 +172,58 @@ const SessionPage: React.FC = () => {
     const interval = window.setInterval(update, 1000);
     return () => clearInterval(interval);
   }, [activeEngInfo?.engageTimestamp]);
+
+  // ─── Persist GPS anomaly alerts as events (Finding 4) ──────────────────────
+  const persistedAnomalyRef = useRef<Map<string, number>>(new Map());
+  const processedAnomalyIds = useRef<Set<string>>(new Set());
+  const ANOMALY_TYPES_TO_PERSIST = useRef(new Set(['gps_lost', 'altitude_anomaly', 'position_jump']));
+
+  useEffect(() => {
+    if (!activeSession?.id || activeEngagements.size === 0 || rawSessionAlerts.length === 0) return;
+
+    const activeEng = Array.from(activeEngagements.values())[0];
+    const now = Date.now();
+    const COOLDOWN_MS = 30_000;
+
+    for (const alert of rawSessionAlerts) {
+      // Skip already-processed alerts
+      if (processedAnomalyIds.current.has(alert.id)) continue;
+      processedAnomalyIds.current.add(alert.id);
+
+      // Only persist anomaly-type alerts
+      if (!ANOMALY_TYPES_TO_PERSIST.current.has(alert.type)) continue;
+
+      // Dedup by tracker+type with 30s cooldown
+      const dedupKey = `${alert.tracker_id}:${alert.type}`;
+      const lastPersisted = persistedAnomalyRef.current.get(dedupKey);
+      if (lastPersisted && now - lastPersisted < COOLDOWN_MS) continue;
+      persistedAnomalyRef.current.set(dedupKey, now);
+
+      addEvent(activeSession.id, {
+        type: 'gps_anomaly' as any,
+        timestamp: alert.timestamp,
+        source: 'auto_detected',
+        tracker_id: alert.tracker_id,
+        engagement_id: activeEng.id,
+        note: alert.message,
+        metadata: alert.metadata,
+      }).catch(() => {
+        // Non-critical — don't block UI
+      });
+    }
+  }, [rawSessionAlerts, activeSession?.id, activeEngagements, addEvent]);
+
+  // ─── Register WebSocket engagement callbacks (Finding 5) ───────────────────
+  useEffect(() => {
+    setOnBurstOpened(() => { refreshEngagements(); });
+    setOnBurstClosed(() => { refreshEngagements(); });
+    setOnEngagementMetricsReady(() => { refreshEngagements(); });
+    return () => {
+      setOnBurstOpened(undefined);
+      setOnBurstClosed(undefined);
+      setOnEngagementMetricsReady(undefined);
+    };
+  }, [setOnBurstOpened, setOnBurstClosed, setOnEngagementMetricsReady, refreshEngagements]);
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 

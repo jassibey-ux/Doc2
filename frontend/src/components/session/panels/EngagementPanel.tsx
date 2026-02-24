@@ -171,6 +171,12 @@ const EngagementPanel: React.FC<EngagementPanelProps> = ({
   );
 };
 
+/** Format an ISO timestamp to local HH:MM:SS */
+function formatTimeHMS(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
 /** Active engagement card with live data */
 const ActiveEngagementCard: React.FC<{
   engagement: Engagement;
@@ -181,6 +187,7 @@ const ActiveEngagementCard: React.FC<{
 }> = ({ engagement, onClick, tacticalMode, currentDroneData, placementMap }) => {
   const dimColor = tacticalMode ? 'rgba(74,222,128,0.5)' : '#6b7280';
   const [elapsed, setElapsed] = useState(0);
+  const [jamElapsed, setJamElapsed] = useState(0);
 
   // Elapsed timer
   useEffect(() => {
@@ -192,12 +199,28 @@ const ActiveEngagementCard: React.FC<{
     return () => clearInterval(interval);
   }, [engagement.engage_timestamp]);
 
-  // Live data
+  // Find open burst from engagement.bursts
+  const openBurst = useMemo(
+    () => engagement.bursts?.find(b => !b.jam_off_at) ?? null,
+    [engagement.bursts],
+  );
+
+  // Jam elapsed timer (from open burst)
+  useEffect(() => {
+    if (!openBurst?.jam_on_at) { setJamElapsed(0); return; }
+    const startMs = new Date(openBurst.jam_on_at).getTime();
+    const update = () => setJamElapsed(Math.floor((Date.now() - startMs) / 1000));
+    update();
+    const interval = window.setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [openBurst?.jam_on_at]);
+
+  // Live data — extended with telemetry fields
   const liveData = useMemo(() => {
     if (!currentDroneData || !engagement.targets || engagement.targets.length === 0) return null;
     const target = engagement.targets[0];
     const drone = currentDroneData.get(target.tracker_id);
-    if (!drone?.lat || !drone?.lon) return null;
+    if (drone?.lat == null || drone?.lon == null) return null;
 
     let cuasLat: number | undefined;
     let cuasLon: number | undefined;
@@ -223,12 +246,19 @@ const ActiveEngagementCard: React.FC<{
       droneName: drone.alias ?? target.tracker_id,
       distance,
       fixValid: drone.fix_valid,
+      lat: drone.lat,
+      lon: drone.lon,
+      altM: drone.alt_m,
+      baroAltM: drone.baro_alt_m ?? null,
       altDelta: target.initial_altitude_m != null && drone.alt_m != null
         ? drone.alt_m - target.initial_altitude_m : null,
     };
   }, [currentDroneData, engagement, placementMap]);
 
   const elapsedStr = `${String(Math.floor(elapsed / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`;
+  const jamElapsedStr = `${String(Math.floor(jamElapsed / 60)).padStart(2, '0')}:${String(jamElapsed % 60).padStart(2, '0')}`;
+
+  const isJamming = !!(engagement.jam_on_at && !engagement.jam_off_at);
 
   return (
     <div
@@ -250,6 +280,16 @@ const ActiveEngagementCard: React.FC<{
         }}>
           {elapsedStr}
         </span>
+      </div>
+
+      {/* Start timestamp (Finding 1) */}
+      <div style={{ fontSize: 9, fontFamily: 'monospace', color: dimColor, marginTop: 2 }}>
+        {engagement.engage_timestamp && (
+          <span>Started: {formatTimeHMS(engagement.engage_timestamp)}</span>
+        )}
+        {engagement.jam_on_at && (
+          <span style={{ marginLeft: 8 }}>Jam: {formatTimeHMS(engagement.jam_on_at)}</span>
+        )}
       </div>
 
       {/* Live metrics */}
@@ -278,16 +318,66 @@ const ActiveEngagementCard: React.FC<{
         </div>
       )}
 
-      {/* Jam active indicator */}
-      {(engagement.jam_on_at && !engagement.jam_off_at) && (
+      {/* Telemetry strip (Finding 3) */}
+      {liveData && (
         <div style={{
-          marginTop: 4,
-          fontSize: 9, fontWeight: 700, color: '#ef4444',
-          letterSpacing: 0.5,
-          animation: 'pulse-live 1.5s ease-in-out infinite',
+          marginTop: 4, padding: '3px 0',
+          fontSize: 9, fontFamily: 'monospace', color: dimColor,
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px 8px',
         }}>
-          <Activity size={9} style={{ verticalAlign: 'middle', marginRight: 3 }} />
-          JAM ACTIVE
+          <span>
+            FIX:{' '}
+            <span style={{ color: liveData.fixValid ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+              {liveData.fixValid ? 'Valid' : 'LOST'}
+            </span>
+          </span>
+          <span>LAT: {liveData.lat != null ? liveData.lat.toFixed(4) + '°' : 'N/A'}</span>
+          <span>LON: {liveData.lon != null ? liveData.lon.toFixed(4) + '°' : 'N/A'}</span>
+          <span>GPS ALT: {liveData.altM != null ? liveData.altM.toFixed(1) + 'm' : 'N/A'}</span>
+          <span>BARO ALT: {liveData.baroAltM != null ? liveData.baroAltM.toFixed(1) + 'm' : 'N/A'}</span>
+        </div>
+      )}
+
+      {/* Enhanced jam indicator (Finding 2) */}
+      {isJamming && (
+        <div style={{
+          marginTop: 4, padding: '3px 6px', borderRadius: 4,
+          background: 'rgba(239,68,68,0.08)',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontSize: 9, fontWeight: 700, color: '#ef4444',
+            letterSpacing: 0.5,
+            animation: 'pulse-live 1.5s ease-in-out infinite',
+          }}>
+            <Activity size={9} />
+            <span>JAM ACTIVE</span>
+            {openBurst && (
+              <>
+                <span style={{ color: '#f97316' }}>Burst #{openBurst.burst_seq}</span>
+                <span style={{ fontFamily: 'monospace', color: '#fff' }}>{jamElapsedStr}</span>
+              </>
+            )}
+          </div>
+          {openBurst && (
+            <div style={{
+              display: 'flex', gap: 8, marginTop: 2,
+              fontSize: 9, fontFamily: 'monospace',
+            }}>
+              {openBurst.gps_denial_detected && (
+                <span style={{
+                  padding: '1px 4px', borderRadius: 3,
+                  background: 'rgba(239,68,68,0.15)', color: '#ef4444',
+                  fontWeight: 700,
+                }}>
+                  GPS DENIED
+                </span>
+              )}
+              {openBurst.time_to_effect_s != null && (
+                <span style={{ color: '#eab308' }}>TTE {openBurst.time_to_effect_s.toFixed(1)}s</span>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -108,6 +108,7 @@ class EventInput(BaseModel):
     source: str = "manual"
     cuas_id: Optional[str] = None
     tracker_id: Optional[str] = None
+    engagement_id: Optional[str] = None
     note: Optional[str] = None
     metadata: Optional[Dict] = None
 
@@ -1474,6 +1475,7 @@ async def add_session_event(
         source=request.source,
         cuas_id=request.cuas_id,
         tracker_id=request.tracker_id,
+        engagement_id=request.engagement_id,
         note=request.note,
         event_metadata=request.metadata,
     )

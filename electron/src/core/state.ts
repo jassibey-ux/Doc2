@@ -173,6 +173,7 @@ export class StateManager {
         stale_since: state.stale_since,
         low_battery: state.low_battery,
         battery_critical: state.battery_critical,
+        baro_alt_m: state.baro_alt_m,
         gps_health: gpsHealthSummary,
       });
     }

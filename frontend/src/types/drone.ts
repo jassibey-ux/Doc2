@@ -133,12 +133,14 @@ export interface DroneSummary {
   // Battery status
   low_battery?: boolean;
   battery_critical?: boolean;
+  // Barometric altitude (for engagement telemetry)
+  baro_alt_m?: number | null;
   // GPS Health summary
   gps_health?: GPSHealthSummary;
 }
 
 export interface WebSocketMessage {
-  type: 'tracker_updated' | 'tracker_stale' | 'active_event_changed' | 'config_changed' | 'replay_state' | 'new_file_detected' | 'anomaly_alert' | 'demo_mode_changed' | 'replay_frames_ready' | 'replay_frames_error' | 'replay_build_progress' | 'gps_health_alert' | 'engagement_started' | 'engagement_ended' | 'engagement_metrics_ready' | 'burst_opened' | 'burst_closed' | 'gps_denial_detected';
+  type: 'tracker_updated' | 'tracker_stale' | 'active_event_changed' | 'config_changed' | 'replay_state' | 'new_file_detected' | 'anomaly_alert' | 'demo_mode_changed' | 'replay_frames_ready' | 'replay_frames_error' | 'replay_build_progress' | 'gps_health_alert' | 'engagement_started' | 'engagement_ended' | 'engagement_completed' | 'engagement_metrics_ready' | 'burst_opened' | 'burst_closed' | 'gps_denial_detected';
   data: Record<string, unknown>;
 }
 

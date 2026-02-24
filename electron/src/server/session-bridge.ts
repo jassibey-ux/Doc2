@@ -34,6 +34,12 @@ const SESSION_CUAS_PLACEMENT_RE = /^\/api\/v2\/sessions\/([^/]+)\/cuas-placement
 // Mobile companion paths — intercept for WebSocket broadcast
 const CUAS_GEOTAG_RE = /^\/api\/v2\/cuas-placements\/([^/]+)\/geotag$/;
 const SDR_READING_RE = /^\/api\/v2\/sessions\/([^/]+)\/sdr-readings$/;
+// Engagement routes — intercept for WebSocket broadcast
+const ENGAGEMENT_ENGAGE_RE = /^\/api\/v2\/engagements\/([^/]+)\/engage$/;
+const ENGAGEMENT_DISENGAGE_RE = /^\/api\/v2\/engagements\/([^/]+)\/disengage$/;
+const ENGAGEMENT_ABORT_RE = /^\/api\/v2\/engagements\/([^/]+)\/abort$/;
+const ENGAGEMENT_JAM_ON_RE = /^\/api\/v2\/engagements\/([^/]+)\/jam-on$/;
+const ENGAGEMENT_JAM_OFF_RE = /^\/api\/v2\/engagements\/([^/]+)\/jam-off$/;
 
 // Local map of session live_data_paths (since sessions live in Python's DB)
 // Persisted to disk so paths survive app restarts.
@@ -427,6 +433,38 @@ export function sessionBridgeMiddleware() {
         next(); // Fall through to proxy if Python unreachable
       }
       return;
+    }
+
+    // Engagement actions — forward to Python, broadcast result
+    const engagementActionPatterns: Array<{ re: RegExp; type: string }> = [
+      { re: ENGAGEMENT_ENGAGE_RE, type: 'engagement_started' },
+      { re: ENGAGEMENT_DISENGAGE_RE, type: 'engagement_completed' },
+      { re: ENGAGEMENT_ABORT_RE, type: 'engagement_completed' },
+      { re: ENGAGEMENT_JAM_ON_RE, type: 'burst_opened' },
+      { re: ENGAGEMENT_JAM_OFF_RE, type: 'burst_closed' },
+    ];
+
+    for (const { re, type } of engagementActionPatterns) {
+      const match = req.path.match(re);
+      if (match) {
+        try {
+          const result = await forwardToPython(req);
+          if (result.status < 400) {
+            try {
+              getDashboardApp().broadcastMessage({
+                type: type as any,
+                data: { engagement_id: match[1], ...result.data },
+              });
+            } catch {
+              // Non-critical broadcast failure
+            }
+          }
+          res.status(result.status).json(result.data);
+        } catch {
+          next(); // Fall through to proxy if Python unreachable
+        }
+        return;
+      }
     }
 
     // Not a handled path — pass through to proxy
