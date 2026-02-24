@@ -165,6 +165,19 @@ MIGRATIONS: List[Migration] = [
             -- SQLite < 3.35 cannot DROP COLUMN; columns will be ignored if unused
         """,
     ),
+    Migration(
+        version=6,
+        name="add_burst_rf_columns",
+        description="Add frequency/power/bandwidth columns to engagement_jam_bursts for per-burst RF params",
+        up_sql="""
+            ALTER TABLE engagement_jam_bursts ADD COLUMN frequency_mhz REAL;
+            ALTER TABLE engagement_jam_bursts ADD COLUMN power_dbm REAL;
+            ALTER TABLE engagement_jam_bursts ADD COLUMN bandwidth_mhz REAL
+        """,
+        down_sql="""
+            -- SQLite < 3.35 cannot DROP COLUMN; columns will be ignored if unused
+        """,
+    ),
 ]
 
 
