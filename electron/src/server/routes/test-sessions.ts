@@ -28,6 +28,7 @@ import { calculateTrackerMetrics } from '../../core/tracker-metrics-calculator';
 import { TrackerPosition } from '../../core/mock-tracker-provider';
 import { loadConfig } from '../../core/config';
 import { getDashboardApp } from '../index';
+import { getSessionLiveDataPath } from '../session-bridge';
 import log from 'electron-log';
 
 export function testSessionRoutes(): Router {
@@ -821,10 +822,50 @@ export function testSessionRoutes(): Router {
   });
 
   // GET /api/test-sessions/:id/raw-telemetry — Full telemetry for analysis table
-  router.get('/test-sessions/:id/raw-telemetry', (req, res) => {
+  router.get('/test-sessions/:id/raw-telemetry', async (req, res) => {
     try {
       const sessionId = req.params.id;
-      const session = getTestSessionById(sessionId);
+
+      // Try Express JSON store first, then fall back to Python backend
+      let session = getTestSessionById(sessionId);
+      let pythonEngagements: any[] | null = null;
+
+      if (!session) {
+        // Session not in Express store — try Python backend (v2 UUID sessions)
+        try {
+          const pyRes = await fetch(`http://127.0.0.1:8083/api/v2/sessions/${sessionId}`, {
+            signal: AbortSignal.timeout(5000),
+          });
+          if (pyRes.ok) {
+            const pySession = await pyRes.json();
+            // Build a minimal session object compatible with the code below
+            // Python PUT for live_data_path fails (500), so check persisted bridge map
+            const liveDataPath = pySession.live_data_path ?? getSessionLiveDataPath(sessionId);
+            session = {
+              id: pySession.id,
+              name: pySession.name ?? '',
+              status: pySession.status ?? 'completed',
+              live_data_path: liveDataPath,
+              engagements: [],
+              events: [],
+            } as any;
+
+            // Also fetch engagements from Python
+            try {
+              const engRes = await fetch(`http://127.0.0.1:8083/api/v2/sessions/${sessionId}/engagements`, {
+                signal: AbortSignal.timeout(5000),
+              });
+              if (engRes.ok) {
+                const engData = await engRes.json();
+                pythonEngagements = Array.isArray(engData) ? engData : engData?.engagements ?? [];
+              }
+            } catch { /* engagements optional */ }
+          }
+        } catch (e: any) {
+          log.warn(`[raw-telemetry] Python backend unavailable: ${e.message}`);
+        }
+      }
+
       if (!session) {
         return res.status(404).json({ error: 'Test session not found' });
       }
@@ -918,7 +959,7 @@ export function testSessionRoutes(): Router {
         session_name: session.name,
         total_count: allPositions.length,
         positions: allPositions,
-        engagements: session.engagements ?? [],
+        engagements: pythonEngagements ?? session.engagements ?? [],
         events: session.events ?? [],
       });
     } catch (error) {

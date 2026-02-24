@@ -36,7 +36,47 @@ const CUAS_GEOTAG_RE = /^\/api\/v2\/cuas-placements\/([^/]+)\/geotag$/;
 const SDR_READING_RE = /^\/api\/v2\/sessions\/([^/]+)\/sdr-readings$/;
 
 // Local map of session live_data_paths (since sessions live in Python's DB)
+// Persisted to disk so paths survive app restarts.
 const sessionPaths = new Map<string, string>();
+const SESSION_PATHS_FILE = path.join(
+  loadConfig().log_root_folder,
+  'session-paths.json',
+);
+
+/** Load persisted session paths from disk */
+function loadSessionPaths(): void {
+  try {
+    if (fs.existsSync(SESSION_PATHS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(SESSION_PATHS_FILE, 'utf-8'));
+      for (const [id, p] of Object.entries(data)) {
+        if (typeof p === 'string') sessionPaths.set(id, p);
+      }
+      log.info(`[session-bridge] Loaded ${sessionPaths.size} persisted session paths`);
+    }
+  } catch (e: any) {
+    log.warn(`[session-bridge] Failed to load session paths: ${e.message}`);
+  }
+}
+
+/** Save session paths to disk */
+function saveSessionPaths(): void {
+  try {
+    const obj: Record<string, string> = {};
+    for (const [id, p] of sessionPaths) obj[id] = p;
+    fs.mkdirSync(path.dirname(SESSION_PATHS_FILE), { recursive: true });
+    fs.writeFileSync(SESSION_PATHS_FILE, JSON.stringify(obj, null, 2));
+  } catch (e: any) {
+    log.warn(`[session-bridge] Failed to save session paths: ${e.message}`);
+  }
+}
+
+// Load on module init
+loadSessionPaths();
+
+/** Get the live_data_path for a Python v2 session */
+export function getSessionLiveDataPath(sessionId: string): string | null {
+  return sessionPaths.get(sessionId) ?? null;
+}
 
 /**
  * Forward a request to the Python backend and return the parsed response.
@@ -126,8 +166,9 @@ async function handleSessionStart(req: Request, res: Response, sessionId: string
     fs.mkdirSync(sessionPath, { recursive: true });
     log.info(`[session-bridge] Created session directory: ${sessionPath}`);
 
-    // Store locally for stop handler
+    // Store locally for stop handler and persist to disk
     sessionPaths.set(sessionId, sessionPath);
+    saveSessionPaths();
 
     // Update live_data_path on the Python session
     try {
@@ -201,8 +242,7 @@ async function handleSessionStop(req: Request, res: Response, sessionId: string)
       }
     }
 
-    // Clean up local path map
-    sessionPaths.delete(sessionId);
+    // Keep sessionPaths entry — needed by raw-telemetry endpoint after session ends
 
     // Deactivate CoT-to-actor bridge
     cotActorBridge.setActiveSession(null).catch(() => {});
