@@ -36,6 +36,7 @@ import SessionMapArea from './SessionMapArea';
 import type { SessionMapAreaHandle } from './SessionMapArea';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import TimelineControl from '../TimelineControl';
+import { slantRange } from '../../utils/geo';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
@@ -147,9 +148,10 @@ const SessionPage: React.FC = () => {
     const placement = cuasPlacements.find(p => p.id === eng.cuas_placement_id);
     let distance: number | undefined;
     if (drone?.lat != null && drone?.lon != null && placement?.position) {
-      const dLat = (drone.lat - placement.position.lat) * 111320;
-      const dLon = (drone.lon - placement.position.lon) * 111320 * Math.cos(placement.position.lat * Math.PI / 180);
-      distance = Math.sqrt(dLat * dLat + dLon * dLon);
+      distance = slantRange(
+        placement.position.lat, placement.position.lon, placement.height_agl_m ?? 5,
+        drone.lat, drone.lon, drone.alt_m ?? 50,
+      );
     }
     return {
       cuasName: eng.cuas_name ?? 'CUAS',

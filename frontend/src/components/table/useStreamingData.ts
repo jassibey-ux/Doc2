@@ -9,19 +9,9 @@ import { useWebSocket } from '../../contexts/WebSocketContext';
 import type { DroneSummary } from '../../types/drone';
 import type { TelemetryRow } from './types';
 import type { Engagement } from '../../types/workflow';
+import { slantRange } from '../../utils/geo';
 
 const MAX_ENTRIES = 2000;
-
-/** Compute 3D distance in meters. */
-function computeDistanceFast(
-  lat1: number, lon1: number, alt1: number,
-  lat2: number, lon2: number, alt2: number,
-): number {
-  const dLat = (lat2 - lat1) * 111320;
-  const dLon = (lon2 - lon1) * 111320 * Math.cos(lat1 * Math.PI / 180);
-  const dAlt = alt2 - alt1;
-  return Math.sqrt(dLat * dLat + dLon * dLon + dAlt * dAlt);
-}
 
 function droneToRow(
   drone: DroneSummary,
@@ -67,7 +57,7 @@ function droneToRow(
 
       // Compute CUAS distance
       if (eng.cuas_lat != null && eng.cuas_lon != null && drone.lat != null && drone.lon != null) {
-        row.cuas_distance_m = Math.round(computeDistanceFast(
+        row.cuas_distance_m = Math.round(slantRange(
           eng.cuas_lat, eng.cuas_lon, eng.cuas_alt_m ?? 5,
           drone.lat, drone.lon, drone.alt_m ?? 50,
         ));

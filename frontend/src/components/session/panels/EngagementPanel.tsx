@@ -10,6 +10,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Circle, Target, Wifi, WifiOff, Activity } from 'lucide-react';
 import type { Engagement, CUASPlacement } from '../../../types/workflow';
 import type { DroneSummary } from '../../../types/drone';
+import { slantRange } from '../../../utils/geo';
 
 interface EngagementPanelProps {
   engagements: Engagement[];
@@ -26,16 +27,6 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> =
   complete: { bg: 'rgba(34,197,94,0.12)', text: '#22c55e', dot: '#22c55e' },
   aborted:  { bg: 'rgba(239,68,68,0.12)', text: '#ef4444', dot: '#ef4444' },
 };
-
-function computeDistance(
-  lat1: number, lon1: number, alt1: number,
-  lat2: number, lon2: number, alt2: number,
-): number {
-  const dLat = (lat2 - lat1) * 111320;
-  const dLon = (lon2 - lon1) * 111320 * Math.cos(lat1 * Math.PI / 180);
-  const dAlt = alt2 - alt1;
-  return Math.sqrt(dLat * dLat + dLon * dLon + dAlt * dAlt);
-}
 
 const EngagementPanel: React.FC<EngagementPanelProps> = ({
   engagements,
@@ -239,7 +230,7 @@ const ActiveEngagementCard: React.FC<{
     }
 
     const distance = cuasLat != null && cuasLon != null
-      ? Math.round(computeDistance(cuasLat, cuasLon, cuasAlt, drone.lat, drone.lon, drone.alt_m ?? 50))
+      ? Math.round(slantRange(cuasLat, cuasLon, cuasAlt, drone.lat, drone.lon, drone.alt_m ?? 50))
       : null;
 
     return {

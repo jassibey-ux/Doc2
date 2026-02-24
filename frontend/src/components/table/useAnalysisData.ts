@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { TelemetryRow } from './types';
 import type { Engagement } from '../../types/workflow';
+import { slantRange } from '../../utils/geo';
 
 interface AnalysisDataResult {
   data: TelemetryRow[];
@@ -16,17 +17,6 @@ interface AnalysisDataResult {
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
-}
-
-/** Compute 3D distance in meters between two geo positions. */
-function computeDistance(
-  lat1: number, lon1: number, alt1: number,
-  lat2: number, lon2: number, alt2: number,
-): number {
-  const dLat = (lat2 - lat1) * 111320;
-  const dLon = (lon2 - lon1) * 111320 * Math.cos(lat1 * Math.PI / 180);
-  const dAlt = alt2 - alt1;
-  return Math.sqrt(dLat * dLat + dLon * dLon + dAlt * dAlt);
 }
 
 export function useAnalysisData(sessionId: string | undefined): AnalysisDataResult {
@@ -173,7 +163,7 @@ export function useAnalysisData(sessionId: string | undefined): AnalysisDataResu
 
         // Compute CUAS distance
         if (matchedEng.cuasLat != null && matchedEng.cuasLon != null && row.lat != null && row.lon != null) {
-          enriched.cuas_distance_m = Math.round(computeDistance(
+          enriched.cuas_distance_m = Math.round(slantRange(
             matchedEng.cuasLat, matchedEng.cuasLon, matchedEng.cuasAlt,
             row.lat, row.lon, row.alt_m ?? 50,
           ));
