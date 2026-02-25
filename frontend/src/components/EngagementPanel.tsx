@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Badge } from './ui/GlassUI';
 import { Square, AlertTriangle, Plus, Target, User, Radio, Zap } from 'lucide-react';
 import type { Engagement, CUASPlacement, CUASProfile, JamBurst, EmitterType } from '../types/workflow';
+import { slantRange } from '../utils/geo';
 
 interface LiveDronePosition {
   lat: number | null;
@@ -44,17 +45,6 @@ function formatMetricValue(val: number | undefined, unit: string): string {
   return String(val);
 }
 
-// Haversine distance in meters (simplified for real-time computation)
-function haversineM(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 function computeLiveRange(
   eng: Engagement,
   liveDronePositions?: Map<string, LiveDronePosition>,
@@ -73,7 +63,7 @@ function computeLiveRange(
   }
 
   return {
-    rangeM: haversineM(eng.cuas_lat, eng.cuas_lon, pos.lat, pos.lon),
+    rangeM: slantRange(eng.cuas_lat, eng.cuas_lon, eng.cuas_alt_m ?? 5, pos.lat, pos.lon, pos.alt_m ?? 50),
     fixValid: pos.fix_valid,
     targetId: primaryTarget.tracker_id,
   };
