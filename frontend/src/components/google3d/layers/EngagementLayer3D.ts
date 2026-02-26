@@ -99,21 +99,40 @@ export function renderEngagementLayer(
       polyline.coordinates = coords;
       polyline.altitudeMode = 'RELATIVE_TO_MESH';
 
-      // Simplified line colors: 3 states
+      // Line colors: 5 states based on engagement status, jamming, and GPS health
       if (isActive && hasBurst && gpsLost) {
-        // Active + GPS denied — bright red with glow
+        // Active + GPS denied + jamming — bright red, wide glow
         polyline.strokeColor = '#ef4444';
         polyline.strokeWidth = 4;
         polyline.outerColor = '#991b1b';
-        polyline.outerWidth = 7;
+        polyline.outerWidth = 8;
       } else if (isActive && hasBurst) {
-        // Active + jam — red
+        // Active + jamming — red
+        polyline.strokeColor = '#ef4444';
+        polyline.strokeWidth = 3.5;
+        polyline.outerColor = '#7f1d1d';
+        polyline.outerWidth = 7;
+      } else if (isActive && gpsLost) {
+        // Active + GPS lost (no jam) — red
         polyline.strokeColor = '#ef4444';
         polyline.strokeWidth = 3;
-        polyline.outerColor = '#7f1d1d';
+        polyline.outerColor = '#991b1b';
+        polyline.outerWidth = 6;
+      } else if (isActive) {
+        // Active, no jam — color by GPS health
+        const gpsStatus = drone.gps_health?.health_status ?? 'healthy';
+        if (gpsStatus === 'degraded') {
+          polyline.strokeColor = '#eab308';
+          polyline.outerColor = '#854d0e';
+        } else {
+          // healthy (or unknown)
+          polyline.strokeColor = '#22c55e';
+          polyline.outerColor = '#166534';
+        }
+        polyline.strokeWidth = 3;
         polyline.outerWidth = 6;
       } else {
-        // Complete/historical — gray
+        // Completed/historical — gray
         polyline.strokeColor = '#6b7280';
         polyline.strokeWidth = 1.5;
         polyline.outerColor = '#1f2937';
