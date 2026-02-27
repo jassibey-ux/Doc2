@@ -29,7 +29,7 @@ interface EngagementLayerOptions {
   cuasPlacements: CUASPlacement[];
   currentDroneData: Map<string, DroneSummary>;
   showLabels?: boolean;
-  /** Callback when an engagement line is clicked. */
+  /** @deprecated Interactive click not supported on Polyline3DElement. */
   onEngagementClick?: (engagementId: string) => void;
 }
 
@@ -56,13 +56,13 @@ export function renderEngagementLayer(
 ): () => void {
   cleanupEngagements(mapEl);
 
-  const { engagements, activeBursts, cuasPlacements, currentDroneData, showLabels = true, onEngagementClick } = options;
+  const { engagements, activeBursts, cuasPlacements, currentDroneData, showLabels = true } = options;
 
   if (!engagements || engagements.length === 0 || !maps3dLib) {
     return () => cleanupEngagements(mapEl);
   }
 
-  const { Polyline3DInteractiveElement, Marker3DElement } = maps3dLib;
+  const { Polyline3DElement, Marker3DElement } = maps3dLib;
 
   // Build placement lookup
   const placementMap = new Map<string, CUASPlacement>();
@@ -93,7 +93,8 @@ export function renderEngagementLayer(
         { lat: drone.lat, lng: drone.lon, altitude: droneAlt },
       ];
 
-      const polyline = new Polyline3DInteractiveElement();
+      if (!Polyline3DElement) continue;
+      const polyline = new Polyline3DElement();
       polyline.setAttribute('data-layer', ENGAGEMENT_TAG);
       polyline.setAttribute('data-engagement-id', engagement.id);
       polyline.coordinates = coords;
@@ -105,19 +106,19 @@ export function renderEngagementLayer(
         polyline.strokeColor = '#ef4444';
         polyline.strokeWidth = 4;
         polyline.outerColor = '#991b1b';
-        polyline.outerWidth = 8;
+        polyline.outerWidth = 0.7;
       } else if (isActive && hasBurst) {
         // Active + jamming — red
         polyline.strokeColor = '#ef4444';
         polyline.strokeWidth = 3.5;
         polyline.outerColor = '#7f1d1d';
-        polyline.outerWidth = 7;
+        polyline.outerWidth = 0.6;
       } else if (isActive && gpsLost) {
         // Active + GPS lost (no jam) — red
         polyline.strokeColor = '#ef4444';
         polyline.strokeWidth = 3;
         polyline.outerColor = '#991b1b';
-        polyline.outerWidth = 6;
+        polyline.outerWidth = 0.5;
       } else if (isActive) {
         // Active, no jam — color by GPS health
         const gpsStatus = drone.gps_health?.health_status ?? 'healthy';
@@ -130,19 +131,16 @@ export function renderEngagementLayer(
           polyline.outerColor = '#166534';
         }
         polyline.strokeWidth = 3;
-        polyline.outerWidth = 6;
+        polyline.outerWidth = 0.5;
       } else {
         // Completed/historical — gray
         polyline.strokeColor = '#6b7280';
         polyline.strokeWidth = 1.5;
         polyline.outerColor = '#1f2937';
-        polyline.outerWidth = 3;
+        polyline.outerWidth = 0.4;
       }
 
       polyline.drawsOccludedSegments = true;
-      if (onEngagementClick) {
-        polyline.addEventListener('gmp-click', () => onEngagementClick(engagement.id));
-      }
       mapEl.append(polyline);
 
       if (!showLabels || !Marker3DElement) continue;
