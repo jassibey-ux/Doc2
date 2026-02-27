@@ -707,7 +707,24 @@ export default function SessionConsole() {
               <GlassButton
                 variant="secondary"
                 size="sm"
-                onClick={() => window.open(`/api/export/session/${sessionId}/geojson`, '_blank')}
+                onClick={async () => {
+                  try {
+                    const resp = await fetch(`/api/export/session/${sessionId}/geojson`);
+                    if (!resp.ok) throw new Error('Export failed');
+                    const blob = await resp.blob();
+                    const safeName = (activeSession?.name || 'session').replace(/\s+/g, '_');
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${safeName}_session.geojson`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                  } catch (e) {
+                    showToast('error', 'GeoJSON export failed');
+                  }
+                }}
                 style={{
                   background: 'rgba(6, 182, 212, 0.2)',
                   borderColor: 'rgba(6, 182, 212, 0.4)',
@@ -722,7 +739,24 @@ export default function SessionConsole() {
               <GlassButton
                 variant="secondary"
                 size="sm"
-                onClick={() => window.open(`/api/export/session/${sessionId}/czml`, '_blank')}
+                onClick={async () => {
+                  try {
+                    const resp = await fetch(`/api/export/session/${sessionId}/czml`);
+                    if (!resp.ok) throw new Error('Export failed');
+                    const blob = await resp.blob();
+                    const safeName = (activeSession?.name || 'session').replace(/\s+/g, '_');
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${safeName}_3d_replay.czml`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                  } catch (e) {
+                    showToast('error', 'CZML export failed');
+                  }
+                }}
                 style={{
                   background: 'rgba(34, 197, 94, 0.2)',
                   borderColor: 'rgba(34, 197, 94, 0.4)',

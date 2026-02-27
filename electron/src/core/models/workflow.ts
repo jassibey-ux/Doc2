@@ -199,6 +199,20 @@ export interface CUASPlacement {
 }
 
 // =============================================================================
+// Asset Placements (Vehicles & Equipment)
+// =============================================================================
+
+export interface AssetPlacement {
+  id: string;
+  asset_type: 'vehicle' | 'equipment';
+  model_id: string;
+  label: string;
+  position: GeoPoint;
+  orientation_deg: number;
+  notes?: string;
+}
+
+// =============================================================================
 // Test Session (Step 4-6)
 // =============================================================================
 
@@ -391,6 +405,7 @@ export interface TestSession {
   // Configuration
   tracker_assignments: TrackerAssignment[];
   cuas_placements: CUASPlacement[];
+  asset_placements?: AssetPlacement[];
 
   // Timeline
   start_time?: string;

@@ -68,6 +68,7 @@ export default function SessionAnalysisView() {
   const [sessionAnnotations, setSessionAnnotations] = useState<SessionAnnotation[]>([]);
   const [sessionEngagements, setSessionEngagements] = useState<Engagement[]>([]);
   const [chartHoverTimestamp, setChartHoverTimestamp] = useState<number | null>(null);
+  const [geoExportLoading, setGeoExportLoading] = useState<string | null>(null);
 
   const { getSessionTags, getSessionAnnotations } = useCRM();
   const [analysisData, setAnalysisData] = useState<{
@@ -254,6 +255,31 @@ export default function SessionAnalysisView() {
       window.URL.revokeObjectURL(url);
     } catch (error: unknown) {
       console.error('Report download failed:', error instanceof Error ? error.message : error);
+    }
+  }, [session]);
+
+  // Handle geo export download
+  const handleGeoExport = useCallback(async (format: string) => {
+    if (!session) return;
+    setGeoExportLoading(format);
+    let objectUrl: string | null = null;
+    try {
+      const response = await fetch(`/api/export/session/${session.id}/${format}`);
+      if (!response.ok) throw new Error(`Export failed: ${response.status}`);
+      const blob = await response.blob();
+      const ext = format === 'geopackage' ? 'gpkg' : format;
+      objectUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `${session.name.replace(/\s+/g, '_')}_session.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (error: unknown) {
+      console.error('Geo export failed:', error instanceof Error ? error.message : error);
+    } finally {
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+      setGeoExportLoading(null);
     }
   }, [session]);
 
@@ -834,13 +860,16 @@ export default function SessionAnalysisView() {
             <TrackLegend visible={true} compact={false} showSDOnly={true} />
           </GlassPanel>
 
-          {/* Report Export */}
+          {/* Export */}
           <GlassPanel style={{ padding: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
               <Download size={16} style={{ color: '#f59e0b' }} />
-              <span style={{ fontSize: '13px', fontWeight: 500 }}>Export Report</span>
+              <span style={{ fontSize: '13px', fontWeight: 500 }}>Export</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+
+            {/* Reports */}
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Reports</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
               <GlassButton
                 variant="secondary"
                 size="md"
@@ -858,6 +887,41 @@ export default function SessionAnalysisView() {
               >
                 <FileText size={16} />
                 Download Text Report
+              </GlassButton>
+            </div>
+
+            {/* Geospatial Data */}
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Geospatial Data</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <GlassButton
+                variant="secondary"
+                size="md"
+                onClick={() => handleGeoExport('geojson')}
+                disabled={!['completed', 'archived'].includes(session?.status || '') || geoExportLoading !== null}
+                style={{ width: '100%' }}
+              >
+                <Globe size={16} />
+                {geoExportLoading === 'geojson' ? 'Exporting...' : 'GeoJSON (.geojson)'}
+              </GlassButton>
+              <GlassButton
+                variant="secondary"
+                size="md"
+                onClick={() => handleGeoExport('geopackage')}
+                disabled={!['completed', 'archived'].includes(session?.status || '') || geoExportLoading !== null}
+                style={{ width: '100%' }}
+              >
+                <Globe size={16} />
+                {geoExportLoading === 'geopackage' ? 'Exporting...' : 'GeoPackage (.gpkg)'}
+              </GlassButton>
+              <GlassButton
+                variant="ghost"
+                size="md"
+                onClick={() => handleGeoExport('czml')}
+                disabled={!['completed', 'archived'].includes(session?.status || '') || geoExportLoading !== null}
+                style={{ width: '100%' }}
+              >
+                <Globe size={16} />
+                {geoExportLoading === 'czml' ? 'Exporting...' : 'CZML 3D Replay'}
               </GlassButton>
             </div>
           </GlassPanel>

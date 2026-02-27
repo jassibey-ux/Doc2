@@ -75,6 +75,99 @@ function csvEscape(val: string): string {
   return val;
 }
 
+/**
+ * Filter positions by session time window (for CSV-from-disk path).
+ * Applies a 2-second tolerance on both bounds to handle GPS processing latency.
+ */
+export function filterPositionsBySessionTime<T extends { timestamp_ms: number }>(
+  positions: T[],
+  startTimeISO: string | undefined,
+  endTimeISO: string | undefined,
+): T[] {
+  const startMs = startTimeISO ? new Date(startTimeISO).getTime() - 2000 : -Infinity;
+  const endMs = endTimeISO ? new Date(endTimeISO).getTime() + 2000 : Infinity;
+  return positions.filter(p => p.timestamp_ms >= startMs && p.timestamp_ms <= endMs);
+}
+
+/**
+ * Recover tracker positions from CSV files on disk (for completed sessions after restart).
+ * Returns positions grouped by tracker ID, optionally filtered by session time window.
+ */
+export function recoverPositionsFromCSV(
+  liveDataPath: string,
+  startTimeISO?: string,
+  endTimeISO?: string,
+): Map<string, TrackerPosition[]> {
+  const result = new Map<string, TrackerPosition[]>();
+
+  if (!fs.existsSync(liveDataPath)) {
+    return result;
+  }
+
+  const csvFiles = fs.readdirSync(liveDataPath).filter(f => f.startsWith('tracker_') && f.endsWith('.csv'));
+  for (const csvFile of csvFiles) {
+    const csvPath = path.join(liveDataPath, csvFile);
+    const content = fs.readFileSync(csvPath, 'utf-8');
+    const lines = content.trim().split('\n');
+    if (lines.length < 2) continue;
+
+    const headers = lines[0].split(',');
+    const positions: TrackerPosition[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      try {
+        const vals = lines[i].split(',');
+        const row: Record<string, string> = {};
+        headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+
+        const timestamp = row.time_local_received || '';
+        if (!timestamp) continue;
+
+        const trackerId = row.tracker_id || '';
+        const tsMs = new Date(timestamp).getTime();
+
+        // Apply time-boundary filter if session times provided
+        if (startTimeISO) {
+          const startMs = new Date(startTimeISO).getTime() - 2000;
+          if (tsMs < startMs) continue;
+        }
+        if (endTimeISO) {
+          const endMs = new Date(endTimeISO).getTime() + 2000;
+          if (tsMs > endMs) continue;
+        }
+
+        positions.push({
+          tracker_id: trackerId,
+          timestamp,
+          latitude: row.lat ? parseFloat(row.lat) : 0,
+          longitude: row.lon ? parseFloat(row.lon) : 0,
+          altitude_m: row.alt_m ? parseFloat(row.alt_m) : 0,
+          speed_ms: row.speed_mps ? parseFloat(row.speed_mps) : 0,
+          heading_deg: row.course_deg ? parseFloat(row.course_deg) : 0,
+          gps_quality: row.fix_valid === 'true' ? 'good' : 'poor',
+          source: 'live' as const,
+          rssi_dbm: row.rssi_dbm ? parseFloat(row.rssi_dbm) : 0,
+          hdop: row.hdop ? parseFloat(row.hdop) : 0,
+          satellites: row.satellites ? parseInt(row.satellites, 10) : 0,
+          fix_valid: row.fix_valid === 'true',
+          battery_mv: row.battery_mv ? parseInt(row.battery_mv, 10) : 0,
+        });
+      } catch (rowErr) {
+        log.warn(`Skipping malformed CSV row ${i} in ${csvFile}`);
+      }
+    }
+
+    if (positions.length > 0) {
+      const trackerId = positions[0].tracker_id;
+      const existing = result.get(trackerId) || [];
+      existing.push(...positions);
+      result.set(trackerId, existing);
+    }
+  }
+
+  return result;
+}
+
 class SessionDataCollector {
   private recordings: Map<string, SessionRecording> = new Map();
   // Track which trackers are assigned to each session for filtering
@@ -189,6 +282,19 @@ class SessionDataCollector {
       return;
     }
 
+    // Warn if position timestamp is >30s outside recording window (observability)
+    const posTs = new Date(position.timestamp).getTime();
+    const recStart = new Date(recording.startTime).getTime();
+    if (posTs < recStart - 30000) {
+      log.warn(`[SessionData] Position for ${position.tracker_id} is ${Math.round((recStart - posTs) / 1000)}s before recording start in session ${sessionId}`);
+    }
+    if (recording.endTime) {
+      const recEnd = new Date(recording.endTime).getTime();
+      if (posTs > recEnd + 30000) {
+        log.warn(`[SessionData] Position for ${position.tracker_id} is ${Math.round((posTs - recEnd) / 1000)}s after recording end in session ${sessionId}`);
+      }
+    }
+
     const trackerId = position.tracker_id;
     if (!recording.positions.has(trackerId)) {
       recording.positions.set(trackerId, []);
@@ -230,6 +336,24 @@ class SessionDataCollector {
   }
 
   /**
+   * Filter positions by recording time window.
+   * Applies a 2-second tolerance on both bounds for GPS processing latency.
+   */
+  private filterPositionsByRecordingTime(
+    positions: TrackerPosition[],
+    recording: SessionRecording,
+  ): TrackerPosition[] {
+    const startMs = new Date(recording.startTime).getTime() - 2000;
+    const endMs = recording.endTime
+      ? new Date(recording.endTime).getTime() + 2000
+      : Infinity;
+    return positions.filter(p => {
+      const ts = new Date(p.timestamp).getTime();
+      return ts >= startMs && ts <= endMs;
+    });
+  }
+
+  /**
    * Get all positions for a session as a flat array
    */
   getSessionPositions(sessionId: string): TrackerPosition[] {
@@ -240,7 +364,7 @@ class SessionDataCollector {
 
     const allPositions: TrackerPosition[] = [];
     for (const positions of recording.positions.values()) {
-      allPositions.push(...positions);
+      allPositions.push(...this.filterPositionsByRecordingTime(positions, recording));
     }
 
     // Sort by timestamp
@@ -261,11 +385,10 @@ class SessionDataCollector {
       return new Map();
     }
 
-    // DEEP COPY: Create new Map with new arrays to prevent shared references
+    // DEEP COPY + TIME FILTER: Create new Map with filtered arrays
     const deepCopiedMap = new Map<string, TrackerPosition[]>();
     for (const [trackerId, positions] of recording.positions) {
-      // Spread operator creates a new array (shallow copy of array, but TrackerPosition objects are not mutated)
-      deepCopiedMap.set(trackerId, [...positions]);
+      deepCopiedMap.set(trackerId, this.filterPositionsByRecordingTime(positions, recording));
     }
     return deepCopiedMap;
   }
@@ -325,7 +448,8 @@ class SessionDataCollector {
     let totalPositions = 0;
     const trackerSummaries: TrackerSummary[] = [];
 
-    for (const [trackerId, positions] of recording.positions) {
+    for (const [trackerId, rawPositions] of recording.positions) {
+      const positions = this.filterPositionsByRecordingTime(rawPositions, recording);
       totalPositions += positions.length;
 
       if (positions.length > 0) {
@@ -338,7 +462,6 @@ class SessionDataCollector {
           poor: positions.filter(p => p.gps_quality === 'poor').length,
         };
 
-        // DEEP COPY: Clone TrackerPosition objects to prevent shared references
         trackerSummaries.push({
           trackerId,
           positionCount: positions.length,
@@ -520,8 +643,9 @@ class SessionDataCollector {
     const createdFiles: string[] = [];
     const engagements = this.sessionEngagements.get(sessionId) || [];
 
-    // Export positions per tracker — with engagement context columns
-    for (const [trackerId, positions] of recording.positions) {
+    // Export positions per tracker — with engagement context columns (time-filtered)
+    for (const [trackerId, rawPositions] of recording.positions) {
+      const positions = this.filterPositionsByRecordingTime(rawPositions, recording);
       if (positions.length === 0) continue;
 
       const safeTrackerId = trackerId.replace(/[^a-zA-Z0-9-_]/g, '_');
@@ -594,14 +718,14 @@ class SessionDataCollector {
           p.altitude_m,
           p.speed_ms,
           p.heading_deg,
-          '', // hdop
-          '', // satellites
+          p.hdop ?? '',
+          p.satellites ?? '',
           p.rssi_dbm ?? '',
           '', // baro_alt_m
           '', // baro_temp_c
           '', // baro_press_hpa
-          p.gps_quality !== 'poor' ? 'true' : 'false',
-          '', // battery_mv
+          p.fix_valid ?? (p.gps_quality !== 'poor') ? 'true' : 'false',
+          p.battery_mv ?? '',
           sessionId,
           engId,
           engActive,

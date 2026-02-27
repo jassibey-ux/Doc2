@@ -17,7 +17,7 @@ import {
   getSiteById,
 } from '../../core/library-store';
 import { TestSession, TestEvent, SessionStatus } from '../../core/models/workflow';
-import { sessionDataCollector, EngagementData } from '../../core/session-data-collector';
+import { sessionDataCollector, EngagementData, filterPositionsBySessionTime } from '../../core/session-data-collector';
 import {
   analyzeSession,
   extractJammingWindows,
@@ -951,14 +951,21 @@ export function testSessionRoutes(): Router {
         }
       }
 
+      // Apply time-boundary filtering for CSV-from-disk path
+      const filteredPositions = filterPositionsBySessionTime(
+        allPositions,
+        (session as any).start_time,
+        (session as any).end_time,
+      );
+
       // Sort by timestamp
-      allPositions.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+      filteredPositions.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
 
       res.json({
         session_id: sessionId,
         session_name: session.name,
-        total_count: allPositions.length,
-        positions: allPositions,
+        total_count: filteredPositions.length,
+        positions: filteredPositions,
         engagements: pythonEngagements ?? session.engagements ?? [],
         events: session.events ?? [],
       });
