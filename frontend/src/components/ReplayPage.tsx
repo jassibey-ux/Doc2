@@ -16,6 +16,8 @@ import Google3DViewer from './google3d/Google3DViewer';
 import DroneDetailPanel from './DroneDetailPanel';
 import ReplaySessionBrowserPanel from './ReplaySessionBrowserPanel';
 import PredictedVsActualView from './PredictedVsActualView';
+import MapFileDropHandler from './MapFileDropHandler';
+import type { ImportedLayer } from './MapFileDropHandler';
 import type { CUASProfile, SiteDefinition } from '../types/workflow';
 import {
   ArrowLeft,
@@ -36,6 +38,11 @@ import {
   Loader2,
   History,
   BarChart3,
+  Upload,
+  Eye,
+  EyeOff,
+  Trash2,
+  Layers,
 } from 'lucide-react';
 
 // State machine for replay page
@@ -109,6 +116,8 @@ export default function ReplayPage() {
   const [showCesiumGlobe, setShowCesiumGlobe] = useState(false);
   const [showPredictedVsActual, setShowPredictedVsActual] = useState(false);
   const [mapStyle, setMapStyle] = useState<'dark' | 'satellite' | 'street'>('satellite');
+  const [importedLayers, setImportedLayers] = useState<ImportedLayer[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Get selected drone
@@ -355,6 +364,60 @@ export default function ReplayPage() {
     setSelectedDroneId(droneId);
   }, []);
 
+  const handleLayerImported = useCallback((layer: ImportedLayer) => {
+    setImportedLayers(prev => [...prev, layer]);
+    showToast('success', `Imported layer: ${layer.name}`);
+  }, [showToast]);
+
+  const handleToggleLayerVisibility = useCallback((layerId: string) => {
+    setImportedLayers(prev => prev.map(l =>
+      l.id === layerId ? { ...l, visible: !l.visible } : l
+    ));
+  }, []);
+
+  const handleRemoveLayer = useCallback((layerId: string) => {
+    setImportedLayers(prev => prev.filter(l => l.id !== layerId));
+  }, []);
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
+    // Reuse MapFileDropHandler's parsing by creating a synthetic drop
+    // Instead, parse inline since it's a simple operation
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = reader.result as string;
+        let geojson: GeoJSON.FeatureCollection;
+        if (file.name.endsWith('.kml')) {
+          showToast('warning', 'KML files are only supported via drag-drop');
+          return;
+        }
+        geojson = JSON.parse(text);
+        if (geojson.type !== 'FeatureCollection') {
+          // Wrap single feature or geometry
+          if (geojson.type === 'Feature') {
+            geojson = { type: 'FeatureCollection', features: [geojson as any] };
+          } else {
+            throw new Error('Invalid GeoJSON');
+          }
+        }
+        const layer: ImportedLayer = {
+          id: `import-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: file.name.replace(/\.(geo)?json$/i, ''),
+          geojson,
+          visible: true,
+        };
+        handleLayerImported(layer);
+      } catch {
+        showToast('error', 'Failed to parse file as GeoJSON');
+      }
+    };
+    reader.readAsText(file);
+  }, [handleLayerImported, showToast]);
+
   // Calculate current playback time (in seconds from session start)
   const currentPlaybackTime = useMemo(() => {
     if (pageState.status !== 'ready' || !replayState?.current_time) return null;
@@ -449,6 +512,21 @@ export default function ReplayPage() {
         </div>
 
         <div className="rp-header-right">
+          <GlassButton
+            variant="ghost"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload size={14} />
+            Open File
+          </GlassButton>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".geojson,.json,.kml"
+            style={{ display: 'none' }}
+            onChange={handleFileInput}
+          />
           {pageState.status !== 'idle' && (
             <GlassButton
               variant="secondary"
@@ -481,11 +559,14 @@ export default function ReplayPage() {
         {/* Center Content */}
         <main className="rp-content">
           {pageState.status === 'idle' ? (
-            <div className="rp-empty-state">
-              <History size={48} />
-              <span className="rp-empty-title">Select a Session</span>
-              <span className="rp-empty-hint">Choose a recorded session from the list to replay</span>
-            </div>
+            <MapFileDropHandler onLayerImported={handleLayerImported}>
+              <div className="rp-empty-state">
+                <History size={48} />
+                <span className="rp-empty-title">Select a Session</span>
+                <span className="rp-empty-hint">Choose a recorded session from the list to replay</span>
+                <span className="rp-empty-hint">or drag a GeoJSON/KML file onto the map to view it</span>
+              </div>
+            </MapFileDropHandler>
           ) : pageState.status === 'loading_metadata' ? (
             <div className="rp-loading-state">
               <div className="rp-spinner" />
@@ -530,6 +611,7 @@ export default function ReplayPage() {
           ) : (
             <>
               {/* Map */}
+              <MapFileDropHandler onLayerImported={handleLayerImported}>
               <div className="rp-map">
                 <MapComponent
                   drones={drones}
@@ -545,6 +627,7 @@ export default function ReplayPage() {
                   showCuasCoverage={true}
                   mapStyle={mapStyle}
                   droneProfileMap={droneProfileMap}
+                  importedLayers={importedLayers}
                 />
 
                 {show3DView && !showCesiumGlobe && (
@@ -618,6 +701,7 @@ export default function ReplayPage() {
                   <Globe size={18} />
                 </button>
               </div>
+              </MapFileDropHandler>
 
               {/* Playback Controls */}
               <div className="rp-playback-bar">
@@ -732,6 +816,40 @@ export default function ReplayPage() {
               </button>
             </div>
 
+            {importedLayers.length > 0 && (
+              <div className="rp-section">
+                <div className="rp-section-header">
+                  <Layers size={14} />
+                  <span>Imported Layers</span>
+                  <Badge color="green" size="sm">{importedLayers.length}</Badge>
+                </div>
+                <div className="rp-layer-list">
+                  {importedLayers.map(layer => (
+                    <div key={layer.id} className="rp-layer-item">
+                      <button
+                        className="rp-layer-vis-btn"
+                        onClick={() => handleToggleLayerVisibility(layer.id)}
+                        title={layer.visible ? 'Hide layer' : 'Show layer'}
+                      >
+                        {layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                      </button>
+                      <div className="rp-layer-info">
+                        <span className="rp-layer-name">{layer.name}</span>
+                        <span className="rp-layer-count">{layer.geojson.features.length} features</span>
+                      </div>
+                      <button
+                        className="rp-layer-remove-btn"
+                        onClick={() => handleRemoveLayer(layer.id)}
+                        title="Remove layer"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="rp-section rp-section-grow">
               <div className="rp-section-header">
                 <Users size={14} />
@@ -760,6 +878,43 @@ export default function ReplayPage() {
                 {drones.size === 0 && (
                   <div className="rp-empty">No trackers in session</div>
                 )}
+              </div>
+            </div>
+          </aside>
+        )}
+
+        {/* Standalone imported layers sidebar when no session is loaded */}
+        {pageState.status !== 'ready' && importedLayers.length > 0 && (
+          <aside className="rp-sidebar">
+            <div className="rp-section">
+              <div className="rp-section-header">
+                <Layers size={14} />
+                <span>Imported Layers</span>
+                <Badge color="green" size="sm">{importedLayers.length}</Badge>
+              </div>
+              <div className="rp-layer-list">
+                {importedLayers.map(layer => (
+                  <div key={layer.id} className="rp-layer-item">
+                    <button
+                      className="rp-layer-vis-btn"
+                      onClick={() => handleToggleLayerVisibility(layer.id)}
+                      title={layer.visible ? 'Hide layer' : 'Show layer'}
+                    >
+                      {layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                    </button>
+                    <div className="rp-layer-info">
+                      <span className="rp-layer-name">{layer.name}</span>
+                      <span className="rp-layer-count">{layer.geojson.features.length} features</span>
+                    </div>
+                    <button
+                      className="rp-layer-remove-btn"
+                      onClick={() => handleRemoveLayer(layer.id)}
+                      title="Remove layer"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           </aside>
@@ -1300,6 +1455,68 @@ const styles = `
     overflow-y: auto;
     border-radius: 12px;
     box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Imported Layers */
+  .rp-layer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .rp-layer-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+  }
+
+  .rp-layer-vis-btn, .rp-layer-remove-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: none;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .rp-layer-vis-btn:hover {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+  }
+
+  .rp-layer-remove-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  .rp-layer-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .rp-layer-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: #fff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rp-layer-count {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
   }
 
   /* Drone Modal */

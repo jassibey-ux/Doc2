@@ -26,6 +26,7 @@ interface SessionStatusBarProps {
   onAlertClick: () => void;
   onToggleTacticalMode: () => void;
   onStopSession: () => void;
+  onExport: (format: 'csv' | 'geojson' | 'geopackage') => void;
 }
 
 function formatDuration(seconds: number): string {
@@ -51,6 +52,7 @@ const SessionStatusBar: React.FC<SessionStatusBarProps> = ({
   onAlertClick,
   onToggleTacticalMode,
   onStopSession,
+  onExport,
 }) => {
   const isConnected = connectionStatus === 'connected';
 
@@ -256,10 +258,10 @@ const SessionStatusBar: React.FC<SessionStatusBarProps> = ({
       </button>
 
       {/* GIS Export buttons */}
-      {isRecording && !isCompleted && (
+      {(isRecording || isCompleted) && (
         <>
           <button
-            onClick={() => {}}
+            onClick={() => onExport('csv')}
             style={{
               display: 'flex', alignItems: 'center', gap: 4,
               padding: '4px 10px', borderRadius: 6,
@@ -268,12 +270,12 @@ const SessionStatusBar: React.FC<SessionStatusBarProps> = ({
               color: '#60a5fa', cursor: 'pointer',
               fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
             }}
-            title="Export as Shapefile"
+            title="Export as CSV"
           >
-            Shapefile
+            CSV
           </button>
           <button
-            onClick={() => {}}
+            onClick={() => onExport('geojson')}
             style={{
               display: 'flex', alignItems: 'center', gap: 4,
               padding: '4px 10px', borderRadius: 6,
@@ -287,7 +289,7 @@ const SessionStatusBar: React.FC<SessionStatusBarProps> = ({
             GeoJSON
           </button>
           <button
-            onClick={() => {}}
+            onClick={() => onExport('geopackage')}
             style={{
               display: 'flex', alignItems: 'center', gap: 4,
               padding: '4px 10px', borderRadius: 6,
