@@ -288,6 +288,18 @@ export function deleteDroneProfile(id: string): boolean {
   return true;
 }
 
+export function upsertDroneProfile(profile: DroneProfile): DroneProfile {
+  const profiles = getDroneProfiles();
+  const index = profiles.findIndex(p => p.id === profile.id);
+  if (index >= 0) {
+    profiles[index] = { ...profile, updated_at: new Date().toISOString() };
+  } else {
+    profiles.push(profile);
+  }
+  writeJsonFile(DRONE_PROFILES_FILE, profiles);
+  return profiles[index >= 0 ? index : profiles.length - 1];
+}
+
 // =============================================================================
 // CUAS Profile Library
 // =============================================================================
@@ -347,6 +359,18 @@ export function deleteCUASProfile(id: string): boolean {
 
   writeJsonFile(CUAS_PROFILES_FILE, filtered);
   return true;
+}
+
+export function upsertCUASProfile(profile: CUASProfile): CUASProfile {
+  const profiles = getCUASProfiles();
+  const index = profiles.findIndex(p => p.id === profile.id);
+  if (index >= 0) {
+    profiles[index] = { ...profile, updated_at: new Date().toISOString() };
+  } else {
+    profiles.push(profile);
+  }
+  writeJsonFile(CUAS_PROFILES_FILE, profiles);
+  return profiles[index >= 0 ? index : profiles.length - 1];
 }
 
 // =============================================================================

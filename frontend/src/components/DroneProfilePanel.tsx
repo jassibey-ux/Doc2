@@ -64,6 +64,7 @@ export default function DroneProfilePanel({ isOpen, onClose }: DroneProfilePanel
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState<Partial<DroneProfile> | null>(null);
   const [selectedBands, setSelectedBands] = useState<string[]>([]);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Start editing
   const handleEdit = useCallback((profile: DroneProfile) => {
@@ -95,6 +96,7 @@ export default function DroneProfilePanel({ isOpen, onClose }: DroneProfilePanel
       frequency_bands: selectedBands,
     };
 
+    setSaveError(null);
     try {
       if (editedProfile.id) {
         await updateDroneProfile(editedProfile.id, profileData);
@@ -105,6 +107,7 @@ export default function DroneProfilePanel({ isOpen, onClose }: DroneProfilePanel
       setEditedProfile(null);
     } catch (err) {
       console.error('Failed to save drone profile:', err);
+      setSaveError(err instanceof Error ? err.message : 'Failed to save profile');
     }
   }, [editedProfile, selectedBands, createDroneProfile, updateDroneProfile]);
 
@@ -232,7 +235,7 @@ export default function DroneProfilePanel({ isOpen, onClose }: DroneProfilePanel
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
                 {/* Auto-detect option */}
                 <button
-                  onClick={() => setEditedProfile(prev => prev ? { ...prev, model_3d: undefined } : null)}
+                  onClick={() => setEditedProfile(prev => prev ? { ...prev, model_3d: null as any } : null)}
                   style={{
                     padding: '6px',
                     borderRadius: '8px',
@@ -421,6 +424,11 @@ export default function DroneProfilePanel({ isOpen, onClose }: DroneProfilePanel
                 Save
               </GlassButton>
             </div>
+            {saveError && (
+              <div style={{ padding: '8px 12px', background: 'rgba(255,50,50,0.15)', borderRadius: '6px', marginTop: '8px', fontSize: '12px', color: '#ff6b6b' }}>
+                {saveError}
+              </div>
+            )}
           </div>
         ) : (
           // Profile List

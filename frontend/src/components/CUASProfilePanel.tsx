@@ -72,6 +72,7 @@ export default function CUASProfilePanel({ isOpen, onClose }: CUASProfilePanelPr
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState<Partial<CUASProfile> | null>(null);
   const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Start editing
   const handleEdit = useCallback((profile: CUASProfile) => {
@@ -103,6 +104,7 @@ export default function CUASProfilePanel({ isOpen, onClose }: CUASProfilePanelPr
       capabilities: selectedCapabilities,
     };
 
+    setSaveError(null);
     try {
       if (editedProfile.id) {
         await updateCUASProfile(editedProfile.id, profileData);
@@ -113,6 +115,7 @@ export default function CUASProfilePanel({ isOpen, onClose }: CUASProfilePanelPr
       setEditedProfile(null);
     } catch (err) {
       console.error('Failed to save CUAS profile:', err);
+      setSaveError(err instanceof Error ? err.message : 'Failed to save profile');
     }
   }, [editedProfile, selectedCapabilities, createCUASProfile, updateCUASProfile]);
 
@@ -316,7 +319,7 @@ export default function CUASProfilePanel({ isOpen, onClose }: CUASProfilePanelPr
               </label>
               <select
                 value={editedProfile?.model_3d || ''}
-                onChange={(e) => setEditedProfile(prev => prev ? { ...prev, model_3d: e.target.value || undefined } : null)}
+                onChange={(e) => setEditedProfile(prev => prev ? { ...prev, model_3d: e.target.value || null as any } : null)}
                 style={{
                   width: '100%',
                   padding: '10px 14px',
@@ -433,6 +436,11 @@ export default function CUASProfilePanel({ isOpen, onClose }: CUASProfilePanelPr
                 Save
               </GlassButton>
             </div>
+            {saveError && (
+              <div style={{ padding: '8px 12px', background: 'rgba(255,50,50,0.15)', borderRadius: '6px', marginTop: '8px', fontSize: '12px', color: '#ff6b6b' }}>
+                {saveError}
+              </div>
+            )}
           </div>
         ) : (
           // Profile List

@@ -302,6 +302,11 @@ class DroneProfileCreateRequest(BaseModel):
     max_speed_mps: Optional[float] = None
     max_altitude_m: Optional[float] = None
     endurance_minutes: Optional[float] = None
+    c2_protocol: Optional[str] = None
+    c2_frequency_mhz: Optional[float] = None
+    c2_receiver_sensitivity_dbm: Optional[float] = None
+    gps_receiver_type: Optional[str] = None
+    jam_resistance_category: Optional[str] = None
     notes: Optional[str] = None
     image_path: Optional[str] = None
     model_3d: Optional[str] = None
@@ -319,6 +324,11 @@ class DroneProfileUpdateRequest(BaseModel):
     max_speed_mps: Optional[float] = None
     max_altitude_m: Optional[float] = None
     endurance_minutes: Optional[float] = None
+    c2_protocol: Optional[str] = None
+    c2_frequency_mhz: Optional[float] = None
+    c2_receiver_sensitivity_dbm: Optional[float] = None
+    gps_receiver_type: Optional[str] = None
+    jam_resistance_category: Optional[str] = None
     notes: Optional[str] = None
     image_path: Optional[str] = None
     model_3d: Optional[str] = None
@@ -333,12 +343,16 @@ class CUASProfileCreateRequest(BaseModel):
     type: Optional[str] = None
     capabilities: Optional[List[str]] = None
     effective_range_m: Optional[float] = None
+    measured_range_m: Optional[float] = None
     beam_width_deg: Optional[float] = None
     vertical_coverage_deg: Optional[float] = None
     antenna_pattern: Optional[str] = None
     power_output_w: Optional[float] = None
     antenna_gain_dbi: Optional[float] = None
     frequency_ranges: Optional[List[Dict]] = None
+    eirp_dbm: Optional[float] = None
+    min_js_ratio_db: Optional[float] = None
+    polarization: Optional[str] = None
     notes: Optional[str] = None
     classification: str = "UNCLASSIFIED"
     model_3d: Optional[str] = None
@@ -359,6 +373,9 @@ class CUASProfileUpdateRequest(BaseModel):
     power_output_w: Optional[float] = None
     antenna_gain_dbi: Optional[float] = None
     frequency_ranges: Optional[List[Dict]] = None
+    eirp_dbm: Optional[float] = None
+    min_js_ratio_db: Optional[float] = None
+    polarization: Optional[str] = None
     notes: Optional[str] = None
     classification: Optional[str] = None
     model_3d: Optional[str] = None
@@ -666,6 +683,11 @@ def drone_to_dict(profile: DroneProfile) -> Dict[str, Any]:
         "max_speed_mps": profile.max_speed_mps,
         "max_altitude_m": profile.max_altitude_m,
         "endurance_minutes": profile.endurance_minutes,
+        "c2_protocol": profile.c2_protocol,
+        "c2_frequency_mhz": profile.c2_frequency_mhz,
+        "c2_receiver_sensitivity_dbm": profile.c2_receiver_sensitivity_dbm,
+        "gps_receiver_type": profile.gps_receiver_type,
+        "jam_resistance_category": profile.jam_resistance_category,
         "notes": profile.notes,
         "image_path": profile.image_path,
         "is_active": profile.is_active,
@@ -692,6 +714,9 @@ def cuas_to_dict(profile: CUASProfile) -> Dict[str, Any]:
         "power_output_w": profile.power_output_w,
         "antenna_gain_dbi": profile.antenna_gain_dbi,
         "frequency_ranges": profile.frequency_ranges,
+        "eirp_dbm": profile.eirp_dbm,
+        "min_js_ratio_db": profile.min_js_ratio_db,
+        "polarization": profile.polarization,
         "notes": profile.notes,
         "classification": profile.classification,
         "is_active": profile.is_active,
@@ -3254,7 +3279,7 @@ async def update_drone_profile(
     """Update a drone profile."""
     repo = DroneProfileRepository(db)
 
-    update_data = {k: v for k, v in request.model_dump().items() if v is not None}
+    update_data = request.model_dump(exclude_unset=True)
 
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -3382,7 +3407,7 @@ async def update_cuas_profile(
     """Update a CUAS profile."""
     repo = CUASProfileRepository(db)
 
-    update_data = {k: v for k, v in request.model_dump().items() if v is not None}
+    update_data = request.model_dump(exclude_unset=True)
 
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")

@@ -300,7 +300,11 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      console.error(`[WorkflowContext] Failed to update drone profile ${id}: ${res.status} ${errText}`);
+      throw new Error(`Failed to update drone profile: ${errText}`);
+    }
     const updated = await res.json();
     setDroneProfiles(prev => prev.map(p => p.id === id ? updated : p));
     return updated;
@@ -347,7 +351,11 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      console.error(`[WorkflowContext] Failed to update CUAS profile ${id}: ${res.status} ${errText}`);
+      throw new Error(`Failed to update CUAS profile: ${errText}`);
+    }
     const updated = await res.json();
     setCUASProfiles(prev => prev.map(p => p.id === id ? updated : p));
     return updated;

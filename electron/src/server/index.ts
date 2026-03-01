@@ -36,7 +36,7 @@ import { analysisRoutes } from './routes/analysis';
 import { loadConfig } from '../core/config';
 // Backend convergence: Python proxy + subprocess
 import { simplePythonProxy } from './proxy';
-import { sessionBridgeMiddleware } from './session-bridge';
+import { sessionBridgeMiddleware, syncProfilesFromPython } from './session-bridge';
 import { getPythonBackend } from '../core/python-backend';
 // CoT listener + deconfliction (Ops Mode)
 import { CotListener } from '../core/cot-listener';
@@ -144,13 +144,24 @@ export async function startServer(port: number): Promise<void> {
       const pythonBackend = getPythonBackend({
         logRootFolder: config.log_root_folder,
       });
+      let pythonReady = false;
       try {
-        const ready = await pythonBackend.start();
-        log.info(ready
+        pythonReady = await pythonBackend.start();
+        log.info(pythonReady
           ? '[server] Python backend ready — /api/v2/* proxied'
           : '[server] Python backend not available — /api/v2/* will fall through to Express');
       } catch (err) {
         log.warn(`[server] Python backend start failed: ${err}`);
+      }
+
+      // Sync profiles from Python → Express before frontend can fetch them
+      if (pythonReady) {
+        try {
+          await syncProfilesFromPython();
+          log.info('[server] Profile sync from Python → Express complete');
+        } catch (err) {
+          log.warn(`[server] Profile sync failed (non-fatal): ${err}`);
+        }
       }
 
       // Start CoT listener in ops mode — fire-and-forget (non-critical)

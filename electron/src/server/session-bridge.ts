@@ -19,6 +19,13 @@ import { sessionDataCollector } from '../core/session-data-collector';
 import { loadConfig } from '../core/config';
 import { cotActorBridge } from '../core/cot-actor-bridge';
 import { getDashboardApp } from './index';
+import {
+  upsertDroneProfile,
+  upsertCUASProfile,
+  deleteDroneProfile as deleteExpressDroneProfile,
+  deleteCUASProfile as deleteExpressCUASProfile,
+} from '../core/library-store';
+import type { DroneProfile, CUASProfile } from '../core/models/workflow';
 
 const PYTHON_BACKEND_PORT = 8083;
 const PYTHON_BACKEND_URL = `http://127.0.0.1:${PYTHON_BACKEND_PORT}`;
@@ -40,6 +47,11 @@ const ENGAGEMENT_DISENGAGE_RE = /^\/api\/v2\/engagements\/([^/]+)\/disengage$/;
 const ENGAGEMENT_ABORT_RE = /^\/api\/v2\/engagements\/([^/]+)\/abort$/;
 const ENGAGEMENT_JAM_ON_RE = /^\/api\/v2\/engagements\/([^/]+)\/jam-on$/;
 const ENGAGEMENT_JAM_OFF_RE = /^\/api\/v2\/engagements\/([^/]+)\/jam-off$/;
+// Profile CRUD routes — intercept to mirror Python DB → Express JSON store
+const DRONE_PROFILE_COLLECTION_RE = /^\/api\/v2\/drone-profiles\/?$/;
+const DRONE_PROFILE_ITEM_RE = /^\/api\/v2\/drone-profiles\/([^/]+)\/?$/;
+const CUAS_PROFILE_COLLECTION_RE = /^\/api\/v2\/cuas-profiles\/?$/;
+const CUAS_PROFILE_ITEM_RE = /^\/api\/v2\/cuas-profiles\/([^/]+)\/?$/;
 
 // Local map of session live_data_paths (since sessions live in Python's DB)
 // Persisted to disk so paths survive app restarts.
@@ -354,13 +366,261 @@ async function handleSessionSubResource(
   res.status(pythonResult.status).json(pythonResult.data);
 }
 
+// =============================================================================
+// Schema Mappers: Python DB → Express JSON store
+// =============================================================================
+
+/**
+ * Map a Python drone profile dict to the Express DroneProfile shape.
+ * Strips is_active, maps image_path → icon, preserves all shared fields.
+ */
+export function mapPythonDroneToExpress(py: Record<string, any>): DroneProfile {
+  const { is_active, image_path, ...rest } = py;
+  return {
+    ...rest,
+    icon: rest.icon ?? image_path ?? undefined,
+    created_at: rest.created_at ?? new Date().toISOString(),
+    updated_at: rest.updated_at ?? new Date().toISOString(),
+  } as DroneProfile;
+}
+
+/**
+ * Map a Python CUAS profile dict to the Express CUASProfile shape.
+ * Strips is_active, maps image_path → icon, normalizes frequency_ranges.
+ */
+export function mapPythonCUASToExpress(py: Record<string, any>): CUASProfile {
+  const { is_active, image_path, ...rest } = py;
+
+  // Normalize frequency_ranges: Python stores [{min_mhz, max_mhz}], Express uses string[]
+  let frequencyRanges = rest.frequency_ranges;
+  if (Array.isArray(frequencyRanges) && frequencyRanges.length > 0 && typeof frequencyRanges[0] === 'object') {
+    frequencyRanges = frequencyRanges.map((r: any) => `${r.min_mhz ?? r.min}-${r.max_mhz ?? r.max} MHz`);
+  }
+
+  return {
+    ...rest,
+    frequency_ranges: frequencyRanges,
+    icon: rest.icon ?? image_path ?? undefined,
+    created_at: rest.created_at ?? new Date().toISOString(),
+    updated_at: rest.updated_at ?? new Date().toISOString(),
+  } as CUASProfile;
+}
+
+// =============================================================================
+// Startup Sync: Pull all profiles from Python → Express
+// =============================================================================
+
+/**
+ * Fetch all profiles from Python backend and upsert them into Express JSON store.
+ * Should be called after Python backend is ready, before the server accepts
+ * frontend requests, so that the Express store is populated with Python-keyed profiles.
+ */
+export async function syncProfilesFromPython(): Promise<void> {
+  const baseUrl = PYTHON_BACKEND_URL;
+
+  // Sync drone profiles
+  try {
+    const res = await fetch(`${baseUrl}/api/v2/drone-profiles?limit=500`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) {
+      const data = await res.json() as any;
+      const items = data.items ?? data;
+      if (Array.isArray(items)) {
+        let count = 0;
+        for (const pyProfile of items) {
+          try {
+            const expressProfile = mapPythonDroneToExpress(pyProfile);
+            upsertDroneProfile(expressProfile);
+            count++;
+          } catch (e: any) {
+            log.warn(`[session-bridge] Failed to sync drone profile ${pyProfile.id}: ${e.message}`);
+          }
+        }
+        log.info(`[session-bridge] Synced ${count} drone profiles from Python → Express`);
+      }
+    } else {
+      log.warn(`[session-bridge] Failed to fetch drone profiles from Python: HTTP ${res.status}`);
+    }
+  } catch (e: any) {
+    log.warn(`[session-bridge] Could not sync drone profiles: ${e.message}`);
+  }
+
+  // Sync CUAS profiles
+  try {
+    const res = await fetch(`${baseUrl}/api/v2/cuas-profiles?limit=500`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) {
+      const data = await res.json() as any;
+      const items = data.items ?? data;
+      if (Array.isArray(items)) {
+        let count = 0;
+        for (const pyProfile of items) {
+          try {
+            const expressProfile = mapPythonCUASToExpress(pyProfile);
+            upsertCUASProfile(expressProfile);
+            count++;
+          } catch (e: any) {
+            log.warn(`[session-bridge] Failed to sync CUAS profile ${pyProfile.id}: ${e.message}`);
+          }
+        }
+        log.info(`[session-bridge] Synced ${count} CUAS profiles from Python → Express`);
+      }
+    } else {
+      log.warn(`[session-bridge] Failed to fetch CUAS profiles from Python: HTTP ${res.status}`);
+    }
+  } catch (e: any) {
+    log.warn(`[session-bridge] Could not sync CUAS profiles: ${e.message}`);
+  }
+}
+
+// =============================================================================
+// Profile CRUD Interception Handlers
+// =============================================================================
+
+/**
+ * Handle profile create/update: forward to Python, mirror result to Express.
+ */
+async function handleProfileWrite(
+  req: Request,
+  res: Response,
+  profileType: 'drone' | 'cuas',
+  _profileId?: string,
+): Promise<void> {
+  let pythonResult: { status: number; data: any };
+  try {
+    pythonResult = await forwardToPython(req);
+  } catch (e: any) {
+    log.warn(`[session-bridge] Python backend unavailable for ${profileType} profile write: ${e.message}`);
+    // Let the request fall through to Express routes (proxy will handle)
+    res.status(502).json({
+      error: 'Python backend unavailable',
+      detail: `Cannot reach backend at ${PYTHON_BACKEND_URL}`,
+      code: 'BACKEND_UNAVAILABLE',
+    });
+    return;
+  }
+
+  if (pythonResult.status >= 400) {
+    res.status(pythonResult.status).json(pythonResult.data);
+    return;
+  }
+
+  // Mirror the Python response to Express JSON store
+  try {
+    const pyProfile = pythonResult.data;
+    if (profileType === 'drone') {
+      const expressProfile = mapPythonDroneToExpress(pyProfile);
+      upsertDroneProfile(expressProfile);
+      log.info(`[session-bridge] Mirrored drone profile ${expressProfile.id} to Express store`);
+    } else {
+      const expressProfile = mapPythonCUASToExpress(pyProfile);
+      upsertCUASProfile(expressProfile);
+      log.info(`[session-bridge] Mirrored CUAS profile ${expressProfile.id} to Express store`);
+    }
+  } catch (mirrorErr: any) {
+    // Non-critical: Python write succeeded, Express mirror is best-effort
+    log.warn(`[session-bridge] Failed to mirror ${profileType} profile to Express: ${mirrorErr.message}`);
+  }
+
+  res.status(pythonResult.status).json(pythonResult.data);
+}
+
+/**
+ * Handle profile delete: forward to Python, remove from Express.
+ */
+async function handleProfileDelete(
+  req: Request,
+  res: Response,
+  profileType: 'drone' | 'cuas',
+  profileId: string,
+): Promise<void> {
+  let pythonResult: { status: number; data: any };
+  try {
+    pythonResult = await forwardToPython(req);
+  } catch (e: any) {
+    log.warn(`[session-bridge] Python backend unavailable for ${profileType} profile delete: ${e.message}`);
+    res.status(502).json({
+      error: 'Python backend unavailable',
+      detail: `Cannot reach backend at ${PYTHON_BACKEND_URL}`,
+      code: 'BACKEND_UNAVAILABLE',
+    });
+    return;
+  }
+
+  if (pythonResult.status >= 400) {
+    res.status(pythonResult.status).json(pythonResult.data);
+    return;
+  }
+
+  // Mirror the delete to Express JSON store
+  try {
+    if (profileType === 'drone') {
+      deleteExpressDroneProfile(profileId);
+    } else {
+      deleteExpressCUASProfile(profileId);
+    }
+    log.info(`[session-bridge] Deleted ${profileType} profile ${profileId} from Express store`);
+  } catch (mirrorErr: any) {
+    log.warn(`[session-bridge] Failed to delete ${profileType} profile from Express: ${mirrorErr.message}`);
+  }
+
+  res.status(pythonResult.status).json(pythonResult.data);
+}
+
 /**
  * Create middleware that bridges v2 session start/stop to Express data collection.
  * Must be registered BEFORE the Python proxy middleware.
  */
 export function sessionBridgeMiddleware() {
   return async (req: Request, res: Response, next: NextFunction) => {
-    // Only intercept POST requests
+    // =========================================================================
+    // Profile CRUD interception (POST/PUT/DELETE) — mirror Python → Express
+    // =========================================================================
+
+    // Drone profile create (POST /api/v2/drone-profiles)
+    if (req.method === 'POST' && req.path.match(DRONE_PROFILE_COLLECTION_RE)) {
+      await handleProfileWrite(req, res, 'drone');
+      return;
+    }
+
+    // Drone profile update (PUT /api/v2/drone-profiles/:id)
+    const droneItemMatch = req.path.match(DRONE_PROFILE_ITEM_RE);
+    if (droneItemMatch && req.method === 'PUT') {
+      await handleProfileWrite(req, res, 'drone', droneItemMatch[1]);
+      return;
+    }
+
+    // Drone profile delete (DELETE /api/v2/drone-profiles/:id)
+    if (droneItemMatch && req.method === 'DELETE') {
+      await handleProfileDelete(req, res, 'drone', droneItemMatch[1]);
+      return;
+    }
+
+    // CUAS profile create (POST /api/v2/cuas-profiles)
+    if (req.method === 'POST' && req.path.match(CUAS_PROFILE_COLLECTION_RE)) {
+      await handleProfileWrite(req, res, 'cuas');
+      return;
+    }
+
+    // CUAS profile update (PUT /api/v2/cuas-profiles/:id)
+    const cuasItemMatch = req.path.match(CUAS_PROFILE_ITEM_RE);
+    if (cuasItemMatch && req.method === 'PUT') {
+      await handleProfileWrite(req, res, 'cuas', cuasItemMatch[1]);
+      return;
+    }
+
+    // CUAS profile delete (DELETE /api/v2/cuas-profiles/:id)
+    if (cuasItemMatch && req.method === 'DELETE') {
+      await handleProfileDelete(req, res, 'cuas', cuasItemMatch[1]);
+      return;
+    }
+
+    // =========================================================================
+    // Session interception (POST only)
+    // =========================================================================
+
     if (req.method !== 'POST') {
       return next();
     }
