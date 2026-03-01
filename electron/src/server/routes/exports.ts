@@ -3,9 +3,11 @@ import { DashboardApp } from '../app';
 import { generateKML } from '../../core/kml-export';
 import { generateCZML } from '../../core/czml-generator';
 import { generateGeoJSON } from '../../core/geojson-generator';
-import { generateGeoPackage } from '../../core/geopackage-generator';
+import { generateGeoPackage, checkSqliteAvailability } from '../../core/geopackage-generator';
+import { generateLeafletMap } from '../../core/leaflet-map-generator';
 import { sessionDataCollector, recoverPositionsFromCSV } from '../../core/session-data-collector';
 import { getTestSessionById, getSiteById, getCUASProfileById } from '../../core/library-store';
+import { getSessionLiveDataPath } from '../session-bridge';
 import type { TrackerPosition } from '../../core/mock-tracker-provider';
 import type { TestSession } from '../../core/models/workflow';
 
@@ -37,6 +39,39 @@ function buildCUASProfilesMap(session: TestSession) {
     if (profile) profiles.set(placement.cuas_profile_id, profile);
   }
   return profiles;
+}
+
+/**
+ * Resolve a session by ID: try Express JSON store first, then Python backend.
+ */
+async function resolveSession(sessionId: string): Promise<TestSession | undefined> {
+  const local = getTestSessionById(sessionId);
+  if (local) return local;
+
+  try {
+    const pyRes = await fetch(`http://127.0.0.1:8083/api/v2/sessions/${sessionId}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (pyRes.ok) {
+      const py: any = await pyRes.json();
+      const liveDataPath = py.live_data_path ?? getSessionLiveDataPath(sessionId);
+      return {
+        id: py.id,
+        name: py.name ?? '',
+        status: py.status ?? 'completed',
+        live_data_path: liveDataPath,
+        site_id: py.site_id,
+        start_time: py.start_time,
+        end_time: py.end_time,
+        cuas_placements: py.cuas_placements ?? [],
+        tracker_assignments: py.tracker_assignments ?? [],
+        engagements: [],
+        events: [],
+      } as any;
+    }
+  } catch { /* Python backend unavailable */ }
+
+  return undefined;
 }
 
 export function exportRoutes(app: DashboardApp): Router {
@@ -112,10 +147,10 @@ export function exportRoutes(app: DashboardApp): Router {
    * GET /api/export/session/:id/csv
    * Export full session telemetry as CSV download
    */
-  router.get('/export/session/:id/csv', (req, res) => {
+  router.get('/export/session/:id/csv', async (req, res) => {
     try {
       const sessionId = req.params.id;
-      const session = getTestSessionById(sessionId);
+      const session = await resolveSession(sessionId);
       if (!session) {
         return res.status(404).json({ error: 'Session not found' });
       }
@@ -174,10 +209,10 @@ export function exportRoutes(app: DashboardApp): Router {
    * GET /api/export/session/:id/geojson
    * Export session data as RFC 7946 GeoJSON FeatureCollection
    */
-  router.get('/export/session/:id/geojson', (req, res) => {
+  router.get('/export/session/:id/geojson', async (req, res) => {
     try {
       const sessionId = req.params.id;
-      const session = getTestSessionById(sessionId);
+      const session = await resolveSession(sessionId);
       if (!session) {
         return res.status(404).json({ error: 'Session not found' });
       }
@@ -208,10 +243,10 @@ export function exportRoutes(app: DashboardApp): Router {
    * GET /api/export/session/:id/czml
    * Export session as CZML (Cesium Language) for 3D replay
    */
-  router.get('/export/session/:id/czml', (req, res) => {
+  router.get('/export/session/:id/czml', async (req, res) => {
     try {
       const sessionId = req.params.id;
-      const session = getTestSessionById(sessionId);
+      const session = await resolveSession(sessionId);
       if (!session) {
         return res.status(404).json({ error: 'Session not found' });
       }
@@ -250,10 +285,22 @@ export function exportRoutes(app: DashboardApp): Router {
    * GET /api/export/session/:id/geopackage
    * Export session data as OGC GeoPackage (.gpkg)
    */
-  router.get('/export/session/:id/geopackage', (req, res) => {
+  router.get('/export/session/:id/geopackage', async (req, res) => {
     try {
+      // Pre-flight check: verify native SQLite module is usable in this runtime
+      const sqliteCheck = checkSqliteAvailability();
+      if (!sqliteCheck.ok) {
+        const hint = (sqliteCheck.error || '').includes('NODE_MODULE_VERSION')
+          ? ' Run `npx electron-rebuild -o better-sqlite3` to fix.'
+          : '';
+        return res.status(500).json({
+          error: 'GeoPackage export unavailable: native SQLite module failed to load.' + hint,
+          detail: sqliteCheck.error,
+        });
+      }
+
       const sessionId = req.params.id;
-      const session = getTestSessionById(sessionId);
+      const session = await resolveSession(sessionId);
       if (!session) {
         return res.status(404).json({ error: 'Session not found' });
       }
@@ -277,9 +324,46 @@ export function exportRoutes(app: DashboardApp): Router {
       res.setHeader('Content-Type', 'application/geopackage+sqlite3');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(gpkgBuffer);
+    } catch (error: any) {
+      const msg = error?.stack || error?.message || String(error);
+      console.error('[GeoPackage Export] Failed:', msg);
+      try { require('fs').writeFileSync('/tmp/gpkg_error.txt', msg); } catch {}
+      res.status(500).json({ error: 'GeoPackage export failed', detail: error?.message || String(error) });
+    }
+  });
+
+  /**
+   * GET /api/export/session/:id/leaflet-map
+   * Export session as self-contained interactive HTML map
+   */
+  router.get('/export/session/:id/leaflet-map', async (req, res) => {
+    try {
+      const sessionId = req.params.id;
+      const session = await resolveSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      const positionsByTracker = getSessionTelemetry(sessionId, session);
+      const cuasProfiles = buildCUASProfilesMap(session);
+      const site = session.site_id ? getSiteById(session.site_id) : undefined;
+
+      const featureCollection = generateGeoJSON({
+        session,
+        positionsByTracker,
+        site: site || undefined,
+        cuasProfiles,
+      });
+
+      const html = generateLeafletMap(featureCollection, positionsByTracker, session.name);
+
+      const safeName = session.name.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 30);
+      res.setHeader('Content-Type', 'text/html');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}_map.html"`);
+      res.send(html);
     } catch (error) {
-      console.error('[GeoPackage Export] Failed:', error);
-      res.status(500).json({ error: 'GeoPackage export failed' });
+      console.error('[Leaflet Map Export] Failed:', error);
+      res.status(500).json({ error: 'Leaflet map export failed' });
     }
   });
 

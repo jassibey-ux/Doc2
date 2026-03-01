@@ -767,6 +767,38 @@ export default function SessionConsole() {
                 3D Replay
               </GlassButton>
 
+              {/* Interactive Map Export button */}
+              <GlassButton
+                variant="secondary"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const resp = await fetch(`/api/export/session/${sessionId}/leaflet-map`);
+                    if (!resp.ok) throw new Error('Export failed');
+                    const blob = await resp.blob();
+                    const safeName = (activeSession?.name || 'session').replace(/\s+/g, '_');
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${safeName}_map.html`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                  } catch (e) {
+                    showToast('error', 'Map export failed');
+                  }
+                }}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  borderColor: 'rgba(245, 158, 11, 0.4)',
+                  color: '#f59e0b',
+                }}
+              >
+                <Download size={14} />
+                Map
+              </GlassButton>
+
               {/* SD Card Merge button */}
               <GlassButton
                 variant="secondary"

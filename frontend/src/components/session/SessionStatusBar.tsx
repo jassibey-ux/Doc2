@@ -26,7 +26,7 @@ interface SessionStatusBarProps {
   onAlertClick: () => void;
   onToggleTacticalMode: () => void;
   onStopSession: () => void;
-  onExport: (format: 'csv' | 'geojson' | 'geopackage') => void;
+  onExport: (format: 'csv' | 'geojson' | 'geopackage' | 'leaflet-map') => void;
 }
 
 function formatDuration(seconds: number): string {
@@ -301,6 +301,20 @@ const SessionStatusBar: React.FC<SessionStatusBarProps> = ({
             title="Export as GeoPackage"
           >
             GeoPkg
+          </button>
+          <button
+            onClick={() => onExport('leaflet-map')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '4px 10px', borderRadius: 6,
+              background: 'rgba(245, 158, 11, 0.12)',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              color: '#f59e0b', cursor: 'pointer',
+              fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+            }}
+            title="Export as interactive HTML map"
+          >
+            Map
           </button>
         </>
       )}

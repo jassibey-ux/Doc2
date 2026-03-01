@@ -449,13 +449,13 @@ const SessionPage: React.FC = () => {
     setShowNoteInput(false);
   }, [noteText, handleMarkEvent]);
 
-  const handleExport = useCallback(async (format: 'csv' | 'geojson' | 'geopackage') => {
+  const handleExport = useCallback(async (format: 'csv' | 'geojson' | 'geopackage' | 'leaflet-map') => {
     if (!sessionId) return;
     try {
       const res = await fetch(`/api/export/session/${sessionId}/${format}`);
       if (!res.ok) throw new Error(`Export failed: ${res.statusText}`);
       const blob = await res.blob();
-      const ext = format === 'geopackage' ? 'gpkg' : format;
+      const ext = format === 'geopackage' ? 'gpkg' : format === 'leaflet-map' ? 'html' : format;
       const filename = `${sessionName || sessionId}.${ext}`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

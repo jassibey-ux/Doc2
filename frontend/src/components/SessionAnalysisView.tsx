@@ -267,7 +267,7 @@ export default function SessionAnalysisView() {
       const response = await fetch(`/api/export/session/${session.id}/${format}`);
       if (!response.ok) throw new Error(`Export failed: ${response.status}`);
       const blob = await response.blob();
-      const ext = format === 'geopackage' ? 'gpkg' : format;
+      const ext = format === 'geopackage' ? 'gpkg' : format === 'leaflet-map' ? 'html' : format;
       objectUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = objectUrl;
@@ -922,6 +922,16 @@ export default function SessionAnalysisView() {
               >
                 <Globe size={16} />
                 {geoExportLoading === 'czml' ? 'Exporting...' : 'CZML 3D Replay'}
+              </GlassButton>
+              <GlassButton
+                variant="ghost"
+                size="md"
+                onClick={() => handleGeoExport('leaflet-map')}
+                disabled={!['completed', 'archived'].includes(session?.status || '') || geoExportLoading !== null}
+                style={{ width: '100%' }}
+              >
+                <Globe size={16} />
+                {geoExportLoading === 'leaflet-map' ? 'Exporting...' : 'Interactive Map (.html)'}
               </GlassButton>
             </div>
           </GlassPanel>
