@@ -349,7 +349,7 @@ class CUASProfileCreateRequest(BaseModel):
     antenna_pattern: Optional[str] = None
     power_output_w: Optional[float] = None
     antenna_gain_dbi: Optional[float] = None
-    frequency_ranges: Optional[List[Dict]] = None
+    frequency_ranges: Optional[List[Any]] = None  # Accept both str[] and dict[]
     eirp_dbm: Optional[float] = None
     min_js_ratio_db: Optional[float] = None
     polarization: Optional[str] = None
@@ -372,7 +372,7 @@ class CUASProfileUpdateRequest(BaseModel):
     antenna_pattern: Optional[str] = None
     power_output_w: Optional[float] = None
     antenna_gain_dbi: Optional[float] = None
-    frequency_ranges: Optional[List[Dict]] = None
+    frequency_ranges: Optional[List[Any]] = None  # Accept both str[] and dict[]
     eirp_dbm: Optional[float] = None
     min_js_ratio_db: Optional[float] = None
     polarization: Optional[str] = None
