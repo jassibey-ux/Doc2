@@ -23,7 +23,9 @@ import CUASControlPanel from './CUASControlPanel';
 import TrackLegend from './TrackLegend';
 import AnomalyAlertToast from './AnomalyAlertToast';
 import Google3DViewer from './google3d/Google3DViewer';
+import type { Google3DViewerHandle } from './google3d/Google3DViewer';
 import { APIProvider } from '@vis.gl/react-google-maps';
+import MapSearchBox from './google3d/overlays/MapSearchBox';
 import TerrainProfileChart from './TerrainProfileChart';
 import LinkBudgetPanel from './LinkBudgetPanel';
 import CoordinateBar from './CoordinateBar';
@@ -413,6 +415,9 @@ export default function MapView() {
     }
   }, [newFileAlert, clearNewFileAlert]);
 
+  // Google 3D viewer ref for flyTo
+  const google3dViewerRef = useRef<Google3DViewerHandle>(null);
+
   // Track if we've already auto-cleared a completed session on mount
   const hasAutoClearedRef = useRef(false);
 
@@ -556,6 +561,7 @@ export default function MapView() {
           <div style={{ position: 'absolute', inset: 0, zIndex: 2 }}>
             <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} version="alpha">
               <Google3DViewer
+                ref={google3dViewerRef}
                 mode="live"
                 droneHistory={droneHistory}
                 currentTime={currentTime}
@@ -573,6 +579,9 @@ export default function MapView() {
                 onDroneClick={handleDroneClick}
               />
             </APIProvider>
+            <MapSearchBox
+              onFlyTo={(lat, lng) => google3dViewerRef.current?.flyTo(lat, lng, 500, 2000)}
+            />
           </div>
         ) : (
           <MapFileDropHandler onLayerImported={handleLayerImported}>
