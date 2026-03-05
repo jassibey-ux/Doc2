@@ -494,6 +494,21 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     };
   }, [connect]);
 
+  // Increment age_seconds every second between WS updates
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDrones(prev => {
+        const next = new Map(prev);
+        if (next.size === 0) return prev;
+        for (const [id, drone] of next) {
+          next.set(id, { ...drone, age_seconds: (drone.age_seconds ?? 0) + 1 });
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Keep-alive ping
   useEffect(() => {
     const interval = setInterval(() => {

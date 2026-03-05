@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from datetime import datetime
 from typing import Callable, Optional
 
@@ -18,6 +19,7 @@ class StateManager:
         stale_seconds: int,
         on_tracker_updated: Optional[Callable[[TrackerState], None]] = None,
         on_tracker_stale: Optional[Callable[[TrackerState], None]] = None,
+        on_tracker_recovered: Optional[Callable[[TrackerState], None]] = None,
         low_battery_mv: int = 3300,
         critical_battery_mv: int = 3000,
     ):
@@ -28,16 +30,19 @@ class StateManager:
             stale_seconds: Threshold for marking tracker as stale.
             on_tracker_updated: Callback when tracker is updated.
             on_tracker_stale: Callback when tracker becomes stale.
+            on_tracker_recovered: Callback when tracker recovers from stale.
             low_battery_mv: Threshold for low battery warning (millivolts).
             critical_battery_mv: Threshold for critical battery warning (millivolts).
         """
         self.stale_seconds = stale_seconds
         self.on_tracker_updated = on_tracker_updated
         self.on_tracker_stale = on_tracker_stale
+        self.on_tracker_recovered = on_tracker_recovered
         self.low_battery_mv = low_battery_mv
         self.critical_battery_mv = critical_battery_mv
 
         self._trackers: dict[str, TrackerState] = {}
+        self._last_seen: dict[str, float] = {}  # tracker_id -> time.monotonic()
         self._stale_check_task: Optional[asyncio.Task] = None
         self._running = False
 
@@ -131,7 +136,8 @@ class StateManager:
         if record.time_received is not None:
             state.time_received = record.time_received
 
-        # Update age and staleness
+        # Update age and staleness using monotonic clock
+        self._last_seen[tracker_id] = time.monotonic()
         state.age_seconds = 0.0
         was_stale = state.is_stale
         state.is_stale = False
@@ -140,6 +146,8 @@ class StateManager:
         if was_stale:
             state.stale_since = None
             logger.info(f"Tracker {tracker_id} became active again")
+            if self.on_tracker_recovered:
+                self.on_tracker_recovered(state)
 
         # Always notify on update
         if self.on_tracker_updated:
@@ -211,6 +219,7 @@ class StateManager:
     def clear_all(self) -> None:
         """Clear all tracker states."""
         self._trackers.clear()
+        self._last_seen.clear()
         logger.info("Cleared all tracker states")
 
     def get_tracker_ids(self) -> list[str]:
@@ -231,11 +240,14 @@ class StateManager:
 
     def _check_staleness(self) -> None:
         """Check all trackers for staleness."""
-        now = datetime.now()
+        now_mono = time.monotonic()
 
         for state in self._trackers.values():
-            # Calculate age
-            age = (now - state.time_local_received).total_seconds()
+            # Calculate age using monotonic clock (timezone-safe)
+            last_seen = self._last_seen.get(state.tracker_id)
+            if last_seen is None:
+                continue
+            age = now_mono - last_seen
             state.age_seconds = age
 
             # Check if became stale
@@ -244,7 +256,7 @@ class StateManager:
 
             if is_now_stale and not was_stale:
                 state.is_stale = True
-                state.stale_since = now  # Record when communication was lost
+                state.stale_since = datetime.now()  # Record when communication was lost
                 logger.warning(f"Tracker {state.tracker_id} became stale (age: {age:.1f}s)")
 
                 if self.on_tracker_stale:

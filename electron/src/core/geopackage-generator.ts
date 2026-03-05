@@ -259,6 +259,19 @@ function gpkgGeometryType(geojsonType: string): string {
  * Generate an OGC GeoPackage file from a GeoJSON FeatureCollection.
  * Returns the file as a Buffer.
  */
+/**
+ * Check if the native better-sqlite3 module can be loaded in the current runtime.
+ */
+export function checkSqliteAvailability(): { ok: boolean; error?: string } {
+  try {
+    const db = new Database(':memory:');
+    db.close();
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err.message || String(err) };
+  }
+}
+
 export function generateGeoPackage(
   featureCollection: GeoJSONFeatureCollection,
   sessionName: string,

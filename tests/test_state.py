@@ -267,11 +267,12 @@ class TestStateManager:
 
     def test_staleness_detection(self, state_manager):
         """Test that staleness is correctly detected via _check_staleness."""
-        # Add tracker with old timestamp (already stale)
-        old_time = datetime.now() - timedelta(seconds=30)
+        import time as _time
+
+        # Add tracker
         record = TrackerRecord(
             tracker_id="101",
-            time_local_received=old_time,
+            time_local_received=datetime.now(),
             fix_valid=True,
         )
         state_manager.update_tracker(record)
@@ -279,6 +280,9 @@ class TestStateManager:
         # Initially not stale (just updated, age_seconds reset to 0)
         state = state_manager.get_tracker("101")
         assert state.is_stale is False
+
+        # Simulate 30 seconds passing by backdating the monotonic last_seen
+        state_manager._last_seen["101"] = _time.monotonic() - 30
 
         # Manually trigger staleness check
         state_manager._check_staleness()
@@ -290,6 +294,8 @@ class TestStateManager:
 
     def test_stale_callback(self):
         """Test stale callback is triggered."""
+        import time as _time
+
         stale_trackers = []
 
         def on_stale(state):
@@ -300,13 +306,16 @@ class TestStateManager:
             on_tracker_stale=on_stale,
         )
 
-        # Add tracker with old timestamp
+        # Add tracker
         record = TrackerRecord(
             tracker_id="101",
-            time_local_received=datetime.now() - timedelta(seconds=5),
+            time_local_received=datetime.now(),
             fix_valid=True,
         )
         manager.update_tracker(record)
+
+        # Simulate 5 seconds passing
+        manager._last_seen["101"] = _time.monotonic() - 5
 
         # Manually trigger staleness check
         manager._check_staleness()
@@ -413,12 +422,14 @@ class TestStateManager:
 
     def test_stale_since_set_on_staleness(self):
         """Test that stale_since is set when tracker becomes stale."""
+        import time as _time
+
         manager = StateManager(stale_seconds=1)
 
-        # Add tracker with old timestamp
+        # Add tracker
         record = TrackerRecord(
             tracker_id="101",
-            time_local_received=datetime.now() - timedelta(seconds=5),
+            time_local_received=datetime.now(),
             fix_valid=True,
         )
         manager.update_tracker(record)
@@ -426,6 +437,9 @@ class TestStateManager:
         # Before staleness check
         state = manager.get_tracker("101")
         assert state.stale_since is None
+
+        # Simulate 5 seconds passing
+        manager._last_seen["101"] = _time.monotonic() - 5
 
         # Trigger staleness check
         manager._check_staleness()
@@ -437,18 +451,20 @@ class TestStateManager:
 
     def test_stale_since_cleared_on_active(self):
         """Test that stale_since is cleared when tracker becomes active again."""
+        import time as _time
+
         manager = StateManager(stale_seconds=1)
 
-        # Add tracker with old timestamp
-        old_time = datetime.now() - timedelta(seconds=5)
+        # Add tracker
         record1 = TrackerRecord(
             tracker_id="101",
-            time_local_received=old_time,
+            time_local_received=datetime.now(),
             fix_valid=True,
         )
         manager.update_tracker(record1)
 
-        # Make it stale
+        # Simulate 5 seconds passing, then make it stale
+        manager._last_seen["101"] = _time.monotonic() - 5
         manager._check_staleness()
         state = manager.get_tracker("101")
         assert state.is_stale is True
@@ -494,3 +510,80 @@ class TestStateManager:
         assert summary.low_battery is True
         assert summary.battery_critical is False
         assert summary.stale_since is None
+
+    def test_recovered_callback(self):
+        """Test that on_tracker_recovered callback is triggered when a stale tracker becomes active."""
+        import time as _time
+
+        recovered_trackers = []
+
+        def on_recovered(state):
+            recovered_trackers.append(state.tracker_id)
+
+        manager = StateManager(
+            stale_seconds=1,
+            on_tracker_recovered=on_recovered,
+        )
+
+        # Add tracker
+        record1 = TrackerRecord(
+            tracker_id="101",
+            time_local_received=datetime.now(),
+            fix_valid=True,
+        )
+        manager.update_tracker(record1)
+
+        # Should not have triggered recovery (was not stale)
+        assert len(recovered_trackers) == 0
+
+        # Simulate 5 seconds passing, then make it stale
+        manager._last_seen["101"] = _time.monotonic() - 5
+        manager._check_staleness()
+
+        state = manager.get_tracker("101")
+        assert state.is_stale is True
+
+        # Send new update (tracker recovers)
+        record2 = TrackerRecord(
+            tracker_id="101",
+            time_local_received=datetime.now(),
+            fix_valid=True,
+        )
+        manager.update_tracker(record2)
+
+        # Recovery callback should have been triggered
+        assert "101" in recovered_trackers
+        state = manager.get_tracker("101")
+        assert state.is_stale is False
+        assert state.stale_since is None
+
+    def test_recovered_callback_not_triggered_when_not_stale(self):
+        """Test that on_tracker_recovered is NOT triggered on normal updates."""
+        recovered_trackers = []
+
+        def on_recovered(state):
+            recovered_trackers.append(state.tracker_id)
+
+        manager = StateManager(
+            stale_seconds=10,
+            on_tracker_recovered=on_recovered,
+        )
+
+        # Add tracker (first update, not previously stale)
+        record1 = TrackerRecord(
+            tracker_id="101",
+            time_local_received=datetime.now(),
+            fix_valid=True,
+        )
+        manager.update_tracker(record1)
+
+        # Second normal update (still not stale)
+        record2 = TrackerRecord(
+            tracker_id="101",
+            time_local_received=datetime.now(),
+            fix_valid=True,
+        )
+        manager.update_tracker(record2)
+
+        # Recovery callback should NOT have been triggered
+        assert len(recovered_trackers) == 0

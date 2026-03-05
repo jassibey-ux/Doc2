@@ -87,6 +87,7 @@ class DashboardApp:
             stale_seconds=config.stale_seconds,
             on_tracker_updated=self._on_tracker_updated,
             on_tracker_stale=self._on_tracker_stale,
+            on_tracker_recovered=self._on_tracker_recovered,
             low_battery_mv=config.low_battery_mv,
             critical_battery_mv=config.critical_battery_mv,
         )
@@ -1597,6 +1598,13 @@ class DashboardApp:
             age_seconds=state.age_seconds,
             last_update=state.time_local_received,
             battery_mv=state.battery_mv,
+            last_known_lat=state.last_known_lat,
+            last_known_lon=state.last_known_lon,
+            last_known_alt_m=state.last_known_alt_m,
+            last_known_time=state.last_known_time,
+            stale_since=state.stale_since,
+            low_battery=state.low_battery,
+            battery_critical=state.battery_critical,
         )
 
         msg = WebSocketMessage(
@@ -1622,6 +1630,40 @@ class DashboardApp:
         )
 
         asyncio.create_task(self._broadcast_message(msg))
+
+        # Also send anomaly_alert for toast notification
+        alert_msg = WebSocketMessage(
+            type="anomaly_alert",
+            data={
+                "id": f"link_lost_{state.tracker_id}_{int(time.time())}",
+                "type": "link_lost",
+                "level": "critical",
+                "tracker_id": state.tracker_id,
+                "message": f"Tracker {state.tracker_id} — signal lost ({state.age_seconds:.0f}s)",
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
+        asyncio.create_task(self._broadcast_message(alert_msg))
+
+    def _on_tracker_recovered(self, state: TrackerState) -> None:
+        """
+        Callback when tracker recovers from stale.
+
+        Args:
+            state: Recovered tracker state.
+        """
+        alert_msg = WebSocketMessage(
+            type="anomaly_alert",
+            data={
+                "id": f"link_restored_{state.tracker_id}_{int(time.time())}",
+                "type": "link_restored",
+                "level": "info",
+                "tracker_id": state.tracker_id,
+                "message": f"Tracker {state.tracker_id} — signal restored",
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
+        asyncio.create_task(self._broadcast_message(alert_msg))
 
     def _maybe_ingest_telemetry(self, records: list[TrackerRecord]) -> None:
         """Ingest telemetry records to DB if an active session is running."""
