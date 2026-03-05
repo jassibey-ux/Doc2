@@ -8,7 +8,6 @@ installer_output/
 # Electron
 electron/node_modules/
 electron/dist/
-electron/out/
 node_modules/
 
 # Python
