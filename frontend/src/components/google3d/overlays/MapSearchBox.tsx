@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useMapsLibrary } from '@vis.gl/react-google-maps';
 import { Search, X } from 'lucide-react';
 
 interface MapSearchBoxProps {
@@ -6,9 +7,9 @@ interface MapSearchBoxProps {
 }
 
 interface GeoResult {
-  formatted_address: string;
-  lat: number;
-  lng: number;
+  description: string;
+  place_id: string;
+  placePrediction: google.maps.places.PlacePrediction;
 }
 
 export default function MapSearchBox({ onFlyTo }: MapSearchBoxProps) {
@@ -19,7 +20,8 @@ export default function MapSearchBox({ onFlyTo }: MapSearchBoxProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string) || '';
+  // Load places library via hook (new Places API)
+  const placesLib = useMapsLibrary('places');
 
   // Click-outside to close
   useEffect(() => {
@@ -33,21 +35,28 @@ export default function MapSearchBox({ onFlyTo }: MapSearchBoxProps) {
   }, []);
 
   const search = useCallback(async (text: string) => {
-    if (!text.trim() || !apiKey) {
+    if (!text.trim()) {
       setResults([]);
       setOpen(false);
       return;
     }
+    if (!placesLib) {
+      setResults([]);
+      return;
+    }
     setLoading(true);
     try {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(text)}&key=${apiKey}`;
-      const resp = await fetch(url);
-      const data = await resp.json();
-      const items: GeoResult[] = (data.results || []).slice(0, 5).map((r: any) => ({
-        formatted_address: r.formatted_address,
-        lat: r.geometry.location.lat,
-        lng: r.geometry.location.lng,
-      }));
+      const { suggestions } = await placesLib.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        input: text,
+      });
+      const items: GeoResult[] = suggestions
+        .filter((s) => s.placePrediction)
+        .slice(0, 5)
+        .map((s) => ({
+          description: s.placePrediction!.text.text,
+          place_id: s.placePrediction!.placeId,
+          placePrediction: s.placePrediction!,
+        }));
       setResults(items);
       setOpen(items.length > 0);
     } catch {
@@ -56,7 +65,7 @@ export default function MapSearchBox({ onFlyTo }: MapSearchBoxProps) {
     } finally {
       setLoading(false);
     }
-  }, [apiKey]);
+  }, [placesLib]);
 
   const handleInput = (value: string) => {
     setQuery(value);
@@ -64,10 +73,18 @@ export default function MapSearchBox({ onFlyTo }: MapSearchBoxProps) {
     debounceRef.current = setTimeout(() => search(value), 400);
   };
 
-  const handleSelect = (r: GeoResult) => {
-    onFlyTo(r.lat, r.lng);
-    setQuery(r.formatted_address);
+  const handleSelect = async (r: GeoResult) => {
+    setQuery(r.description);
     setOpen(false);
+    try {
+      const place = r.placePrediction.toPlace();
+      await place.fetchFields({ fields: ['location'] });
+      if (place.location) {
+        onFlyTo(place.location.lat(), place.location.lng());
+      }
+    } catch {
+      // silently fail
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -156,7 +173,7 @@ export default function MapSearchBox({ onFlyTo }: MapSearchBoxProps) {
         >
           {results.map((r, i) => (
             <div
-              key={i}
+              key={r.place_id}
               onClick={() => handleSelect(r)}
               style={{
                 padding: '8px 12px',
@@ -169,7 +186,7 @@ export default function MapSearchBox({ onFlyTo }: MapSearchBoxProps) {
               onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(100,140,255,0.12)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
-              {r.formatted_address}
+              {r.description}
             </div>
           ))}
         </div>

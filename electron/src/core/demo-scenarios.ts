@@ -154,6 +154,102 @@ const BMO_FIELD_SCENARIO: DemoScenario = {
   ],
 };
 
+const GRAND_FORKS_AFB_SCENARIO: DemoScenario = {
+  id: 'grand-forks-afb',
+  name: 'Grand Forks AFB',
+  description: '4 drones probing AFB perimeter with RF denial zone over airfield',
+  siteCenter: [-97.4001, 47.9547],
+  gpsDenialZones: [
+    {
+      center: [-97.395, 47.956],
+      radiusM: 500,
+      minSats: 1,
+      maxSats: 4,
+      hdopMax: 20.0,
+      driftM: 15.0,
+    },
+  ],
+  trackers: [
+    {
+      trackerId: 'HAWK-01',
+      description: 'North approach along runway corridor — fast ingress',
+      startPosition: [-97.4001, 47.9750],
+      altitude: 90,
+      speed: 22,
+      heading: 180,
+      pattern: 'waypoints',
+      gpsDenialAffected: false,
+      color: '#ff6b00',
+      extendedWaypoints: [
+        [-97.4001, 47.9750, 90, 22],
+        [-97.4005, 47.9710, 85, 20],
+        [-97.4000, 47.9670, 75, 16],
+        [-97.3990, 47.9630, 65, 12],
+        [-97.3980, 47.9590, 55, 8],
+        [-97.3970, 47.9560, 45, 5],
+      ],
+    },
+    {
+      trackerId: 'HAWK-02',
+      description: 'East approach from GrandSky — low altitude recon',
+      startPosition: [-97.3700, 47.9600],
+      altitude: 40,
+      speed: 18,
+      heading: 270,
+      pattern: 'waypoints',
+      gpsDenialAffected: true,
+      color: '#ef4444',
+      extendedWaypoints: [
+        [-97.3700, 47.9600, 40, 18],
+        [-97.3770, 47.9590, 40, 16],
+        [-97.3840, 47.9575, 38, 14],
+        [-97.3900, 47.9565, 35, 10],
+        [-97.3950, 47.9555, 32, 7],
+        [-97.4000, 47.9547, 30, 4],
+      ],
+    },
+    {
+      trackerId: 'HAWK-03',
+      description: 'Southwest approach — high altitude surveillance orbit',
+      startPosition: [-97.4300, 47.9400],
+      altitude: 150,
+      speed: 15,
+      heading: 45,
+      pattern: 'waypoints',
+      gpsDenialAffected: false,
+      color: '#6366f1',
+      extendedWaypoints: [
+        [-97.4300, 47.9400, 150, 15],
+        [-97.4250, 47.9430, 145, 15],
+        [-97.4200, 47.9460, 140, 14],
+        [-97.4150, 47.9490, 130, 13],
+        [-97.4100, 47.9520, 120, 12],
+        [-97.4050, 47.9540, 110, 10],
+        [-97.4001, 47.9547, 100, 8],
+      ],
+    },
+    {
+      trackerId: 'HAWK-04',
+      description: 'West perimeter probe — nap-of-earth flight',
+      startPosition: [-97.4350, 47.9580],
+      altitude: 15,
+      speed: 20,
+      heading: 90,
+      pattern: 'waypoints',
+      gpsDenialAffected: false,
+      color: '#eab308',
+      extendedWaypoints: [
+        [-97.4350, 47.9580, 15, 20],
+        [-97.4290, 47.9575, 15, 18],
+        [-97.4230, 47.9568, 18, 16],
+        [-97.4170, 47.9560, 20, 14],
+        [-97.4110, 47.9555, 22, 10],
+        [-97.4050, 47.9550, 25, 6],
+      ],
+    },
+  ],
+};
+
 const DEFAULT_SCENARIO: DemoScenario = {
   id: 'default',
   name: 'Default (4 drones)',
@@ -162,7 +258,7 @@ const DEFAULT_SCENARIO: DemoScenario = {
   trackers: [], // empty signals use of getDefaultDemoTrackers()
 };
 
-export const DEMO_SCENARIOS: DemoScenario[] = [DEFAULT_SCENARIO, BMO_FIELD_SCENARIO];
+export const DEMO_SCENARIOS: DemoScenario[] = [DEFAULT_SCENARIO, BMO_FIELD_SCENARIO, GRAND_FORKS_AFB_SCENARIO];
 
 export function getScenarioById(id: string): DemoScenario | undefined {
   return DEMO_SCENARIOS.find((s) => s.id === id);

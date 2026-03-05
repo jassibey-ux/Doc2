@@ -192,6 +192,104 @@ const SEED_SITES = [
     zones: [],
     environment_type: "open_field",
     rf_notes: "Demo site - Denver open field for baseline testing with minimal interference"
+  },
+  {
+    id: "demo-site-grand-forks-afb",
+    name: "Grand Forks AFB",
+    center: { lat: 47.9547, lon: -97.4001 },
+    boundary_polygon: [
+      { lat: 47.97, lon: -97.42 },
+      { lat: 47.97, lon: -97.38 },
+      { lat: 47.94, lon: -97.38 },
+      { lat: 47.94, lon: -97.42 },
+      { lat: 47.97, lon: -97.42 }
+    ],
+    markers: [
+      {
+        id: "marker-gf-cp",
+        name: "Command Post",
+        type: "command_post",
+        position: { lat: 47.956, lon: -97.401 },
+        notes: "Base operations center"
+      },
+      {
+        id: "marker-gf-lp1",
+        name: "North Launch Point",
+        type: "launch_point",
+        position: { lat: 47.965, lon: -97.395 },
+        notes: "Primary UAS launch area - north runway"
+      },
+      {
+        id: "marker-gf-lp2",
+        name: "South Launch Point",
+        type: "launch_point",
+        position: { lat: 47.945, lon: -97.405 },
+        notes: "Secondary launch area - south taxiway"
+      },
+      {
+        id: "marker-gf-obs",
+        name: "Observation Post",
+        type: "observation",
+        position: { lat: 47.958, lon: -97.388 },
+        notes: "Visual tracking station - east perimeter"
+      },
+      {
+        id: "marker-gf-rz",
+        name: "Recovery Zone",
+        type: "recovery_zone",
+        position: { lat: 47.95, lon: -97.41 },
+        notes: "UAS recovery and inspection area"
+      }
+    ],
+    zones: [
+      {
+        id: "zone-gf-test",
+        name: "Primary Test Corridor",
+        type: "test_area",
+        polygon: [
+          { lat: 47.965, lon: -97.405 },
+          { lat: 47.965, lon: -97.385 },
+          { lat: 47.95, lon: -97.385 },
+          { lat: 47.95, lon: -97.405 }
+        ],
+        color: "#3b82f6",
+        opacity: 0.3,
+        notes: "Main flight test corridor over airfield"
+      },
+      {
+        id: "zone-gf-jammer",
+        name: "RF Denial Zone",
+        type: "jammer_zone",
+        polygon: [
+          { lat: 47.96, lon: -97.4 },
+          { lat: 47.96, lon: -97.39 },
+          { lat: 47.952, lon: -97.39 },
+          { lat: 47.952, lon: -97.4 }
+        ],
+        color: "#ef4444",
+        opacity: 0.25,
+        notes: "Active RF jamming area - coordinate with tower"
+      },
+      {
+        id: "zone-gf-exclusion",
+        name: "Runway Exclusion",
+        type: "exclusion",
+        polygon: [
+          { lat: 47.958, lon: -97.415 },
+          { lat: 47.958, lon: -97.385 },
+          { lat: 47.953, lon: -97.385 },
+          { lat: 47.953, lon: -97.415 }
+        ],
+        color: "#f97316",
+        opacity: 0.2,
+        notes: "Active runway - no UAS operations without ATC clearance"
+      }
+    ],
+    environment_type: "open_field",
+    elevation_min_m: 253,
+    elevation_max_m: 260,
+    rf_notes: "Active military airfield - coordinate RF emissions with base frequency manager. ATC on 124.15 MHz.",
+    access_notes: "Requires base access credentials. Check in at Visitor Center Gate 1."
   }
 ];
 const SEED_DRONE_PROFILES = [
@@ -5949,20 +6047,6 @@ function generateGeoJSON(input) {
     features
   };
 }
-function checkSqliteAvailability() {
-  try {
-    const db = new Database(":memory:");
-    db.close();
-    return { ok: true };
-  } catch (err) {
-    const msg = err?.message || String(err);
-    log.error("[GeoPackage] better-sqlite3 native module check failed:", msg);
-    if (msg.includes("NODE_MODULE_VERSION")) {
-      log.error("[GeoPackage] Fix: run `npx electron-rebuild -o better-sqlite3` to recompile for Electron");
-    }
-    return { ok: false, error: msg };
-  }
-}
 function writeDouble(buf, offset, value) {
   buf.writeDoubleLE(value, offset);
 }
@@ -6149,6 +6233,15 @@ function gpkgGeometryType(geojsonType) {
       return "POLYGON";
     default:
       return "GEOMETRY";
+  }
+}
+function checkSqliteAvailability() {
+  try {
+    const db = new Database(":memory:");
+    db.close();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) };
   }
 }
 function generateGeoPackage(featureCollection, sessionName) {
@@ -11382,6 +11475,101 @@ const BMO_FIELD_SCENARIO = {
     }
   ]
 };
+const GRAND_FORKS_AFB_SCENARIO = {
+  id: "grand-forks-afb",
+  name: "Grand Forks AFB",
+  description: "4 drones probing AFB perimeter with RF denial zone over airfield",
+  siteCenter: [-97.4001, 47.9547],
+  gpsDenialZones: [
+    {
+      center: [-97.395, 47.956],
+      radiusM: 500,
+      minSats: 1,
+      maxSats: 4,
+      hdopMax: 20,
+      driftM: 15
+    }
+  ],
+  trackers: [
+    {
+      trackerId: "HAWK-01",
+      description: "North approach along runway corridor — fast ingress",
+      startPosition: [-97.4001, 47.975],
+      altitude: 90,
+      speed: 22,
+      heading: 180,
+      pattern: "waypoints",
+      gpsDenialAffected: false,
+      color: "#ff6b00",
+      extendedWaypoints: [
+        [-97.4001, 47.975, 90, 22],
+        [-97.4005, 47.971, 85, 20],
+        [-97.4, 47.967, 75, 16],
+        [-97.399, 47.963, 65, 12],
+        [-97.398, 47.959, 55, 8],
+        [-97.397, 47.956, 45, 5]
+      ]
+    },
+    {
+      trackerId: "HAWK-02",
+      description: "East approach from GrandSky — low altitude recon",
+      startPosition: [-97.37, 47.96],
+      altitude: 40,
+      speed: 18,
+      heading: 270,
+      pattern: "waypoints",
+      gpsDenialAffected: true,
+      color: "#ef4444",
+      extendedWaypoints: [
+        [-97.37, 47.96, 40, 18],
+        [-97.377, 47.959, 40, 16],
+        [-97.384, 47.9575, 38, 14],
+        [-97.39, 47.9565, 35, 10],
+        [-97.395, 47.9555, 32, 7],
+        [-97.4, 47.9547, 30, 4]
+      ]
+    },
+    {
+      trackerId: "HAWK-03",
+      description: "Southwest approach — high altitude surveillance orbit",
+      startPosition: [-97.43, 47.94],
+      altitude: 150,
+      speed: 15,
+      heading: 45,
+      pattern: "waypoints",
+      gpsDenialAffected: false,
+      color: "#6366f1",
+      extendedWaypoints: [
+        [-97.43, 47.94, 150, 15],
+        [-97.425, 47.943, 145, 15],
+        [-97.42, 47.946, 140, 14],
+        [-97.415, 47.949, 130, 13],
+        [-97.41, 47.952, 120, 12],
+        [-97.405, 47.954, 110, 10],
+        [-97.4001, 47.9547, 100, 8]
+      ]
+    },
+    {
+      trackerId: "HAWK-04",
+      description: "West perimeter probe — nap-of-earth flight",
+      startPosition: [-97.435, 47.958],
+      altitude: 15,
+      speed: 20,
+      heading: 90,
+      pattern: "waypoints",
+      gpsDenialAffected: false,
+      color: "#eab308",
+      extendedWaypoints: [
+        [-97.435, 47.958, 15, 20],
+        [-97.429, 47.9575, 15, 18],
+        [-97.423, 47.9568, 18, 16],
+        [-97.417, 47.956, 20, 14],
+        [-97.411, 47.9555, 22, 10],
+        [-97.405, 47.955, 25, 6]
+      ]
+    }
+  ]
+};
 const DEFAULT_SCENARIO = {
   id: "default",
   name: "Default (4 drones)",
@@ -11390,7 +11578,7 @@ const DEFAULT_SCENARIO = {
   trackers: []
   // empty signals use of getDefaultDemoTrackers()
 };
-const DEMO_SCENARIOS = [DEFAULT_SCENARIO, BMO_FIELD_SCENARIO];
+const DEMO_SCENARIOS = [DEFAULT_SCENARIO, BMO_FIELD_SCENARIO, GRAND_FORKS_AFB_SCENARIO];
 function getScenarioById(id) {
   return DEMO_SCENARIOS.find((s) => s.id === id);
 }

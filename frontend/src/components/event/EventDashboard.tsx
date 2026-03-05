@@ -170,6 +170,18 @@ const EventDashboard: React.FC = () => {
       }
       return best;
     }
+    if (scenarioId === 'grand-forks-afb') {
+      const gfMatch = sites.find(s => /grand.forks/i.test(s.name));
+      if (gfMatch) return gfMatch;
+      // Fallback: nearest to Grand Forks AFB (47.95, -97.40)
+      let best = sites[0];
+      let bestDist = Infinity;
+      for (const s of sites) {
+        const d = haversineDistance(s.center.lat, s.center.lon, 47.9547, -97.4001);
+        if (d < bestDist) { bestDist = d; best = s; }
+      }
+      return best;
+    }
     return sites[0];
   }, [sites]);
 
