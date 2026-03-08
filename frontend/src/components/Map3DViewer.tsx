@@ -1175,7 +1175,7 @@ export default function Map3DViewer({
         },
       });
 
-      // Engagement line - active jamming (red, wider)
+      // Engagement line - active jamming (GPS-health color, wider)
       map.addLayer({
         id: 'engagement-lines-3d-jamming',
         type: 'line',
@@ -1183,7 +1183,7 @@ export default function Map3DViewer({
         filter: ['all', ['==', ['get', 'type'], 'line'], ['==', ['get', 'isJamming'], true]],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: {
-          'line-color': '#ef4444',
+          'line-color': ['get', 'color'],
           'line-width': 3.5,
           'line-opacity': 0.95,
           'line-dasharray': [2, 2],
@@ -1205,7 +1205,7 @@ export default function Map3DViewer({
         },
       }, 'engagement-lines-3d-line');
 
-      // Engagement glow - jamming
+      // Engagement glow - jamming (GPS-health color, brighter glow)
       map.addLayer({
         id: 'engagement-lines-3d-jamming-glow',
         type: 'line',
@@ -1213,7 +1213,7 @@ export default function Map3DViewer({
         filter: ['all', ['==', ['get', 'type'], 'line'], ['==', ['get', 'isJamming'], true]],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: {
-          'line-color': '#ef4444',
+          'line-color': ['get', 'color'],
           'line-width': 10,
           'line-opacity': 0.4,
           'line-blur': 4,
@@ -1235,12 +1235,7 @@ export default function Map3DViewer({
           'text-radial-offset': 0.5,
         },
         paint: {
-          'text-color': [
-            'case',
-            ['==', ['get', 'isJamming'], true],
-            '#fca5a5',
-            '#ffffff',
-          ],
+          'text-color': '#ffffff',
           'text-halo-color': 'rgba(0, 0, 0, 0.8)',
           'text-halo-width': 2,
         },

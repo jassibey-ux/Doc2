@@ -1051,7 +1051,7 @@ export default function MapComponent({
         },
       });
 
-      // Engagement line layer - active jamming (red, wider, rapid dashes)
+      // Engagement line layer - active jamming (GPS-health color, wider, rapid dashes)
       map.addLayer({
         id: 'engagement-lines-jamming',
         type: 'line',
@@ -1062,7 +1062,7 @@ export default function MapComponent({
           'line-cap': 'round',
         },
         paint: {
-          'line-color': '#ef4444', // Red for active jamming
+          'line-color': ['get', 'color'], // GPS health drives color
           'line-width': 3.5,
           'line-opacity': 0.95,
           'line-dasharray': [2, 2],
@@ -1087,7 +1087,7 @@ export default function MapComponent({
         },
       }, 'engagement-lines-line');
 
-      // Engagement line glow - active jamming (brighter red glow)
+      // Engagement line glow - active jamming (brighter glow, GPS-health color)
       map.addLayer({
         id: 'engagement-lines-jamming-glow',
         type: 'line',
@@ -1098,7 +1098,7 @@ export default function MapComponent({
           'line-cap': 'round',
         },
         paint: {
-          'line-color': '#ef4444',
+          'line-color': ['get', 'color'],
           'line-width': 10,
           'line-opacity': 0.4,
           'line-blur': 4,
@@ -1120,12 +1120,7 @@ export default function MapComponent({
           'text-radial-offset': 0.5,
         },
         paint: {
-          'text-color': [
-            'case',
-            ['==', ['get', 'isJamming'], true],
-            '#fca5a5', // Light red text when jamming
-            '#ffffff',
-          ],
+          'text-color': '#ffffff',
           'text-halo-color': 'rgba(0, 0, 0, 0.8)',
           'text-halo-width': 2,
         },

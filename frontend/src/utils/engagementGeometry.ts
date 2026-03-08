@@ -101,14 +101,12 @@ export function computeEngagementGeometries(
       const mid = midpoint(emitterLat, emitterLon, droneLat, droneLon);
       const altDelta = droneAlt - emitterAlt;
 
-      // Line color: red when jamming, otherwise GPS-health-based
-      let lineColor: string;
-      if (isJamming) {
-        lineColor = '#ef4444';
-      } else {
-        const gpsHealth = drone.gps_health?.health_status ?? 'healthy';
-        lineColor = gpsHealth === 'healthy' ? '#22c55e' : gpsHealth === 'degraded' ? '#eab308' : '#ef4444';
-      }
+      // Line color always driven by GPS health (jamming only affects width in renderers)
+      const gpsHealth = drone.gps_health?.health_status ?? 'healthy';
+      const gpsLost = !drone.fix_valid;
+      const lineColor = gpsLost ? '#ef4444'
+        : gpsHealth === 'degraded' ? '#eab308'
+        : '#22c55e';
 
       // Build label with elapsed timer
       let label = `${formatDistance(hRange)} | ${formatBearing(brg)}`;

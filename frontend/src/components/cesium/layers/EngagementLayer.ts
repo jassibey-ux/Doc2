@@ -44,18 +44,16 @@ export function renderEngagementLayer(
       g.droneLon, g.droneLat, g.droneAlt + 2,
     );
 
-    let engColor: any;
-    let lineWidth: number;
-    let dashLen: number;
-    if (g.isJamming) {
-      engColor = Cesium.Color.RED.withAlpha(0.9);
-      lineWidth = 3;
-      dashLen = 8.0;
-    } else {
-      engColor = Cesium.Color.CYAN.withAlpha(0.8);
-      lineWidth = 2;
-      dashLen = 16.0;
-    }
+    // Color from GPS health (already computed in lineColor); jamming affects width/dash
+    const hexToColor = (hex: string, alpha: number) => {
+      const r = parseInt(hex.slice(1, 3), 16) / 255;
+      const gr = parseInt(hex.slice(3, 5), 16) / 255;
+      const b = parseInt(hex.slice(5, 7), 16) / 255;
+      return new Cesium.Color(r, gr, b, alpha);
+    };
+    const engColor = hexToColor(g.lineColor, g.isJamming ? 0.9 : 0.8);
+    const lineWidth = g.isJamming ? 3 : 2;
+    const dashLen = g.isJamming ? 8.0 : 16.0;
 
     viewer.entities.add({
       name: `engagement_${g.engagementId}_${g.trackerId}`,
@@ -80,7 +78,7 @@ export function renderEngagementLayer(
         label: {
           text: g.distanceLabel,
           font: '10px monospace',
-          fillColor: g.isJamming ? Cesium.Color.RED : Cesium.Color.CYAN,
+          fillColor: hexToColor(g.lineColor, 1.0),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 2,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,

@@ -100,38 +100,30 @@ export function renderEngagementLayer(
       polyline.coordinates = coords;
       polyline.altitudeMode = 'RELATIVE_TO_MESH';
 
-      // Line colors: 5 states based on engagement status, jamming, and GPS health
-      if (isActive && hasBurst && gpsLost) {
-        // Active + GPS denied + jamming — bright red, wide glow
-        polyline.strokeColor = '#ef4444';
-        polyline.strokeWidth = 4;
-        polyline.outerColor = '#991b1b';
-        polyline.outerWidth = 0.7;
-      } else if (isActive && hasBurst) {
-        // Active + jamming — red
-        polyline.strokeColor = '#ef4444';
-        polyline.strokeWidth = 3.5;
-        polyline.outerColor = '#7f1d1d';
-        polyline.outerWidth = 0.6;
-      } else if (isActive && gpsLost) {
-        // Active + GPS lost (no jam) — red
-        polyline.strokeColor = '#ef4444';
-        polyline.strokeWidth = 3;
-        polyline.outerColor = '#991b1b';
-        polyline.outerWidth = 0.5;
-      } else if (isActive) {
-        // Active, no jam — color by GPS health
-        const gpsStatus = drone.gps_health?.health_status ?? 'healthy';
-        if (gpsStatus === 'degraded') {
-          polyline.strokeColor = '#eab308';
+      // Line color driven by GPS health; jamming drives width/glow
+      if (isActive) {
+        // Color always driven by GPS health
+        const gpsStatus = gpsLost ? 'lost' : (drone.gps_health?.health_status ?? 'healthy');
+
+        if (gpsStatus === 'lost') {
+          polyline.strokeColor = '#ef4444'; // Red
+          polyline.outerColor = '#991b1b';
+        } else if (gpsStatus === 'degraded') {
+          polyline.strokeColor = '#eab308'; // Yellow
           polyline.outerColor = '#854d0e';
         } else {
-          // healthy (or unknown)
-          polyline.strokeColor = '#22c55e';
+          polyline.strokeColor = '#22c55e'; // Green
           polyline.outerColor = '#166534';
         }
-        polyline.strokeWidth = 3;
-        polyline.outerWidth = 0.5;
+
+        // Jamming increases width/glow intensity
+        if (hasBurst) {
+          polyline.strokeWidth = gpsLost ? 4 : 3.5;
+          polyline.outerWidth = 0.7;
+        } else {
+          polyline.strokeWidth = 3;
+          polyline.outerWidth = 0.5;
+        }
       } else {
         // Completed/historical — gray
         polyline.strokeColor = '#6b7280';
