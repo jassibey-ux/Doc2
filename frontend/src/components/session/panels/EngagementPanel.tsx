@@ -7,7 +7,7 @@
  */
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { Circle, Target, Wifi, WifiOff, Activity } from 'lucide-react';
+import { Circle, Target, Wifi, WifiOff, Activity, Brain } from 'lucide-react';
 import type { Engagement, CUASPlacement } from '../../../types/workflow';
 import type { DroneSummary } from '../../../types/drone';
 import { slantRange } from '../../../utils/geo';
@@ -19,6 +19,7 @@ interface EngagementPanelProps {
   tacticalMode: boolean;
   currentDroneData?: Map<string, DroneSummary>;
   cuasPlacements?: CUASPlacement[];
+  sessionId?: string;
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
@@ -35,6 +36,7 @@ const EngagementPanel: React.FC<EngagementPanelProps> = ({
   tacticalMode,
   currentDroneData,
   cuasPlacements,
+  sessionId,
 }) => {
   const textColor = tacticalMode ? '#4ade80' : '#e5e7eb';
   const dimColor = tacticalMode ? 'rgba(74,222,128,0.5)' : '#6b7280';
@@ -71,6 +73,26 @@ const EngagementPanel: React.FC<EngagementPanelProps> = ({
     const avgTte = ttes.length > 0 ? ttes.reduce((a, b) => a + b, 0) / ttes.length : null;
     return { total: completed.length, avgTte, passes, fails };
   }, [completed]);
+
+  // Cross-engagement AI summary
+  const [crossAiSummary, setCrossAiSummary] = useState<string | null>(null);
+
+  // Auto-fetch cross-engagement summary when we hit 3+ completed and have a session AI analysis
+  useEffect(() => {
+    if (!sessionId || completed.length < 3) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/test-sessions/${sessionId}/ai-analysis`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (data.cross_engagement_analysis && !cancelled) {
+          setCrossAiSummary(data.cross_engagement_analysis);
+        }
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [sessionId, completed.length]);
 
   if (engagements.length === 0) {
     return (
@@ -135,6 +157,22 @@ const EngagementPanel: React.FC<EngagementPanelProps> = ({
           {summaryStats.avgTte != null && <span>avg TTE {summaryStats.avgTte.toFixed(1)}s</span>}
           <span style={{ color: '#22c55e' }}>{summaryStats.passes} PASS</span>
           {summaryStats.fails > 0 && <span style={{ color: '#ef4444' }}>{summaryStats.fails} FAIL</span>}
+        </div>
+      )}
+
+      {/* Cross-engagement AI summary */}
+      {summaryStats && crossAiSummary && (
+        <div style={{
+          margin: '0 14px 8px', padding: '6px 10px',
+          borderRadius: 4,
+          borderLeft: '2px solid #06b6d4',
+          background: 'rgba(6,182,212,0.06)',
+          fontSize: 10, lineHeight: 1.5,
+          color: tacticalMode ? 'rgba(74,222,128,0.7)' : 'rgba(255,255,255,0.6)',
+          fontStyle: 'italic',
+        }}>
+          <Brain size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4, color: '#06b6d4' }} />
+          {crossAiSummary.length > 150 ? crossAiSummary.slice(0, 150) + '…' : crossAiSummary}
         </div>
       )}
 
@@ -425,6 +463,18 @@ const CompactHistoryCard: React.FC<{
           </span>
         )}
       </div>
+      {/* AI Insight strip */}
+      {engagement.ai_insight && (
+        <div style={{
+          fontSize: 10, color: 'rgba(255,255,255,0.6)',
+          fontStyle: 'italic', padding: '3px 0 0 11px',
+          borderLeft: '2px solid rgba(6,182,212,0.3)',
+          marginLeft: 5, marginTop: 3,
+          lineHeight: 1.4,
+        }}>
+          {engagement.ai_insight}
+        </div>
+      )}
     </div>
   );
 };

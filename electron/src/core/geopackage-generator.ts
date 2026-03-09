@@ -272,9 +272,16 @@ export function checkSqliteAvailability(): { ok: boolean; error?: string } {
   }
 }
 
+interface AIAnalysisData {
+  executive_summary: string;
+  operational_assessment: string;
+  analysis_json: string;
+}
+
 export function generateGeoPackage(
   featureCollection: GeoJSONFeatureCollection,
   sessionName: string,
+  aiAnalysis?: AIAnalysisData,
 ): Buffer {
   // Group features by feature_type for separate tables
   const layerGroups = new Map<string, GeoJSONFeature[]>();
@@ -449,6 +456,31 @@ export function generateGeoPackage(
       `).run(tableName, geomType, hasZ ? 1 : 0);
 
       log.info(`[GeoPackage] Created layer "${tableName}" with ${features.length} features`);
+    }
+
+    // Add AI analysis non-spatial table if data provided
+    if (aiAnalysis) {
+      db.exec(`
+        CREATE TABLE "session_analysis" (
+          fid INTEGER PRIMARY KEY AUTOINCREMENT,
+          executive_summary TEXT,
+          operational_assessment TEXT,
+          analysis_json TEXT
+        )
+      `);
+
+      const now = new Date().toISOString();
+      db.prepare(`
+        INSERT INTO gpkg_contents (table_name, data_type, identifier, description, last_change, srs_id)
+        VALUES (?, 'attributes', ?, ?, ?, 4326)
+      `).run('session_analysis', 'session_analysis', `${sessionName} - AI Analysis`, now);
+
+      db.prepare(`
+        INSERT INTO "session_analysis" (executive_summary, operational_assessment, analysis_json)
+        VALUES (?, ?, ?)
+      `).run(aiAnalysis.executive_summary, aiAnalysis.operational_assessment, aiAnalysis.analysis_json);
+
+      log.info('[GeoPackage] Added session_analysis table with AI analysis data');
     }
 
     // Serialize the database to a Buffer

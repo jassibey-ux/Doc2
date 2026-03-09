@@ -327,28 +327,40 @@ export default function AnalysisPanel({ isOpen, onClose }: AnalysisPanelProps) {
                   </GlassCard>
                 </div>
 
-                {/* Summary */}
+                {/* Summary — AI executive summary when available, else static text */}
                 <GlassCard style={{
                   padding: '12px',
                   borderLeft: `3px solid ${
+                    session?.ai_analysis ? '#06b6d4' :
                     metrics.pass_fail === 'pass' ? '#22c55e' :
                     metrics.pass_fail === 'partial' ? '#f59e0b' : '#ef4444'
                   }`,
                 }}>
                   <div style={{ fontSize: '12px', fontWeight: 500, color: '#fff', marginBottom: '4px' }}>
-                    Test Summary
+                    {session?.ai_analysis ? 'AI Analysis Summary' : 'Test Summary'}
                   </div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
-                    {metrics.pass_fail === 'pass' && (
-                      <>CUAS system demonstrated effective drone denial with expected failsafe behavior.</>
-                    )}
-                    {metrics.pass_fail === 'partial' && (
-                      <>CUAS system showed partial effectiveness. Failsafe behavior differed from expected.</>
-                    )}
-                    {metrics.pass_fail === 'fail' && (
-                      <>CUAS system did not achieve effective drone denial within test parameters.</>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                    {session?.ai_analysis ? (
+                      session.ai_analysis.executive_summary
+                    ) : (
+                      <>
+                        {metrics.pass_fail === 'pass' && (
+                          <>CUAS system demonstrated effective drone denial with expected failsafe behavior.</>
+                        )}
+                        {metrics.pass_fail === 'partial' && (
+                          <>CUAS system showed partial effectiveness. Failsafe behavior differed from expected.</>
+                        )}
+                        {metrics.pass_fail === 'fail' && (
+                          <>CUAS system did not achieve effective drone denial within test parameters.</>
+                        )}
+                      </>
                     )}
                   </div>
+                  {session?.ai_analysis && (
+                    <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', marginTop: '6px' }}>
+                      AI-generated | {session.ai_analysis.model}
+                    </div>
+                  )}
                 </GlassCard>
 
                 {/* Per-Tracker Analysis Section */}

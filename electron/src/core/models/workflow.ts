@@ -366,6 +366,7 @@ export interface Engagement {
   targets: EngagementTarget[];
   bursts: EngagementJamBurst[];
   metrics?: EngagementMetrics;
+  ai_insight?: string;
   created_at: string;
   updated_at: string;
 }
@@ -432,6 +433,9 @@ export interface TestSession {
   post_test_notes?: string;
   classification?: string;
 
+  // AI Analysis
+  ai_analysis?: AIAnalysisResult;
+
   // CRM Features
   tags?: string[];
   annotations?: SessionAnnotation[];
@@ -487,6 +491,38 @@ export interface TrackSegment {
   quality: GPSQuality | 'sd_only' | 'gap';
   start_time_ms: number;
   end_time_ms: number;
+}
+
+// =============================================================================
+// AI Analysis
+// =============================================================================
+
+export interface AIEngagementFinding {
+  engagement_id: string;
+  run_number?: number;
+  finding: string;
+  detail: string;
+  pass_fail_reasoning?: string;
+  anomalies?: string[];
+}
+
+export interface AIAnalysisResult {
+  executive_summary: string;
+  per_engagement: AIEngagementFinding[];
+  cross_engagement_analysis?: string;
+  operational_assessment: {
+    strengths: string[];
+    weaknesses: string[];
+    coverage_gaps?: string[];
+    placement_recommendations?: string[];
+  };
+  drone_behavior_analysis?: string;
+  data_quality_notes?: string[];
+  recommended_followup?: string[];
+  model: string;
+  analyzed_at: string;
+  input_tokens: number;
+  output_tokens: number;
 }
 
 // =============================================================================

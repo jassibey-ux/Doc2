@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { dialog } from 'electron';
 import { DashboardApp } from '../app';
+import { saveConfigAtomic } from '../../core/config';
 
 export function configRoutes(app: DashboardApp): Router {
   const router = Router();
@@ -32,6 +33,12 @@ export function configRoutes(app: DashboardApp): Router {
       is_configured: logRootExists,
       port: app.config.port,
       stale_seconds: app.config.stale_seconds,
+      // AI Analysis config (key is masked for security)
+      anthropic_api_key: app.config.anthropic_api_key
+        ? `${app.config.anthropic_api_key.slice(0, 7)}...${app.config.anthropic_api_key.slice(-4)}`
+        : '',
+      anthropic_model: app.config.anthropic_model || 'claude-sonnet-4-latest',
+      ai_analysis_consent: app.config.ai_analysis_consent || false,
     });
   });
 
@@ -44,6 +51,33 @@ export function configRoutes(app: DashboardApp): Router {
 
     const result = await app.setLogRoot(newPath);
     res.json(result);
+  });
+
+  // PATCH /api/config — partial config update (for AI settings, etc.)
+  router.patch('/config', (req, res) => {
+    try {
+      const updates: Record<string, unknown> = {};
+      const allowed = ['anthropic_api_key', 'anthropic_model', 'ai_analysis_consent'];
+      for (const key of allowed) {
+        if (key in req.body) {
+          updates[key] = req.body[key];
+        }
+      }
+      if (Object.keys(updates).length === 0) {
+        res.status(400).json({ success: false, message: 'No valid fields to update' });
+        return;
+      }
+      const ok = saveConfigAtomic(updates as any);
+      if (ok) {
+        // Reload config into the running app
+        Object.assign(app.config, updates);
+        res.json({ success: true });
+      } else {
+        res.status(500).json({ success: false, message: 'Failed to save config' });
+      }
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e.message });
+    }
   });
 
   router.get('/validate-path', (req, res) => {

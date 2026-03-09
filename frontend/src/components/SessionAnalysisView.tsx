@@ -31,6 +31,7 @@ import {
   Box,
   Globe,
   Table2,
+  Brain,
 } from 'lucide-react';
 import { GlassPanel, GlassCard, GlassButton, Badge } from './ui/GlassUI';
 import { useWorkflow } from '../contexts/WorkflowContext';
@@ -46,6 +47,7 @@ import RangeOverTimeChart from './RangeOverTimeChart';
 import GPSQualityChart from './GPSQualityChart';
 import type { SessionMetrics, TestEvent, TestSession, Engagement, CUASPlacement, CUASProfile } from '../types/workflow';
 import type { SessionAnnotation } from '../types/crm';
+import AIAnalysisPanel from './AIAnalysisPanel';
 
 export default function SessionAnalysisView() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -69,6 +71,12 @@ export default function SessionAnalysisView() {
   const [sessionEngagements, setSessionEngagements] = useState<Engagement[]>([]);
   const [chartHoverTimestamp, setChartHoverTimestamp] = useState<number | null>(null);
   const [geoExportLoading, setGeoExportLoading] = useState<string | null>(null);
+
+  // AI Analysis state
+  const [activeTab, setActiveTab] = useState<'metrics' | 'ai'>('metrics');
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
 
   const { getSessionTags, getSessionAnnotations } = useCRM();
   const [analysisData, setAnalysisData] = useState<{
@@ -159,6 +167,23 @@ export default function SessionAnalysisView() {
     getSessionAnnotations(sessionId).then(setSessionAnnotations);
   }, [sessionId, getSessionTags, getSessionAnnotations]);
 
+  // Check AI configuration and load existing analysis
+  useEffect(() => {
+    fetch('/api/config')
+      .then(r => r.json())
+      .then(cfg => setAiEnabled(!!cfg.anthropic_api_key && cfg.anthropic_api_key !== ''))
+      .catch(() => {});
+
+    if (sessionId) {
+      fetch(`/api/test-sessions/${sessionId}/ai-analysis`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.analysis) setAiAnalysis(data.analysis);
+        })
+        .catch(() => {});
+    }
+  }, [sessionId]);
+
   // Fetch analysis data from API
   useEffect(() => {
     if (!sessionId) return;
@@ -232,6 +257,24 @@ export default function SessionAnalysisView() {
       setIsAnalyzing(false);
     }
   }, [session, timelineInfo, updateTestSession]);
+
+  // Handle AI analysis
+  const handleAiAnalyze = useCallback(async () => {
+    if (!session) return;
+    setAiAnalyzing(true);
+    try {
+      const resp = await fetch(`/api/test-sessions/${session.id}/ai-analysis`, { method: 'POST' });
+      const data = await resp.json();
+      if (data.analysis) {
+        setAiAnalysis(data.analysis);
+        setActiveTab('ai');
+      }
+    } catch (err) {
+      console.error('AI analysis failed:', err);
+    } finally {
+      setAiAnalyzing(false);
+    }
+  }, [session]);
 
   // Handle report download - uses GET endpoint that matches backend
   const handleDownloadReport = useCallback(async (format: 'html' | 'txt') => {
@@ -567,8 +610,69 @@ export default function SessionAnalysisView() {
             </GlassPanel>
           )}
 
-          {/* Metrics Grid */}
+          {/* View Tab Bar */}
           {metrics && (
+            <div style={{ display: 'flex', gap: '2px', marginBottom: '12px' }}>
+              <button
+                onClick={() => setActiveTab('metrics')}
+                style={{
+                  flex: 1,
+                  padding: '8px 16px',
+                  background: activeTab === 'metrics' ? 'rgba(255,140,0,0.15)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${activeTab === 'metrics' ? 'rgba(255,140,0,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                  borderRadius: '8px 0 0 8px',
+                  color: activeTab === 'metrics' ? '#ff8c00' : 'rgba(255,255,255,0.5)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
+              >
+                <BarChart3 size={14} />
+                Metrics
+              </button>
+              <button
+                onClick={() => setActiveTab('ai')}
+                style={{
+                  flex: 1,
+                  padding: '8px 16px',
+                  background: activeTab === 'ai' ? 'rgba(6,182,212,0.15)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${activeTab === 'ai' ? 'rgba(6,182,212,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                  borderRadius: '0 8px 8px 0',
+                  color: activeTab === 'ai' ? '#06b6d4' : 'rgba(255,255,255,0.5)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Brain size={14} />
+                AI Analysis
+                {aiAnalysis && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#06b6d4' }} />}
+              </button>
+            </div>
+          )}
+
+          {/* AI Analysis Tab */}
+          {metrics && activeTab === 'ai' && (
+            <AIAnalysisPanel
+              sessionId={sessionId || ''}
+              analysis={aiAnalysis}
+              onAnalyze={handleAiAnalyze}
+              isAnalyzing={aiAnalyzing}
+              analysisEnabled={aiEnabled}
+              metricsReady={!!metrics}
+            />
+          )}
+
+          {/* Metrics Grid */}
+          {metrics && activeTab === 'metrics' && (
             <>
               <GlassPanel style={{ padding: '16px' }}>
                 <div

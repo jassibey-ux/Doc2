@@ -15,6 +15,7 @@ import {
   ExternalLink,
   TrendingUp,
   Zap,
+  Brain,
 } from 'lucide-react';
 import { GlassCard, GlassButton, GlassDivider, Badge } from './ui/GlassUI';
 import { useApiUsage } from '../contexts/ApiUsageContext';
@@ -87,6 +88,47 @@ const ApiUsageSection: React.FC = () => {
         </div>
       </GlassCard>
 
+      {/* Claude AI Analysis */}
+      {(usage.sessionClaudeCallCount > 0 || usage.dailyClaudeCallCount > 0) && (
+        <GlassCard style={{ padding: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Brain size={14} style={{ color: '#06b6d4' }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>AI Analysis (Claude)</span>
+              <span style={{
+                fontSize: 9, padding: '1px 5px', borderRadius: 3,
+                background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444',
+                fontWeight: 600, letterSpacing: 0.5,
+              }}>BILLED</span>
+            </div>
+            <span style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: '#fff' }}>
+              {usage.sessionClaudeCallCount}
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>
+              Input: <span style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,0.7)' }}>
+                {usage.sessionClaudeInputTokens.toLocaleString()}
+              </span> tok
+            </div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>
+              Output: <span style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,0.7)' }}>
+                {usage.sessionClaudeOutputTokens.toLocaleString()}
+              </span> tok
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Est. Session Cost</span>
+            <span style={{
+              fontFamily: 'monospace', fontSize: 18, fontWeight: 700,
+              color: usage.sessionClaudeCost > 5 ? '#ef4444' : usage.sessionClaudeCost > 0.5 ? '#f59e0b' : '#22c55e',
+            }}>
+              {formatCost(usage.sessionClaudeCost)}
+            </span>
+          </div>
+        </GlassCard>
+      )}
+
       {/* Performance Metrics (not billed) */}
       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
         <BarChart3 size={12} />
@@ -139,6 +181,19 @@ const ApiUsageSection: React.FC = () => {
           <StatBox icon={<Map size={14} />} label="Net Reqs" value={usage.dailyTileLoads} color="#3b82f6" />
           <StatBox icon={<BarChart3 size={14} />} label="Layers" value={usage.dailyLayerRenders} color="#f59e0b" />
         </div>
+        {usage.dailyClaudeCallCount > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <StatBox icon={<Brain size={14} />} label="AI Calls" value={usage.dailyClaudeCallCount} color="#06b6d4" />
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginBottom: 4 }}>INPUT TOK</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{usage.dailyClaudeInputTokens.toLocaleString()}</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginBottom: 4 }}>OUTPUT TOK</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{usage.dailyClaudeOutputTokens.toLocaleString()}</div>
+            </div>
+          </div>
+        )}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.08)',
@@ -146,9 +201,12 @@ const ApiUsageSection: React.FC = () => {
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Est. Daily Cost</span>
           <span style={{
             fontFamily: 'monospace', fontSize: 14, fontWeight: 600,
-            color: usage.dailyCost > 5 ? '#ef4444' : usage.dailyCost > 1 ? '#f59e0b' : '#22c55e',
+            color: (usage.dailyCost + usage.dailyClaudeCost) > 5 ? '#ef4444' : (usage.dailyCost + usage.dailyClaudeCost) > 1 ? '#f59e0b' : '#22c55e',
           }}>
-            {formatCost(usage.dailyCost)}
+            {usage.dailyClaudeCost > 0
+              ? `Google ${formatCost(usage.dailyCost)} + Claude ${formatCost(usage.dailyClaudeCost)} = ${formatCost(usage.dailyCost + usage.dailyClaudeCost)}`
+              : formatCost(usage.dailyCost)
+            }
           </span>
         </div>
       </GlassCard>

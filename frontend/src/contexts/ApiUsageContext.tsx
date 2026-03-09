@@ -15,6 +15,9 @@ import React, { createContext, useContext, useCallback, useState, useEffect, use
 // Layer renders are purely client-side and have zero billing impact.
 const PRICING = {
   mapLoad: 7.0 / 1000,  // $7 per 1,000 Dynamic Map loads (the only billable metric)
+  // Claude API pricing (Sonnet)
+  claudeInputPerMTok: 3.0,   // $3 per million input tokens
+  claudeOutputPerMTok: 15.0,  // $15 per million output tokens
 };
 
 const STORAGE_KEY = 'scensus-api-usage-daily';
@@ -24,6 +27,9 @@ interface DailyTotals {
   tileLoads: number;
   mapInits: number;
   layerRenders: number;
+  claudeInputTokens: number;
+  claudeOutputTokens: number;
+  claudeCallCount: number;
 }
 
 interface LayerRenderBreakdown {
@@ -38,20 +44,31 @@ export interface ApiUsageStats {
   sessionLayerBreakdown: LayerRenderBreakdown;
   sessionStart: number;
 
+  // Claude session counters
+  sessionClaudeInputTokens: number;
+  sessionClaudeOutputTokens: number;
+  sessionClaudeCallCount: number;
+  sessionClaudeCost: number;
+
   // Daily totals (persisted to localStorage)
   dailyTileLoads: number;
   dailyMapInits: number;
   dailyLayerRenders: number;
+  dailyClaudeInputTokens: number;
+  dailyClaudeOutputTokens: number;
+  dailyClaudeCallCount: number;
+  dailyClaudeCost: number;
 
   // Cost estimates
-  sessionCost: number;
-  dailyCost: number;
+  sessionCost: number;  // Google Maps
+  dailyCost: number;    // Google Maps
 }
 
 interface ApiUsageContextValue extends ApiUsageStats {
   recordTileLoad: (count?: number) => void;
   recordMapInit: () => void;
   recordLayerRender: (layerName: string) => void;
+  recordClaudeCall: (inputTokens: number, outputTokens: number) => void;
   resetSession: () => void;
 }
 
@@ -73,7 +90,7 @@ function loadDailyTotals(): DailyTotals {
   } catch {
     // Corrupted storage, start fresh
   }
-  return { date: getTodayKey(), tileLoads: 0, mapInits: 0, layerRenders: 0 };
+  return { date: getTodayKey(), tileLoads: 0, mapInits: 0, layerRenders: 0, claudeInputTokens: 0, claudeOutputTokens: 0, claudeCallCount: 0 };
 }
 
 function saveDailyTotals(totals: DailyTotals): void {
@@ -93,6 +110,9 @@ export const ApiUsageProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [sessionMapInits, setSessionMapInits] = useState(0);
   const [sessionLayerRenders, setSessionLayerRenders] = useState(0);
   const [sessionLayerBreakdown, setSessionLayerBreakdown] = useState<LayerRenderBreakdown>({});
+  const [sessionClaudeInputTokens, setSessionClaudeInputTokens] = useState(0);
+  const [sessionClaudeOutputTokens, setSessionClaudeOutputTokens] = useState(0);
+  const [sessionClaudeCallCount, setSessionClaudeCallCount] = useState(0);
   const [sessionStart] = useState(() => Date.now());
 
   const dailyRef = useRef<DailyTotals>(loadDailyTotals());
@@ -103,7 +123,7 @@ export const ApiUsageProvider: React.FC<{ children: ReactNode }> = ({ children }
     const interval = setInterval(() => {
       const today = getTodayKey();
       if (dailyRef.current.date !== today) {
-        dailyRef.current = { date: today, tileLoads: 0, mapInits: 0, layerRenders: 0 };
+        dailyRef.current = { date: today, tileLoads: 0, mapInits: 0, layerRenders: 0, claudeInputTokens: 0, claudeOutputTokens: 0, claudeCallCount: 0 };
         saveDailyTotals(dailyRef.current);
         setDailyTotals({ ...dailyRef.current });
       }
@@ -136,15 +156,36 @@ export const ApiUsageProvider: React.FC<{ children: ReactNode }> = ({ children }
     setDailyTotals({ ...dailyRef.current });
   }, []);
 
+  const recordClaudeCall = useCallback((inputTokens: number, outputTokens: number) => {
+    setSessionClaudeInputTokens(prev => prev + inputTokens);
+    setSessionClaudeOutputTokens(prev => prev + outputTokens);
+    setSessionClaudeCallCount(prev => prev + 1);
+    dailyRef.current.claudeInputTokens = (dailyRef.current.claudeInputTokens || 0) + inputTokens;
+    dailyRef.current.claudeOutputTokens = (dailyRef.current.claudeOutputTokens || 0) + outputTokens;
+    dailyRef.current.claudeCallCount = (dailyRef.current.claudeCallCount || 0) + 1;
+    saveDailyTotals(dailyRef.current);
+    setDailyTotals({ ...dailyRef.current });
+  }, []);
+
   const resetSession = useCallback(() => {
     setSessionTileLoads(0);
     setSessionMapInits(0);
     setSessionLayerRenders(0);
     setSessionLayerBreakdown({});
+    setSessionClaudeInputTokens(0);
+    setSessionClaudeOutputTokens(0);
+    setSessionClaudeCallCount(0);
   }, []);
 
   const sessionCost = estimateCost(sessionMapInits);
   const dailyCost = estimateCost(dailyTotals.mapInits);
+
+  const sessionClaudeCost =
+    (sessionClaudeInputTokens * PRICING.claudeInputPerMTok / 1_000_000) +
+    (sessionClaudeOutputTokens * PRICING.claudeOutputPerMTok / 1_000_000);
+  const dailyClaudeCost =
+    ((dailyTotals.claudeInputTokens || 0) * PRICING.claudeInputPerMTok / 1_000_000) +
+    ((dailyTotals.claudeOutputTokens || 0) * PRICING.claudeOutputPerMTok / 1_000_000);
 
   return (
     <ApiUsageContext.Provider value={{
@@ -153,14 +194,23 @@ export const ApiUsageProvider: React.FC<{ children: ReactNode }> = ({ children }
       sessionLayerRenders,
       sessionLayerBreakdown,
       sessionStart,
+      sessionClaudeInputTokens,
+      sessionClaudeOutputTokens,
+      sessionClaudeCallCount,
+      sessionClaudeCost,
       dailyTileLoads: dailyTotals.tileLoads,
       dailyMapInits: dailyTotals.mapInits,
       dailyLayerRenders: dailyTotals.layerRenders,
+      dailyClaudeInputTokens: dailyTotals.claudeInputTokens || 0,
+      dailyClaudeOutputTokens: dailyTotals.claudeOutputTokens || 0,
+      dailyClaudeCallCount: dailyTotals.claudeCallCount || 0,
+      dailyClaudeCost,
       sessionCost,
       dailyCost,
       recordTileLoad,
       recordMapInit,
       recordLayerRender,
+      recordClaudeCall,
       resetSession,
     }}>
       {children}

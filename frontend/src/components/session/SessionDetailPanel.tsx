@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { X, Navigation, Crosshair, Zap, ZapOff, XCircle } from 'lucide-react';
+import { X, Navigation, Crosshair, Zap, ZapOff, XCircle, Brain, Loader2 } from 'lucide-react';
 import type { DroneSummary } from '../../types/drone';
 import type { DroneProfile, CUASPlacement, CUASProfile, Engagement, JamBurst, TrackerAssignment } from '../../types/workflow';
 import type { JamOnParams } from '../../contexts/TestSessionPhaseContext';
@@ -28,6 +28,7 @@ interface SessionDetailPanelProps {
   context: DetailContext;
   tacticalMode: boolean;
   onClose: () => void;
+  sessionId?: string;
 
   // Drone data
   drones: Map<string, DroneSummary>;
@@ -71,6 +72,7 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
   context,
   tacticalMode,
   onClose,
+  sessionId,
   drones,
   onFlyToDrone,
   onTrackDrone,
@@ -131,6 +133,7 @@ const SessionDetailPanel: React.FC<SessionDetailPanelProps> = ({
           engagement={engagements.find(e => e.id === context.engagementId)}
           onClose={onClose}
           tacticalMode={tacticalMode}
+          sessionId={sessionId}
         />
       )}
       {context.type === 'cuas' && (
@@ -316,7 +319,36 @@ const EngagementDetail: React.FC<{
   engagement: Engagement | undefined;
   onClose: () => void;
   tacticalMode: boolean;
-}> = ({ engagement, onClose, tacticalMode }) => {
+  sessionId?: string;
+}> = ({ engagement, onClose, tacticalMode, sessionId }) => {
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // Load existing AI insight when engagement changes
+  useEffect(() => {
+    setAiInsight(engagement?.ai_insight ?? null);
+    setAiError(null);
+  }, [engagement?.id, engagement?.ai_insight]);
+
+  const handleRequestAiInsight = useCallback(async () => {
+    if (!sessionId || !engagement?.id) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch(`/api/engagements/${sessionId}/${engagement.id}/ai-insight`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setAiInsight(data.insight);
+    } catch (err: any) {
+      setAiError(err.message || 'Failed to get AI insight');
+    } finally {
+      setAiLoading(false);
+    }
+  }, [sessionId, engagement?.id]);
   const dimColor = tacticalMode ? 'rgba(74,222,128,0.5)' : '#6b7280';
 
   if (!engagement) {
@@ -459,6 +491,67 @@ const EngagementDetail: React.FC<{
                 {target.role === 'observer' && ' (observer)'}
               </div>
             ))}
+          </>
+        )}
+
+        {/* AI Assessment */}
+        {engagement.status === 'complete' && sessionId && (
+          <>
+            <SectionLabel tacticalMode={tacticalMode}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Brain size={11} style={{ color: '#06b6d4' }} />
+                AI Assessment
+              </span>
+            </SectionLabel>
+            {aiInsight ? (
+              <div style={{
+                fontSize: 11, lineHeight: 1.6, color: tacticalMode ? 'rgba(74,222,128,0.8)' : 'rgba(255,255,255,0.7)',
+                fontStyle: 'italic',
+                padding: '8px 10px',
+                borderLeft: '2px solid #06b6d4',
+                background: 'rgba(6,182,212,0.06)',
+                borderRadius: '0 4px 4px 0',
+                marginBottom: 16,
+              }}>
+                {aiInsight}
+              </div>
+            ) : aiLoading ? (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                fontSize: 11, color: '#06b6d4', padding: '8px 0', marginBottom: 16,
+              }}>
+                <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />
+                Analyzing engagement...
+              </div>
+            ) : aiError ? (
+              <div style={{ fontSize: 11, color: '#ef4444', padding: '4px 0', marginBottom: 8 }}>
+                {aiError}
+                <button
+                  onClick={handleRequestAiInsight}
+                  style={{
+                    marginLeft: 8, fontSize: 10, color: '#06b6d4',
+                    background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline',
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleRequestAiInsight}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 10px', marginBottom: 16,
+                  fontSize: 10, fontWeight: 600,
+                  color: '#06b6d4', background: 'rgba(6,182,212,0.1)',
+                  border: '1px solid rgba(6,182,212,0.2)',
+                  borderRadius: 4, cursor: 'pointer',
+                }}
+              >
+                <Brain size={11} />
+                Get AI Insight
+              </button>
+            )}
           </>
         )}
       </div>

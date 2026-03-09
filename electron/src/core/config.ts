@@ -37,6 +37,14 @@ export interface AppConfig {
   /** Whether to auto-compute metrics when session completes */
   auto_compute_metrics: boolean;
 
+  // --- AI Analysis ---
+  /** Anthropic API key for Claude AI analysis (optional, stored locally) */
+  anthropic_api_key?: string;
+  /** Claude model to use for AI analysis (default: 'claude-sonnet-4-latest') */
+  anthropic_model?: string;
+  /** Whether user has consented to sending data to Anthropic API */
+  ai_analysis_consent?: boolean;
+
   // --- Ops Mode ---
   /** Enable operational mode (network-accessible, IFF, CoT, deconfliction) */
   ops_mode: boolean;

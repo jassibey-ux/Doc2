@@ -316,7 +316,14 @@ export function exportRoutes(app: DashboardApp): Router {
         cuasProfiles,
       });
 
-      const gpkgBuffer = generateGeoPackage(featureCollection, session.name);
+      // Include AI analysis in GeoPackage if available
+      const aiAnalysisData = session.ai_analysis ? {
+        executive_summary: session.ai_analysis.executive_summary,
+        operational_assessment: JSON.stringify(session.ai_analysis.operational_assessment),
+        analysis_json: JSON.stringify(session.ai_analysis),
+      } : undefined;
+
+      const gpkgBuffer = generateGeoPackage(featureCollection, session.name, aiAnalysisData);
 
       const safeName = session.name.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 30);
       const filename = `${safeName}_session.gpkg`;
@@ -355,7 +362,13 @@ export function exportRoutes(app: DashboardApp): Router {
         cuasProfiles,
       });
 
-      const html = generateLeafletMap(featureCollection, positionsByTracker, session.name);
+      // Include AI analysis in Leaflet map if available
+      const leafletAiAnalysis = session.ai_analysis ? {
+        executive_summary: session.ai_analysis.executive_summary,
+        operational_assessment: session.ai_analysis.operational_assessment,
+      } : undefined;
+
+      const html = generateLeafletMap(featureCollection, positionsByTracker, session.name, leafletAiAnalysis);
 
       const safeName = session.name.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 30);
       res.setHeader('Content-Type', 'text/html');

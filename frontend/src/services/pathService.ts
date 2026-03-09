@@ -34,6 +34,9 @@ export interface ConfigResponse {
   is_configured: boolean;
   port: number;
   stale_seconds: number;
+  anthropic_api_key?: string;
+  anthropic_model?: string;
+  ai_analysis_consent?: boolean;
 }
 
 export interface UploadResult {

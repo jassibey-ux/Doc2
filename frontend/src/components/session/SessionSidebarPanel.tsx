@@ -34,6 +34,7 @@ interface SessionSidebarPanelProps {
   engagements: Engagement[];
   activeEngagements: Map<string, Engagement>;
   onSelectEngagement: (id: string) => void;
+  sessionId?: string;
 
   // Activity panel
   alerts: SessionAlert[];
@@ -113,6 +114,7 @@ const SessionSidebarPanel: React.FC<SessionSidebarPanelProps> = ({
             tacticalMode={tacticalMode}
             currentDroneData={props.currentDroneData}
             cuasPlacements={props.cuasPlacements}
+            sessionId={props.sessionId}
           />
         )}
         {activePanel === 'activity' && (

@@ -1,6 +1,9 @@
 /**
  * Metrics Engine
- * Calculates CUAS effectiveness metrics from test session data
+ * Calculates CUAS effectiveness metrics from test session data.
+ *
+ * Delegates shared calculations (haversine, recovery, position lookup) to
+ * metrics-shared.ts — the single source of truth for distance/time primitives.
  */
 
 import log from 'electron-log';
@@ -19,20 +22,19 @@ import {
   getTestSessionById,
   updateTestSession,
 } from './library-store';
+import {
+  haversineDistance,
+  haversine3DDistance,
+  findSustainedRecoveryTime,
+  findPositionAtTime,
+  extractJammingWindows,
+  DroneTrackData,
+  JammingWindow,
+} from './metrics-shared';
 
-export interface DroneTrackData {
-  tracker_id: string;
-  points: EnhancedPositionPoint[];
-  start_time_ms: number;
-  end_time_ms: number;
-}
-
-export interface JammingWindow {
-  start_time_ms: number;
-  end_time_ms: number;
-  duration_s: number;
-  cuas_id?: string;
-}
+// Re-export shared types so existing consumers don't break
+export type { DroneTrackData, JammingWindow };
+export { extractJammingWindows };
 
 export interface AnalysisResult {
   session_id: string;
@@ -42,70 +44,6 @@ export interface AnalysisResult {
   altitude_profile: { time_ms: number; alt_m: number }[];
   position_drift: { time_ms: number; drift_m: number }[];
   gps_quality_changes: { time_ms: number; quality: string }[];
-}
-
-/**
- * Calculate distance between two GPS points in meters
- */
-function haversineDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371000; // Earth radius in meters
-  const phi1 = (lat1 * Math.PI) / 180;
-  const phi2 = (lat2 * Math.PI) / 180;
-  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
-  const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
-
-  const a =
-    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-    Math.cos(phi1) * Math.cos(phi2) *
-    Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-/**
- * Extract jamming windows from session events
- */
-export function extractJammingWindows(events: TestEvent[]): JammingWindow[] {
-  const windows: JammingWindow[] = [];
-  let jamStartTime: number | null = null;
-  let currentCuasId: string | undefined;
-
-  for (const event of events) {
-    if (event.type === 'jam_on') {
-      jamStartTime = new Date(event.timestamp).getTime();
-      currentCuasId = event.cuas_id;
-    } else if (event.type === 'jam_off' && jamStartTime !== null) {
-      const endTime = new Date(event.timestamp).getTime();
-      windows.push({
-        start_time_ms: jamStartTime,
-        end_time_ms: endTime,
-        duration_s: (endTime - jamStartTime) / 1000,
-        cuas_id: currentCuasId,
-      });
-      jamStartTime = null;
-      currentCuasId = undefined;
-    }
-  }
-
-  // Handle unclosed jamming window
-  if (jamStartTime !== null) {
-    const lastEvent = events[events.length - 1];
-    const endTime = new Date(lastEvent.timestamp).getTime();
-    windows.push({
-      start_time_ms: jamStartTime,
-      end_time_ms: endTime,
-      duration_s: (endTime - jamStartTime) / 1000,
-      cuas_id: currentCuasId,
-    });
-  }
-
-  return windows;
 }
 
 /**
@@ -154,6 +92,8 @@ export function calculateTimeToFullDenial(
 
 /**
  * Calculate recovery time: time from jam_off until GPS is restored
+ * Uses sustained recovery (5+ seconds of good HDOP ≤ 2.0) for accuracy,
+ * with fallback to first good-quality point.
  */
 export function calculateRecoveryTime(
   events: TestEvent[],
@@ -164,7 +104,13 @@ export function calculateRecoveryTime(
 
   const jamEndTime = new Date(jamOffEvent.timestamp).getTime();
 
-  // Find first good quality point after jam end
+  // Primary: sustained 5+ seconds of good HDOP (delegates to tracker-metrics-calculator)
+  const sustainedRecoveryTime = findSustainedRecoveryTime(trackData.points, jamEndTime, 5000, 2.0);
+  if (sustainedRecoveryTime !== null) {
+    return (sustainedRecoveryTime - jamEndTime) / 1000;
+  }
+
+  // Fallback: first good quality point (for data without HDOP values)
   const firstGoodPoint = trackData.points.find(
     p => p.timestamp_ms >= jamEndTime && p.quality === 'good'
   );
@@ -175,7 +121,8 @@ export function calculateRecoveryTime(
 }
 
 /**
- * Calculate maximum lateral drift during jamming
+ * Calculate maximum lateral drift during jamming.
+ * Uses closest point at jam start as reference (consistent with tracker-metrics-calculator).
  */
 export function calculateMaxLateralDrift(
   trackData: DroneTrackData,
@@ -184,24 +131,18 @@ export function calculateMaxLateralDrift(
   let maxDrift = 0;
 
   for (const window of jammingWindows) {
-    // Get pre-jam position (average of last 5 points before jam)
-    const preJamPoints = trackData.points.filter(
-      p => p.timestamp_ms >= window.start_time_ms - 5000 && p.timestamp_ms < window.start_time_ms
-    );
-
-    if (preJamPoints.length === 0) continue;
-
-    const avgPreJamLat = preJamPoints.reduce((sum, p) => sum + p.lat, 0) / preJamPoints.length;
-    const avgPreJamLon = preJamPoints.reduce((sum, p) => sum + p.lon, 0) / preJamPoints.length;
+    // Use closest point at jam start as reference
+    const refPoint = findPositionAtTime(trackData.points, window.start_time_ms);
+    if (!refPoint) continue;
 
     // Get points during jamming
     const jamPoints = trackData.points.filter(
       p => p.timestamp_ms >= window.start_time_ms && p.timestamp_ms <= window.end_time_ms
     );
 
-    // Calculate max drift from pre-jam position
+    // Calculate max drift from reference position
     for (const point of jamPoints) {
-      const drift = haversineDistance(avgPreJamLat, avgPreJamLon, point.lat, point.lon);
+      const drift = haversineDistance(refPoint.lat, refPoint.lon, point.lat, point.lon);
       maxDrift = Math.max(maxDrift, drift);
     }
   }
@@ -210,7 +151,8 @@ export function calculateMaxLateralDrift(
 }
 
 /**
- * Calculate altitude delta during jamming
+ * Calculate altitude delta during jamming.
+ * Uses min/max range during jamming window (consistent with tracker-metrics-calculator).
  */
 export function calculateAltitudeDelta(
   trackData: DroneTrackData,
@@ -219,29 +161,24 @@ export function calculateAltitudeDelta(
   let maxDelta = 0;
 
   for (const window of jammingWindows) {
-    // Get pre-jam altitude
-    const preJamPoints = trackData.points.filter(
-      p => p.timestamp_ms >= window.start_time_ms - 5000 &&
-           p.timestamp_ms < window.start_time_ms &&
-           p.alt_m !== null
-    );
+    const refPoint = findPositionAtTime(trackData.points, window.start_time_ms);
+    if (!refPoint) continue;
 
-    if (preJamPoints.length === 0) continue;
+    let minAlt = refPoint.alt_m ?? 0;
+    let maxAlt = refPoint.alt_m ?? 0;
 
-    const avgPreJamAlt = preJamPoints.reduce((sum, p) => sum + (p.alt_m || 0), 0) / preJamPoints.length;
-
-    // Get points during jamming with valid altitude
-    const jamPoints = trackData.points.filter(
-      p => p.timestamp_ms >= window.start_time_ms &&
-           p.timestamp_ms <= window.end_time_ms &&
-           p.alt_m !== null
-    );
-
-    // Calculate max altitude delta
-    for (const point of jamPoints) {
-      const delta = Math.abs((point.alt_m || 0) - avgPreJamAlt);
-      maxDelta = Math.max(maxDelta, delta);
+    // Track altitude range during jamming
+    for (const point of trackData.points) {
+      if (point.timestamp_ms >= window.start_time_ms &&
+          point.timestamp_ms <= window.end_time_ms &&
+          point.alt_m !== null) {
+        if (point.alt_m < minAlt) minAlt = point.alt_m;
+        if (point.alt_m > maxAlt) maxAlt = point.alt_m;
+      }
     }
+
+    const delta = maxAlt - minAlt;
+    if (delta > maxDelta) maxDelta = delta;
   }
 
   return Math.round(maxDelta * 10) / 10; // Round to 0.1m
@@ -278,10 +215,12 @@ export function detectFailsafe(
 }
 
 /**
- * Calculate effective range from CUAS position to drone at first effect
+ * Calculate effective range from CUAS position to drone at first effect.
+ * Uses 3D distance (including altitude) for accuracy at high AGL,
+ * with findPositionAtTime for better tolerance matching.
  */
 export function calculateEffectiveRange(
-  cuasPosition: { lat: number; lon: number },
+  cuasPosition: { lat: number; lon: number; alt_m?: number },
   events: TestEvent[],
   trackData: DroneTrackData
 ): number | undefined {
@@ -290,18 +229,20 @@ export function calculateEffectiveRange(
 
   const jamStartTime = new Date(jamOnEvent.timestamp).getTime();
 
-  // Find drone position at jam start
-  const droneAtJam = trackData.points.find(
-    p => p.timestamp_ms >= jamStartTime && p.timestamp_ms <= jamStartTime + 1000
-  );
+  // Use findPositionAtTime for better tolerance matching (±2s)
+  const droneAtJam = findPositionAtTime(trackData.points, jamStartTime, 2000);
 
   if (!droneAtJam) return undefined;
 
-  return Math.round(haversineDistance(
+  // Use 3D distance when altitude data is available
+  const cuasAlt = cuasPosition.alt_m ?? 0;
+  return Math.round(haversine3DDistance(
     cuasPosition.lat,
     cuasPosition.lon,
+    cuasAlt,
     droneAtJam.lat,
-    droneAtJam.lon
+    droneAtJam.lon,
+    droneAtJam.alt_m
   ));
 }
 
@@ -352,40 +293,29 @@ export function generateAltitudeProfile(
 }
 
 /**
- * Generate position drift profile for visualization
+ * Generate position drift profile for visualization.
+ * Uses closest point at jam start as reference (consistent with drift calculation).
  */
 export function generateDriftProfile(
   trackData: DroneTrackData,
   jammingWindows: JammingWindow[]
 ): { time_ms: number; drift_m: number }[] {
-  const driftProfile: { time_ms: number; drift_m: number }[] = [];
-
   if (jammingWindows.length === 0) {
     return trackData.points.map(p => ({ time_ms: p.timestamp_ms, drift_m: 0 }));
   }
 
   // Use first jamming window for reference
   const window = jammingWindows[0];
-  const preJamPoints = trackData.points.filter(
-    p => p.timestamp_ms >= window.start_time_ms - 5000 && p.timestamp_ms < window.start_time_ms
-  );
+  const refPoint = findPositionAtTime(trackData.points, window.start_time_ms);
 
-  if (preJamPoints.length === 0) {
+  if (!refPoint) {
     return trackData.points.map(p => ({ time_ms: p.timestamp_ms, drift_m: 0 }));
   }
 
-  const refLat = preJamPoints.reduce((sum, p) => sum + p.lat, 0) / preJamPoints.length;
-  const refLon = preJamPoints.reduce((sum, p) => sum + p.lon, 0) / preJamPoints.length;
-
-  for (const point of trackData.points) {
-    const drift = haversineDistance(refLat, refLon, point.lat, point.lon);
-    driftProfile.push({
-      time_ms: point.timestamp_ms,
-      drift_m: Math.round(drift * 10) / 10,
-    });
-  }
-
-  return driftProfile;
+  return trackData.points.map(point => ({
+    time_ms: point.timestamp_ms,
+    drift_m: Math.round(haversineDistance(refPoint.lat, refPoint.lon, point.lat, point.lon) * 10) / 10,
+  }));
 }
 
 /**
@@ -420,9 +350,10 @@ export function analyzeSession(
 
     // Calculate effective range if CUAS position is available
     const firstCuasPlacement = session.cuas_placements[0];
-    const effectiveRange = firstCuasPlacement && cuasPositions.has(firstCuasPlacement.cuas_profile_id)
+    const cuasPos = firstCuasPlacement ? cuasPositions.get(firstCuasPlacement.cuas_profile_id) : undefined;
+    const effectiveRange = cuasPos
       ? calculateEffectiveRange(
-          cuasPositions.get(firstCuasPlacement.cuas_profile_id)!,
+          { ...cuasPos, alt_m: firstCuasPlacement.height_agl_m ?? 0 },
           session.events,
           data
         )
@@ -680,7 +611,7 @@ export function analyzeEngagement(
   engagement: Engagement,
   trackData: Map<string, DroneTrackData>,
   events: TestEvent[],
-  cuasPosition?: { lat: number; lon: number; orientation_deg?: number },
+  cuasPosition?: { lat: number; lon: number; alt_m?: number; orientation_deg?: number },
 ): EngagementMetrics | null {
   if (!engagement.engage_timestamp) return null;
 
@@ -756,7 +687,11 @@ export function analyzeEngagement(
 
     let effectiveRange: number | undefined;
     if (cuasPosition) {
-      effectiveRange = calculateEffectiveRange(cuasPosition, syntheticEvents, scopedTrackData);
+      effectiveRange = calculateEffectiveRange(
+        { lat: cuasPosition.lat, lon: cuasPosition.lon, alt_m: cuasPosition.alt_m },
+        syntheticEvents,
+        scopedTrackData
+      );
     }
 
     const passFail = determinePassFail(undefined, failsafe, timeToEffect, maxDrift);

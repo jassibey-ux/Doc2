@@ -579,6 +579,7 @@ const SessionPage: React.FC = () => {
             engagements={engagements}
             activeEngagements={activeEngagements}
             onSelectEngagement={handleSelectEngagement}
+            sessionId={activeSession?.id}
             currentDroneData={sessionDrones}
             alerts={alerts}
             events={events}
@@ -622,6 +623,7 @@ const SessionPage: React.FC = () => {
             context={detailContext}
             tacticalMode={tacticalMode}
             onClose={handleCloseDetail}
+            sessionId={activeSession?.id}
             drones={sessionDrones}
             onFlyToDrone={handleFlyToDrone}
             onTrackDrone={handleTrackDrone}

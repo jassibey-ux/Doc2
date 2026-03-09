@@ -33,6 +33,7 @@ import { siteReconRoutes } from './routes/site-recon';
 import { iffRoutes } from './routes/iff';
 import { detectionRoutes } from './routes/detections';
 import { analysisRoutes } from './routes/analysis';
+import { aiAnalysisRoutes } from './routes/ai-analysis';
 import { loadConfig } from '../core/config';
 // Backend convergence: Python proxy + subprocess
 import { simplePythonProxy } from './proxy';
@@ -117,6 +118,9 @@ export async function startServer(port: number): Promise<void> {
 
   // Engagement analysis routes (range-over-time, GPS quality)
   app.use('/api', analysisRoutes());
+
+  // AI Analysis routes (Claude-powered session analysis)
+  app.use('/api', aiAnalysisRoutes());
 
   // Ops Mode routes (IFF registry and detections)
   app.use('/api', iffRoutes());

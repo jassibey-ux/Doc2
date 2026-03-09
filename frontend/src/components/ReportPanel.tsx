@@ -16,6 +16,7 @@ import {
   BarChart3,
   Clock,
   Target,
+  Brain,
 } from 'lucide-react';
 import { GlassPanel, GlassCard, GlassButton, Badge, GlassDivider } from './ui/GlassUI';
 import { useWorkflow } from '../contexts/WorkflowContext';
@@ -295,6 +296,20 @@ export default function ReportPanel({ isOpen, onClose }: ReportPanelProps) {
                         <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>{item.text}</span>
                       </div>
                     ))}
+                    {/* AI Analysis - only shown when available */}
+                    {selectedSession?.ai_analysis ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Check size={12} style={{ color: '#06b6d4' }} />
+                        <span style={{ color: 'rgba(255,255,255,0.5)' }}><Brain size={12} /></span>
+                        <span style={{ fontSize: '11px', color: '#06b6d4' }}>AI Analysis</span>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.4 }}>
+                        <X size={12} style={{ color: 'rgba(255,255,255,0.3)' }} />
+                        <span style={{ color: 'rgba(255,255,255,0.3)' }}><Brain size={12} /></span>
+                        <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>AI Analysis (run analysis first)</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -121,10 +121,21 @@ function thinPositions(positions: TrackerPosition[], maxPoints: number): Tracker
 const TRACKER_PALETTE = ['#ff6b6b', '#4ecdc4', '#ffd93d', '#6bcb77', '#4d96ff', '#ff6b9d'];
 const QUALITY_COLORS: Record<string, string> = { good: '#22c55e', degraded: '#eab308', lost: '#ef4444' };
 
+interface AIAnalysisSummary {
+  executive_summary: string;
+  operational_assessment?: {
+    strengths: string[];
+    weaknesses: string[];
+    coverage_gaps?: string[];
+    placement_recommendations?: string[];
+  };
+}
+
 export function generateLeafletMap(
   geojson: GeoJSONFeatureCollection,
   positionsByTracker: Map<string, TrackerPosition[]>,
   sessionName: string,
+  aiAnalysis?: AIAnalysisSummary,
 ): string {
   const MAX_POINTS_PER_TRACKER = 10000;
   const safeTitle = escapeHtml(sessionName);
@@ -327,6 +338,40 @@ ${hasEngagements ? `    <div class="legend-item"><div class="legend-box" style="
 ${hasSiteBoundary ? `    <div class="legend-item"><div class="legend-box" style="height:2px; border-top: 2px dashed #ffffff; background: none;"></div>Site boundary</div>` : ''}
   </div>
 </div>
+${aiAnalysis ? `
+<div style="position:absolute; top:12px; right:270px; z-index:1000; max-width:400px; font-family:system-ui,-apple-system,sans-serif;">
+  <div style="background:rgba(15,15,25,0.92); backdrop-filter:blur(12px); border:1px solid rgba(6,182,212,0.3); border-radius:8px; overflow:hidden;">
+    <button onclick="this.parentElement.querySelector('.ai-body').classList.toggle('collapsed')" style="width:100%; padding:10px 14px; background:none; border:none; color:#06b6d4; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; text-align:left;">
+      <span style="font-size:14px;">&#x1F9E0;</span> AI Analysis
+      <span style="margin-left:auto; font-size:10px; opacity:0.6;">click to toggle</span>
+    </button>
+    <div class="ai-body" style="padding:0 14px 12px; font-size:11px; line-height:1.6; color:#a0b0c0;">
+      <div style="border-left:2px solid #06b6d4; padding-left:10px; margin-bottom:10px;">
+        <div style="font-size:10px; color:#06b6d4; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Executive Summary</div>
+        ${escapeHtml(aiAnalysis.executive_summary)}
+      </div>
+      ${aiAnalysis.operational_assessment ? `
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+        <div>
+          <div style="font-size:10px; color:#22c55e; margin-bottom:4px;">Strengths</div>
+          <ul style="margin:0; padding-left:14px; font-size:10px;">
+            ${aiAnalysis.operational_assessment.strengths.map(s => `<li>${escapeHtml(s)}</li>`).join('')}
+          </ul>
+        </div>
+        <div>
+          <div style="font-size:10px; color:#ef4444; margin-bottom:4px;">Weaknesses</div>
+          <ul style="margin:0; padding-left:14px; font-size:10px;">
+            ${aiAnalysis.operational_assessment.weaknesses.map(w => `<li>${escapeHtml(w)}</li>`).join('')}
+          </ul>
+        </div>
+      </div>
+      ` : ''}
+      <div style="font-size:9px; color:#6a7a8a; margin-top:6px; font-style:italic;">AI-generated analysis — review with qualified personnel</div>
+    </div>
+  </div>
+</div>
+<style>.ai-body.collapsed { display: none; }</style>
+` : ''}
 <div class="time-bar" id="time-bar" style="display:none;">
   <button id="play-btn">&#9654;</button>
   <input type="range" id="time-slider" min="0" max="1000" value="1000" step="1">

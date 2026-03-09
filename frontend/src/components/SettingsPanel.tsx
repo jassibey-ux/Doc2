@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Check, AlertCircle, Download, FileText, Globe, FolderOpen } from 'lucide-react';
+import { X, Check, AlertCircle, Download, FileText, Globe, FolderOpen, Brain, Eye, EyeOff } from 'lucide-react';
 import { pathService, ValidateResponse } from '../services/pathService';
 
 interface SettingsPanelProps {
@@ -15,6 +15,12 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   const [pathInput, setPathInput] = useState<string>('');
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // AI Analysis settings
+  const [apiKey, setApiKey] = useState<string>('');
+  const [apiKeyMasked, setApiKeyMasked] = useState(true);
+  const [aiModel, setAiModel] = useState<string>('claude-sonnet-4-latest');
+  const [aiTestStatus, setAiTestStatus] = useState<{ type: 'success' | 'error' | 'testing'; text: string } | null>(null);
 
   // Load config on mount
   useEffect(() => {
@@ -32,6 +38,13 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
       // Validate current path
       if (cfg.log_root) {
         validatePath(cfg.log_root);
+      }
+      // Load AI settings — key comes back masked from API, show placeholder if configured
+      if (cfg.anthropic_api_key && cfg.anthropic_api_key !== '') {
+        setApiKey(cfg.anthropic_api_key);
+      }
+      if (cfg.anthropic_model) {
+        setAiModel(cfg.anthropic_model);
       }
     } catch (err) {
       setLoadError('Failed to load settings. Please try again.');
@@ -129,6 +142,51 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     } catch (err) {
       console.error('Export KML failed:', err);
     }
+  };
+
+  const handleSaveAiSettings = async () => {
+    try {
+      const resp = await fetch('/api/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          anthropic_api_key: apiKey || undefined,
+          anthropic_model: aiModel || 'claude-sonnet-4-latest',
+        }),
+      });
+      if (resp.ok) {
+        setSaveMessage({ type: 'success', text: 'AI settings saved' });
+        setTimeout(() => setSaveMessage(null), 3000);
+      } else {
+        setSaveMessage({ type: 'error', text: 'Failed to save AI settings' });
+      }
+    } catch {
+      setSaveMessage({ type: 'error', text: 'Failed to save AI settings' });
+    }
+  };
+
+  const handleTestConnection = async () => {
+    if (!apiKey.trim()) {
+      setAiTestStatus({ type: 'error', text: 'Enter an API key first' });
+      return;
+    }
+    setAiTestStatus({ type: 'testing', text: 'Testing connection...' });
+    try {
+      const resp = await fetch('/api/ai-analysis/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: apiKey, model: aiModel }),
+      });
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        setAiTestStatus({ type: 'success', text: `Connected (${data.model})` });
+      } else {
+        setAiTestStatus({ type: 'error', text: data.error || 'Connection failed' });
+      }
+    } catch {
+      setAiTestStatus({ type: 'error', text: 'Connection failed — check network' });
+    }
+    setTimeout(() => setAiTestStatus(null), 5000);
   };
 
   const handleBrowse = async () => {
@@ -249,6 +307,122 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
               <Globe size={16} />
               Export KML
             </button>
+          </div>
+        </div>
+
+        {/* AI Analysis Section */}
+        <div className="settings-section">
+          <h3 className="settings-section-title">
+            <Brain size={14} />
+            AI Analysis (Claude)
+          </h3>
+          <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '0 0 10px 0' }}>
+            Enable AI-powered analysis of CUAS test sessions using Anthropic's Claude API.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)' }}>API Key</label>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input
+                type={apiKeyMasked ? 'password' : 'text'}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="sk-ant-..."
+                style={{
+                  flex: 1,
+                  padding: '6px 10px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '6px',
+                  color: '#fff',
+                  fontSize: '12px',
+                  fontFamily: 'monospace',
+                }}
+              />
+              <button
+                onClick={() => setApiKeyMasked(!apiKeyMasked)}
+                style={{
+                  padding: '6px 8px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '6px',
+                  color: 'rgba(255,255,255,0.6)',
+                  cursor: 'pointer',
+                }}
+                title={apiKeyMasked ? 'Show key' : 'Hide key'}
+              >
+                {apiKeyMasked ? <Eye size={14} /> : <EyeOff size={14} />}
+              </button>
+            </div>
+
+            <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '4px' }}>Model</label>
+            <select
+              value={aiModel}
+              onChange={(e) => setAiModel(e.target.value)}
+              style={{
+                padding: '6px 10px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '6px',
+                color: '#fff',
+                fontSize: '12px',
+              }}
+            >
+              <option value="claude-sonnet-4-latest">Claude Sonnet 4 (Recommended)</option>
+              <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (Faster/Cheaper)</option>
+              <option value="claude-opus-4-6">Claude Opus 4.6 (Most Capable)</option>
+            </select>
+
+            <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+              <button
+                onClick={handleSaveAiSettings}
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  background: apiKey ? 'rgba(255,140,0,0.8)' : 'rgba(255,255,255,0.05)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: '#fff',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: apiKey ? 'pointer' : 'default',
+                  opacity: apiKey ? 1 : 0.5,
+                }}
+                disabled={!apiKey}
+              >
+                Save AI Settings
+              </button>
+              <button
+                onClick={handleTestConnection}
+                style={{
+                  padding: '6px 12px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '6px',
+                  color: 'rgba(255,255,255,0.7)',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Test Connection
+              </button>
+            </div>
+
+            {aiTestStatus && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '11px',
+                color: aiTestStatus.type === 'success' ? '#22c55e' :
+                       aiTestStatus.type === 'error' ? '#ef4444' : 'rgba(255,255,255,0.6)',
+              }}>
+                {aiTestStatus.type === 'testing' && <div className="loading-spinner-small" />}
+                {aiTestStatus.type === 'success' && <Check size={12} />}
+                {aiTestStatus.type === 'error' && <AlertCircle size={12} />}
+                <span>{aiTestStatus.text}</span>
+              </div>
+            )}
           </div>
         </div>
 
