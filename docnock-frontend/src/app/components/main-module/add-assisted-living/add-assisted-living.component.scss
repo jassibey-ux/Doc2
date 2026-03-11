@@ -1,0 +1,138 @@
+.profile-picture {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    margin: 0 !important;
+    border: 2px solid var(--bg-light);
+    border-radius: 50%;
+    display: flex;
+    // justify-content: center;
+    // align-items: center;
+    overflow: hidden;
+    box-shadow: -4px 4px 9px 0px #00000040;
+}
+
+select {
+    max-width: 100% !important;
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--bg-light);
+    color: var(--p);
+    border: 1px solid #555;
+    border-radius: var(--border-radius-pill);
+}
+
+.error {
+    color: red;
+    font-size: 14px;
+    margin-top: 5px;
+  }
+
+  .custom-multi-select {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--bg-light);
+    color: var(--p);
+    border: 1px solid #555;
+    border-radius: var(--border-radius-pill);
+  }
+  
+  /* Target the internal dropdown if needed */
+  .custom-multi-select .ng-select {
+    width: 100%;
+  }
+  
+  .custom-multi-select .ng-select .ng-select-container {
+    padding: 0.75rem;
+    background: var(--bg-light);
+    color: var(--p);
+    border: 1px solid #555;
+    border-radius: var(--border-radius-pill);
+  }
+  
+  ::ng-deep app-multi-select {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--bg-light);
+    color: var(--p);
+    border: 1px solid #555;
+    border-radius: var(--border-radius-pill);
+  }
+  
+  ::ng-deep app-multi-select .ng-select .ng-select-container {
+    padding: 0.75rem;
+    background: var(--bg-light);
+    color: var(--p);
+    border: 1px solid #555;
+    border-radius: var(--border-radius-pill);
+  }
+
+  ::ng-deep app-multi-select .ng-select {
+    width: 100%;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  
+  ::ng-deep app-multi-select .ng-select .ng-select-container {
+    width: 100%;
+    border: 1px solid #555 !important;
+    border-radius: var(--border-radius-pill) !important;
+    background: var(--bg-light) !important;
+  }
+
+  .custom-multi-select {
+    width: 100%;
+    padding: 0;
+    background: var(--bg-light);
+    color: var(--p);
+    border: 0px solid #555;
+    border-radius: var(--border-radius-pill);
+}
+
+.backdrop .card-container form .actions {
+    display: flex;
+    justify-content: end;
+}
+.backdrop .card-container form{
+  align-items: baseline !important;
+}
+.card-container form .actions .add-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    margin: 0.75rem 1.5rem;
+    border: 1px solid var(--h);
+    border-radius: var(--border-radius-pill);
+    cursor: pointer;
+    text-transform: uppercase;
+    width: 40%;
+    max-width: 150px;
+}
+.backdrop .card-container form .actions .cancel-btn, .backdrop .card-container form .actions .add-btn {
+  padding: 0.75rem 1.5rem;
+  margin: 0.75rem 10px;
+  border: 1px solid var(--h);
+  border-radius: var(--border-radius-pill);
+  cursor: pointer;
+  text-transform: uppercase;
+  // width: 40%;
+}
+@media screen and (max-width: 768px) {
+    .actions button {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    .backdrop .card-container form .actions .cancel-btn, .backdrop .card-container form .actions .add-btn {
+      padding: 0.75rem 1.5rem;
+      margin: 0.75rem 10px;
+      border: 1px solid var(--h);
+      border-radius: var(--border-radius-pill);
+      cursor: pointer;
+      text-transform: uppercase;
+      width: 40%;
+    }
+}
+  

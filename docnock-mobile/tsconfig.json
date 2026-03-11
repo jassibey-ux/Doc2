@@ -1,0 +1,22 @@
+{
+  "extends": "@react-native/typescript-config/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "./",
+    "paths": {
+      "@api": ["src/api"],
+      "@assets": ["src/assets"],
+      "@components": ["src/components"],
+      "@navigation": ["src/navigation"],
+      "@screens": ["src/screens"],
+      "@store": ["src/store"],
+      "@theme": ["src/theme"],
+      "@utils": ["src/utils"],
+      "@types": ["src/types"],
+      "@hooks": ["src/hooks"],
+      "@styles": ["src/styles"],
+      "@context": ["src/context"],
+      "@socket": ["src/socket"],
+    }
+  },
+  "exclude": ["node_modules", "babel.config.js", "metro.config.js", "jest.config.js"]
+}

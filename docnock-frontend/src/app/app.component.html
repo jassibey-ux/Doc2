@@ -1,0 +1,72 @@
+<div class="global-loader-overlay" *ngIf="(loading$ | async) && !hideGlobalLoaderOnChat">
+	<div class="global-loader-box" aria-label="Loading">
+		<div class="global-loader-logo-wrap">
+			<img src="/assets/images/logo.png" alt="Loading" class="global-loader-logo" (error)="$any($event.target).src='/assets/images/loginLogo.png'" />
+		</div>
+		<span class="global-loader-text">Loading...</span>
+	</div>
+</div>
+
+<div
+	*ngIf="activeCallSession && !hideGlobalCallCapsule"
+	#globalCallCapsule
+	class="global-call-capsule"
+	[class.dragging]="isCapsuleDragging"
+	[style.left.px]="capsuleLeft"
+	[style.top.px]="capsuleTop"
+	[style.right]="capsuleLeft !== null ? 'auto' : null"
+	(click)="resumeActiveCall()"
+	(mousedown)="startCapsuleDrag($event)"
+	(touchstart)="startCapsuleDrag($event)"
+	title="Return to ongoing call"
+>
+	<div class="mini-call-remote" #miniRemoteVideo></div>
+	<div class="mini-call-local">
+		<video #miniLocalVideoEl autoplay muted playsinline></video>
+		<div class="mini-local-placeholder" *ngIf="!hasMiniLocalPreview">
+			<i class="bx bx-user"></i>
+		</div>
+	</div>
+	<div class="mini-call-controls" (click)="$event.stopPropagation()" (mousedown)="$event.stopPropagation()" (touchstart)="$event.stopPropagation()">
+		<button type="button" class="mini-ctrl-btn" (click)="toggleMiniAudio($event)" (mousedown)="$event.stopPropagation()" (touchstart)="$event.stopPropagation()">
+			<i class="bx" [ngClass]="isMiniAudioMuted ? 'bx-microphone-off' : 'bx-microphone'"></i>
+		</button>
+		<button
+			*ngIf="activeCallSession?.isScreenSharing"
+			type="button"
+			class="mini-ctrl-btn"
+			(click)="stopMiniScreenShare($event)"
+			(mousedown)="$event.stopPropagation()"
+			(touchstart)="$event.stopPropagation()"
+			title="Stop screen share"
+		>
+			<i class="bx bx-stop-circle"></i>
+		</button>
+		<button
+			*ngIf="!activeCallSession?.audio"
+			type="button"
+			class="mini-ctrl-btn"
+			(click)="toggleMiniVideo($event)"
+			(mousedown)="$event.stopPropagation()"
+			(touchstart)="$event.stopPropagation()"
+		>
+			<i class="bx" [ngClass]="isMiniVideoMuted ? 'bx-video-off' : 'bx-video'"></i>
+		</button>
+		<button
+			type="button"
+			class="mini-ctrl-btn mini-ctrl-btn-danger"
+			(click)="endCallFromMini($event)"
+			(mousedown)="$event.stopPropagation()"
+			(touchstart)="$event.stopPropagation()"
+			title="End call"
+		>
+			<i class="bx bx-phone-off"></i>
+		</button>
+	</div>
+	<div class="mini-call-label">
+		<i class="bx" [ngClass]="activeCallSession?.audio ? 'bx-phone' : 'bx-video'"></i>
+		<span>{{ activeCallSession?.audio ? 'Back to Audio Call' : 'Back to Video Call' }}</span>
+	</div>
+</div>
+
+<router-outlet></router-outlet>

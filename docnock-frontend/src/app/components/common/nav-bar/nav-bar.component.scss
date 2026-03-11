@@ -1,0 +1,175 @@
+#content nav .bx.bx-menu {
+  font-size: 1.5rem;
+  margin: 10px;
+  position: relative;
+  z-index: 99999;
+}
+
+.notification-modal {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  width: 320px;
+  background-color: var(--bg-light);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+  padding: 0;
+  z-index: 1001;
+  max-height: 360px;
+  overflow: hidden;
+}
+
+.notification-header {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.notification-modal h4 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.notification-modal ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.notification-modal li {
+  font-size: 14px;
+}
+
+.notification-modal li:last-child {
+  border-bottom: none;
+}
+
+.notification-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.noti-item {
+  margin: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+}
+
+.noti-item:hover {
+  background-color: var(--bg);
+  border-color: var(--primary);
+}
+
+.noti-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--h);
+  margin-bottom: 3px;
+}
+h4.notification-heading {
+  color: var(--h);
+}
+.noti-message {
+  font-size: 13px;
+  color: var(--p);
+  line-height: 1.35;
+}
+
+.notification-list li:last-child .noti-item {
+  border-bottom: none;
+}
+.profilePhoto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-light);
+  width: 50px;
+  min-height: 50px;
+  border-radius: 50%;
+  border: 1px solid;
+  margin-right: 2px;
+}
+
+.scroll-container {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+// notification end
+
+.bell-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  border-radius: 0;
+  padding: 0 !important;
+}
+
+.bell-icon img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: block;
+}
+
+.notification-count {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  background-color: var(--primary);
+  color: var(--white);
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 50%;
+  line-height: 1;
+  min-width: 20px;
+  text-align: center;
+  border: 1px solid var(--bg-light);
+}
+
+.notification {
+  cursor: pointer;
+}
+
+.notification-heading {
+  color: var(--h);
+}
+
+.no-notifications {
+  text-align: center;
+  color: var(--p);
+  padding: 28px 16px;
+  font-size: 14px;
+}
+
+.theme-icon-toggle {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  background: var(--bg-light);
+  color: var(--h);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.theme-icon-toggle i {
+  font-size: 18px;
+}
+
+.theme-icon-toggle:hover {
+  background: var(--bg);
+  border-color: var(--primary);
+}

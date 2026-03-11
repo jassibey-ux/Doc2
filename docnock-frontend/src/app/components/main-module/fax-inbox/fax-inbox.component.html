@@ -1,0 +1,140 @@
+<div class="fax-page">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-left">
+      <h1 class="page-title">eFax</h1>
+      <span class="unread-badge" *ngIf="unreadCount > 0">{{ unreadCount }} new</span>
+    </div>
+    <button class="btn-primary" (click)="openSendModal()">
+      <mat-icon>send</mat-icon>
+      Send Fax
+    </button>
+  </div>
+
+  <!-- Tab Switcher -->
+  <div class="tab-row">
+    <button class="tab-btn" [class.active]="activeTab === 'inbound'" (click)="switchTab('inbound')">
+      Inbox
+    </button>
+    <button class="tab-btn" [class.active]="activeTab === 'outbound'" (click)="switchTab('outbound')">
+      Sent
+    </button>
+  </div>
+
+  <!-- Fax List -->
+  <div class="fax-list" *ngIf="!loading; else loadingTpl">
+    <div *ngIf="faxes.length === 0" class="empty-state">
+      <mat-icon>fax</mat-icon>
+      <p>No faxes yet</p>
+    </div>
+
+    <div
+      *ngFor="let fax of faxes"
+      class="fax-row"
+      [class.unread]="fax.status === 'received'"
+      (click)="openFax(fax)"
+    >
+      <div class="fax-icon">
+        <mat-icon *ngIf="fax.direction === 'inbound'">call_received</mat-icon>
+        <mat-icon *ngIf="fax.direction === 'outbound'">call_made</mat-icon>
+      </div>
+      <div class="fax-info">
+        <div class="fax-number">{{ fax.faxNumber || 'Unknown' }}</div>
+        <div class="fax-meta">
+          {{ fax.pageCount }} page{{ fax.pageCount !== 1 ? 's' : '' }}
+          · {{ formatDate(fax.createdAt) }}
+          <span *ngIf="fax.facilityId"> · {{ fax.facilityId.fullName }}</span>
+        </div>
+      </div>
+      <span class="status-chip" [ngClass]="statusClass(fax.status)">
+        {{ statusLabel(fax.status) }}
+      </span>
+      <button
+        class="icon-btn"
+        *ngIf="fax.direction === 'inbound' && fax.status !== 'forwarded'"
+        (click)="$event.stopPropagation(); forwardToChat(fax)"
+        title="Forward to chat"
+      >
+        <mat-icon>forward_to_inbox</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <ng-template #loadingTpl>
+    <div class="loading-state">Loading faxes...</div>
+  </ng-template>
+
+  <!-- Pagination -->
+  <div class="pagination" *ngIf="totalPages > 1">
+    <button class="icon-btn" [disabled]="page <= 1" (click)="prevPage()">
+      <mat-icon>chevron_left</mat-icon>
+    </button>
+    <span class="page-info">{{ page }} / {{ totalPages }}</span>
+    <button class="icon-btn" [disabled]="page >= totalPages" (click)="nextPage()">
+      <mat-icon>chevron_right</mat-icon>
+    </button>
+  </div>
+</div>
+
+<!-- PDF Viewer Overlay -->
+<div class="viewer-backdrop" *ngIf="selectedFax" (click)="closeFaxViewer()">
+  <div class="viewer-card" (click)="$event.stopPropagation()">
+    <div class="viewer-header">
+      <h2>Fax from {{ selectedFax.faxNumber }}</h2>
+      <button class="icon-btn" (click)="closeFaxViewer()"><mat-icon>close</mat-icon></button>
+    </div>
+    <iframe
+      *ngIf="selectedFax.pdfPath"
+      [src]="selectedFax.pdfPath"
+      class="pdf-viewer"
+      title="Fax PDF"
+    ></iframe>
+    <div *ngIf="!selectedFax.pdfPath" class="no-pdf">PDF not available</div>
+  </div>
+</div>
+
+<!-- Send Fax Modal -->
+<div class="modal-backdrop" *ngIf="showSendModal" (click)="closeSendModal()">
+  <div class="modal-card" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Send Fax</h2>
+      <button class="icon-btn" (click)="closeSendModal()"><mat-icon>close</mat-icon></button>
+    </div>
+
+    <div class="modal-form">
+      <div class="field-group">
+        <label class="field-label" for="faxNumber">Recipient Fax Number</label>
+        <input
+          id="faxNumber"
+          type="tel"
+          class="text-input"
+          [(ngModel)]="sendFaxNumber"
+          placeholder="+1 (555) 123-4567"
+        />
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="faxFile">PDF Document</label>
+        <input
+          id="faxFile"
+          type="file"
+          accept="application/pdf"
+          (change)="onFileSelect($event)"
+          class="file-input"
+        />
+        <span *ngIf="sendFile" class="file-name">{{ sendFile.name }}</span>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeSendModal()">Cancel</button>
+        <button
+          class="btn-primary"
+          [disabled]="!sendFaxNumber || !sendFile || sending"
+          (click)="submitSendFax()"
+        >
+          {{ sending ? 'Sending...' : 'Send Fax' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

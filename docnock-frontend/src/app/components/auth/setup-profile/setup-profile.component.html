@@ -1,0 +1,191 @@
+<section class="login-page" >
+  <div class="bg_container" *ngIf="!error">
+    <!-- <div class="bg_container"> -->
+      <div class="logo-main"><img src="../../assets/images/logo.png" alt=""></div>
+      <div class="bg-image"></div>
+    </div>
+    <div class="row" *ngIf="!error">
+      <div class="col-lg-6 desc justify-content-center col-6 text-left px-5 py-3">
+        <h2>Doc-Nock</h2>
+        <p class="text-bold">Professional communication for modern healthcare teams</p>
+        <p>Streamlines discussions, reduces delays, and enhances overall care delivery efficiency.</p>
+      </div>
+      <div class="col-lg-6 d-flex align-items-center justify-content-center">
+        <div class="form-2-wrapper p-5">
+          <h5 class="text-left mb-3">Profile Setup</h5>
+          <div class="logo text-left"></div>
+          <div *ngIf="message" class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+          <strong>Error!</strong> {{ message }}
+          <button type="button" class="btn-close" (click)="message = ''" aria-label="Close"></button>
+        </div>
+          <form class="mt-3" [formGroup]="profileSetup" (ngSubmit)="onSubmit()">
+          <!-- <span class="profilePhoto">{{ getInitials(name) }}</span> -->
+
+           <span class="profilePhoto">
+              <img
+                *ngIf="profileImage; else initials"
+                [src]="profileImage"
+                alt="Profile"
+                class="profile-img"
+              />
+              <ng-template #initials>
+                {{ getInitials(name) }}
+              </ng-template>
+          </span>
+
+            <div class="mb-3 form-box">
+              <label for="name" class="text-left">Name</label>
+              <input
+                type="name"
+                class="form-control custom-input"
+                formControlName="name"
+                id="name"
+                name="name"
+                placeholder="Enter your name"
+                required
+              />
+            </div>
+            <div class="mb-3 form-box">
+              <label for="email" class="text-left">Email</label>
+              <input
+                type="email"
+                class="form-control custom-input"
+                formControlName="email"
+                id="email"
+                email="email"
+                placeholder="Enter your email"
+                required
+              />
+            </div>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="form-group form-box">
+                  <label for="role-name">Location</label>
+                  <input
+                    type="text"
+                    id="role-name"
+                    formControlName="location"
+                    placeholder="Enter Location"
+                    class="form-control"
+                    #placesRef="ngx-places"
+                    ngx-gp-autocomplete
+                  />
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3 form-box">
+                  <label for="phone" class="text-left">Phone</label>
+                  <input
+                    type="text"
+                    class="form-control custom-input"
+                    formControlName="mobile"
+                    id="phone"
+                    placeholder="Enter your phone number"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="col-md-12">
+                  <div class="form-group form-box">
+                    <label for="password">Password</label>
+                    <input
+                      type="password"
+                      id="password"
+                      formControlName="password"
+                      placeholder="Enter Password"
+                      class="form-control"
+                    />
+                    <div *ngIf="profileSetup.controls['password'].errors?.['required'] && profileSetup.controls['password'].touched" class="text-danger">
+                      Password is required.
+                    </div>
+                    <div *ngIf="profileSetup.controls['password'].errors?.['minlength'] && profileSetup.controls['password'].touched" class="text-danger">
+                      Password must be at least 6 characters long.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            
+              <div class="col-md-6">
+                <div class="col-md-12">
+                  <div class="form-group form-box">
+                    <label for="confirm-password">Confirm Password</label>
+                    <input
+                      type="password"
+                      id="confirm-password"
+                      formControlName="confirmpassword"
+                      placeholder="Confirm your password"
+                      class="form-control"
+                    />
+                    <div *ngIf="profileSetup.controls['confirmpassword'].errors?.['required'] && profileSetup.controls['confirmpassword'].touched" class="text-danger">
+                      Confirm password is required.
+                    </div>
+                    <div *ngIf="profileSetup.errors?.['passwordMismatch'] && profileSetup.controls['confirmpassword'].touched" class="text-danger mt-2">
+                      Passwords do not match!
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="actions">
+              <button type="button" class="cancel-btn">Cancel</button>
+              <button type="submit" class="add-btn" [disabled]="!errorshow || profileSetup.invalid">Add</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  <!-- </div> -->
+
+  <!-- <div class="bg_container" *ngIf="error">
+    <div class="row w-100">
+      <div class="col-lg-12 d-flex align-items-center justify-content-center">
+        <div class="form-2-wrapper p-5">
+    <h1>Already Login another account so please used other browser</h1>
+    </div>
+    </div>
+  </div>
+  </div> -->
+
+ <div
+  class="bg_container error-bg"
+  [ngClass]="{ 'full-height': error, 'normal-height': !error }"
+  *ngIf="error"
+>
+  <div class="row w-100">
+    <div class="col-lg-12 d-flex align-items-center justify-content-center min-vh-100">
+      <div class="error-card text-center p-5">
+        <div class="error-icon mb-3">⚠️</div>
+
+       <h2 class="mb-2">Already Logged In</h2>
+<p class="error-text mb-4">
+  You are already logged in with another account.<br />
+  Please log out first or use a different browser.
+</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+</section>
+
+<!-- <section class="login-page" *ngIf="!errorshow">
+  <div class="container-fluid min-vh-100 d-flex justify-content-center align-items-center px-3">
+    <div class="text-center w-100" style="max-width: 500px;">
+      <div class="expired-icon mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-clock-history" viewBox="0 0 16 16">
+          <path d="M8.515 3.435a.5.5 0 0 1-.5.5v3.43l2.8 1.68a.5.5 0 0 1-.515.86l-3-1.8A.5.5 0 0 1 7 7V3.935a.5.5 0 0 1 .5-.5.5.5 0 0 1 .515.5z"/>
+          <path d="M8 16A8 8 0 1 1 16 8a8.002 8.002 0 0 1-8 8zM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0z"/>
+          <path d="M7.5 1.018a.5.5 0 0 1 1 0V2a.5.5 0 0 1-1 0V1.018z"/>
+        </svg>
+      </div>
+      <h2 class="expired-heading">Uh oh. {{message}}</h2>
+      <p class="expired-message mt-3">
+        Please reply to the scheduling email you received with any questions,<br />
+        and let them know you received this error.
+      </p>
+    </div>
+  </div>
+</section> -->

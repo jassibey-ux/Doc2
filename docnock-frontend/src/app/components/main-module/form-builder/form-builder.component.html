@@ -1,0 +1,149 @@
+<div class="form-builder-page">
+  <div class="page-header">
+    <h2>Clinical Forms</h2>
+    <button class="btn btn-primary" (click)="openBuilder()">
+      <i class="bx bx-plus"></i> New Template
+    </button>
+  </div>
+
+  <!-- Template List -->
+  <div class="templates-grid" *ngIf="!showBuilder && !showSubmissions">
+    <div *ngIf="loading" class="loading-state">
+      <i class="bx bx-loader-alt bx-spin"></i> Loading templates...
+    </div>
+
+    <div *ngIf="!loading && templates.length === 0" class="empty-state">
+      <i class="bx bx-file"></i>
+      <p>No form templates yet</p>
+      <button class="btn btn-primary" (click)="openBuilder()">Create your first template</button>
+    </div>
+
+    <div class="template-card" *ngFor="let t of templates">
+      <div class="template-card-header">
+        <h3>{{ t.name }}</h3>
+        <span class="category-chip">{{ t.category }}</span>
+      </div>
+      <p class="template-meta">{{ t.fields.length }} field{{ t.fields.length !== 1 ? 's' : '' }}</p>
+      <div class="template-actions">
+        <button class="btn-ghost" (click)="openBuilder(t)" title="Edit">
+          <i class="bx bx-pencil"></i>
+        </button>
+        <button class="btn-ghost" (click)="viewSubmissions(t._id!)" title="Submissions">
+          <i class="bx bx-list-ul"></i>
+        </button>
+        <button class="btn-ghost btn-danger" (click)="deleteTemplate(t._id!)" title="Deactivate">
+          <i class="bx bx-trash"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Form Builder -->
+  <div class="builder-panel" *ngIf="showBuilder">
+    <div class="builder-header">
+      <h3>{{ editingTemplate ? 'Edit Template' : 'New Template' }}</h3>
+      <button class="btn-ghost" (click)="closeBuilder()"><i class="bx bx-x"></i></button>
+    </div>
+
+    <div class="builder-body">
+      <div class="form-row">
+        <label>Template Name</label>
+        <input type="text" [(ngModel)]="templateName" placeholder="e.g. Fall Risk Assessment" class="form-input" />
+      </div>
+
+      <div class="form-row">
+        <label>Category</label>
+        <select [(ngModel)]="templateCategory" class="form-input">
+          <option *ngFor="let cat of categories" [value]="cat.value">{{ cat.label }}</option>
+        </select>
+      </div>
+
+      <div class="fields-section">
+        <div class="fields-header">
+          <h4>Fields</h4>
+          <button class="btn btn-secondary" (click)="addField()">
+            <i class="bx bx-plus"></i> Add Field
+          </button>
+        </div>
+
+        <div class="field-item" *ngFor="let field of builderFields; let i = index; trackBy: trackByIndex">
+          <div class="field-drag-handle">
+            <button class="btn-icon" (click)="moveField(i, 'up')" [disabled]="i === 0">
+              <i class="bx bx-chevron-up"></i>
+            </button>
+            <span class="field-number">{{ i + 1 }}</span>
+            <button class="btn-icon" (click)="moveField(i, 'down')" [disabled]="i === builderFields.length - 1">
+              <i class="bx bx-chevron-down"></i>
+            </button>
+          </div>
+
+          <div class="field-config">
+            <div class="field-row">
+              <input type="text" [(ngModel)]="field.label" placeholder="Field label" class="form-input field-label-input" />
+              <select [(ngModel)]="field.type" class="form-input field-type-select">
+                <option *ngFor="let ft of fieldTypes" [value]="ft.value">{{ ft.label }}</option>
+              </select>
+              <label class="checkbox-label">
+                <input type="checkbox" [(ngModel)]="field.required" /> Required
+              </label>
+            </div>
+
+            <!-- Options for select/multiselect -->
+            <div class="options-area" *ngIf="field.type === 'select' || field.type === 'multiselect'">
+              <div class="option-row" *ngFor="let opt of field.options; let j = index; trackBy: trackByIndex">
+                <input type="text" [(ngModel)]="field.options[j]" placeholder="Option value" class="form-input option-input" />
+                <button class="btn-icon btn-danger" (click)="removeOption(field, j)">
+                  <i class="bx bx-x"></i>
+                </button>
+              </div>
+              <button class="btn-ghost" (click)="addOption(field)">
+                <i class="bx bx-plus"></i> Add Option
+              </button>
+            </div>
+          </div>
+
+          <button class="btn-icon btn-danger" (click)="removeField(i)" title="Remove field">
+            <i class="bx bx-trash"></i>
+          </button>
+        </div>
+
+        <div *ngIf="builderFields.length === 0" class="no-fields">
+          Click "Add Field" to start building your form
+        </div>
+      </div>
+    </div>
+
+    <div class="builder-footer">
+      <button class="btn btn-secondary" (click)="closeBuilder()">Cancel</button>
+      <button class="btn btn-primary" (click)="saveTemplate()">
+        {{ editingTemplate ? 'Update Template' : 'Create Template' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Submissions Viewer -->
+  <div class="submissions-panel" *ngIf="showSubmissions">
+    <div class="builder-header">
+      <h3>Form Submissions</h3>
+      <button class="btn-ghost" (click)="closeSubmissions()"><i class="bx bx-x"></i></button>
+    </div>
+
+    <div class="submissions-list">
+      <div *ngIf="submissions.length === 0" class="empty-state">
+        <p>No submissions yet</p>
+      </div>
+      <div class="submission-item" *ngFor="let sub of submissions">
+        <div class="submission-info">
+          <span class="submission-status" [ngClass]="'status-' + sub.status">{{ sub.status }}</span>
+          <span class="submission-by" *ngIf="sub.submittedBy?.fullName">by {{ sub.submittedBy.fullName }}</span>
+          <span class="submission-date">{{ sub.completedAt || sub.createdAt | date:'short' }}</span>
+        </div>
+        <div class="submission-actions">
+          <a *ngIf="sub.pdfPath" [href]="sub.pdfPath" target="_blank" class="btn-ghost">
+            <i class="bx bx-download"></i> PDF
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

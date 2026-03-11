@@ -1,0 +1,35 @@
+<ng-select
+  [items]="items"
+  [bindLabel]="bindLabel"
+  [bindValue]="bindValue"
+  [multiple]="multiple"
+  [searchable]="searchable"
+  [loading]="loading"
+  (change)="onSelectionChange($event)"
+  (scrollToEnd)="onScrollToEnd()"
+  [compareWith]="compareWith"
+  (search)="onSearch($event)"
+  [(ngModel)]="selectedModel"  
+  [ngModelOptions]="{standalone: true}"
+  [placeholder]= "placeholderText"
+  class="form-control custom-ng-select"
+  (open)="onDropdownOpen()"
+  (close)="onDropdownClose()"
+>
+  <ng-template ng-option-tmp let-item="item">
+    <div class="custom-option">
+      {{ item[bindLabel] }}
+    </div>
+  </ng-template>
+
+  <ng-template ng-multi-label-tmp let-items="items" let-clear="clear">
+    <div class="selected-items">
+      <span *ngFor="let item of items" style="color: black">
+        {{ item[bindLabel] }}
+        <button type="button" class="close-btn" (click)="removeItem(item)">
+          ✖
+        </button>
+      </span>
+    </div>
+  </ng-template>
+</ng-select>

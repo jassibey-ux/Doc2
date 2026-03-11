@@ -1,0 +1,94 @@
+<section class="login-page" *ngIf="errorshow">
+  <div class="bg_container">
+    <div class="logo-main">
+      <img src="../../assets/images/logo.png" alt="" />
+    </div>
+    <div class="bg-image"></div>
+  </div>
+
+  <div class="row w-100">
+    <div class="col-lg-6 desc justify-content-center col-6 text-left px-5 py-3">
+      <h2>Doc-Nock</h2>
+      <p class="text-bold">Professional communication for modern healthcare teams</p>
+      <p>Streamlines discussions, reduces delays, and enhances overall care delivery efficiency.</p>
+    </div>
+    <div class="col-lg-6 d-flex align-items-center justify-content-center">
+      <div class="form-2-wrapper p-5">
+        <div class="logo text-left">
+          <h2>Reset your password</h2>
+        </div>
+        <form class="mt-3" [formGroup]="resetPassword" (ngSubmit)="onSubmit()">
+          <div class="mb-3 form-box">
+            <label for="new-password" class="text-left">New Password</label>
+            <input
+              type="password"
+              class="form-control custom-input"
+              id="new-password"
+              name="new-password"
+              placeholder="Enter your new password"
+              required
+              formControlName = "newpassword"
+            />
+            <div *ngIf="resetPassword.controls['newpassword'].errors?.['required'] && resetPassword.controls['newpassword'].touched" class="text-danger">
+              Password is required.
+            </div>
+            <div *ngIf="resetPassword.controls['newpassword'].errors?.['minlength'] && resetPassword.controls['newpassword'].touched" class="text-danger">
+              Password must be at least 6 characters long.
+            </div>
+          </div>
+          <div class="mb-3 form-box">
+            <label for="confirm-password" class="text-left"
+              >Confirm Password</label
+            >
+            <input
+              type="password"
+              class="form-control custom-input"
+              id="confirm-password"
+              name="confirm-password"
+              placeholder="Confirm your new password"
+              required
+              formControlName = "confirmpassword"
+            />
+            <div *ngIf="resetPassword.controls['confirmpassword'].errors?.['required'] && resetPassword.controls['confirmpassword'].touched" class="text-danger">
+              Confirm password is required.
+            </div>
+            <div *ngIf="resetPassword.errors?.['passwordMismatch'] && resetPassword.controls['confirmpassword'].touched" class="text-danger mt-2">
+              Passwords do not match!
+            </div>
+          </div>
+          <button
+            type="submit"
+            class="btn btn-outline-secondary login-btn w-100 mb-3"
+          >
+            Reset Password
+          </button>
+          <div class="col-12 mt-4 text-center">
+            <p>
+              Back to login?
+              <a class="bold" href="/login"> Log in </a>
+            </p>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="login-page" *ngIf="!errorshow">
+  <div class="container-fluid min-vh-100 d-flex justify-content-center align-items-center px-3">
+    <div class="text-center w-100" style="max-width: 500px;">
+      <div class="expired-icon mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-clock-history" viewBox="0 0 16 16">
+          <path d="M8.515 3.435a.5.5 0 0 1-.5.5v3.43l2.8 1.68a.5.5 0 0 1-.515.86l-3-1.8A.5.5 0 0 1 7 7V3.935a.5.5 0 0 1 .5-.5.5.5 0 0 1 .515.5z"/>
+          <path d="M8 16A8 8 0 1 1 16 8a8.002 8.002 0 0 1-8 8zM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0z"/>
+          <path d="M7.5 1.018a.5.5 0 0 1 1 0V2a.5.5 0 0 1-1 0V1.018z"/>
+        </svg>
+      </div>
+      <h2 class="expired-heading">Uh oh. {{message}}</h2>
+      <p class="expired-message mt-3">
+        Please reply to the scheduling email you received with any questions,<br />
+        and let them know you received this error.
+      </p>
+    </div>
+  </div>
+</section>

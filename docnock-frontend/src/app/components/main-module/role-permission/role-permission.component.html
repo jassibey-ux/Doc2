@@ -1,0 +1,75 @@
+<div id="content" class="backdrop">
+  <div class="container cardMain">
+    <div class="row">
+      <div class="col-md-4 colPadding">
+        <div class="headerRole">
+          <label for="staff-select" class="label">Select Role</label>
+          <div class="select-wrapper">
+            <select id="staff-select" (change)="onRoleChange($event)">
+              <option value="">Select Role</option>
+              <option *ngFor="let role of selectedRoles" [value]="role.id">
+                {{ role.name }}
+              </option>
+            </select>
+          </div>          
+        </div>
+      </div>
+      <div class="col-md-4 colPadding">
+        <div class="headerRole">
+          <label for="staff-select" class="label">Select User</label>
+          <app-multi-select
+          class="custom-multi-select"
+            [items]="diagnosisList"
+            bindLabel="fullName"
+            bindValue="_id"
+            [multiple]="multiple"
+            [searchable]="true"
+            [loading]="loading"
+            [selectedItems]="patientSelectedIds"
+            (selectionChange)="onSelectionChange($event)"
+            (loadMore)="loadMoreItems()"
+            [compareWith]="compareFn"
+            (search)="onSearch($event)"
+          >
+          </app-multi-select>
+        </div>
+      </div>
+    </div>
+
+    <form [formGroup]="rolesForm">
+      <div class="roles-grid">
+        <!-- Select All Checkbox -->
+        <div class="role-item">
+          <input type="checkbox" [formControl]="selectAllControl" id="selectAll" />
+          <label for="selectAll"><strong>Select All</strong></label>
+        </div>
+    
+        <!-- Role Selection with Input Fields -->
+        <div *ngFor="let role of roles" class="role-item">
+          <input
+            type="checkbox"
+            [id]="role.id"
+            [formControl]="rolesForm.get('roles')?.get(role.id)"
+            (change)="toggleIndividualRole(role.id)"
+          />
+          <label [for]="role.id">{{ role.name }}</label>
+    
+          <!-- Input field for Limit -->
+          <input
+          *ngIf="['facility_center', 'physician', 'nurse', 'subadmin', 'other'].includes(role.id)"
+          type="number"
+          class="form-control input-sm w-50 formRolePermission"
+          placeholder="Enter limit"
+          [disabled]="!getRoleControlChecked(role.id)"
+          [formControl]="rolesForm.get('limits')?.get(role.id)"
+        />
+        
+        </div>
+      </div>
+    <div class="footerRole">
+      <button class="assign" type="submit" (click)="getAllValues()">Assign</button>
+    </div>
+    </form>
+  
+  </div>
+</div>

@@ -1,0 +1,94 @@
+<section id="content">
+  <nav class="nav_bar">
+    <div class="sidebar_toggle">
+      <i class="bx bx-menu" (click)="onToggleSidebar()"></i>
+    </div>
+    <h4 class="greet_text">Hi, {{this.profileName}}</h4>
+    <form action="#">
+      <!-- <div class="form-input">
+        <input type="search" placeholder="Search..." />
+        <button type="button" class="search-btn">
+          <i class="bx bx-search"></i>
+        </button>
+      </div> -->
+    </form>
+    <div class="d-flex align-items-center justify-content-end col-md-5">
+      <button
+        type="button"
+        class="theme-icon-toggle"
+        (click)="toggleTheme()"
+        [attr.aria-label]="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+        [attr.title]="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+      >
+        <i [ngClass]="isDark ? 'bx bx-sun' : 'bx bx-moon'"></i>
+      </button>
+
+      <!-- <div class="notification" (click)="toggleNotification()">
+        <span class="bell-icon"
+          ><img src="../../../assets/images/bell_icon.png" alt=""
+        /><span>{{count}}</span></span>
+        Notification Modal
+        <div class="notification-modal" *ngIf="showNotification">
+          <h4>Notifications</h4>
+          <div class="scroll-container" (scroll)="onScroll($event)">
+            <ul>
+              <li *ngFor="let notification of notificationMessage">
+                <div class="noti-item">
+                  <div class="noti-title">{{notification.name}}</div>
+                  <div class="noti-message">{{ notification.message }}</div>
+                </div>
+              </li>
+            </ul>
+            <div *ngIf="loading" class="loading-spinner">Loading more...</div>
+          </div>
+        </div>
+        
+        
+      </div> -->
+
+      <div class="notification" (click)="toggleNotification()">
+        <span class="bell-icon">
+          <img src="../../../assets/images/bell_icon.png" alt="Bell Icon" data-fallback-src="/assets/images/bell_icon.png" />
+          <span class="notification-count">{{ count }}</span>
+        </span>
+      
+        <!-- Notification Modal -->
+        <div class="notification-modal" *ngIf="showNotification">
+          <div class="notification-header">
+            <h4 class="notification-heading">Notifications</h4>
+          </div>
+          <div class="scroll-container" (scroll)="onScroll($event)">
+            <ul>
+            <ng-container *ngIf="notificationMessage.length === 0">
+              <li class="no-notifications">No new notifications</li>
+            </ng-container>
+              <li *ngFor="let notification of notificationMessage">
+                <div class="noti-item"  (click)="noticlick(notification.groupid)">
+                  <div class="noti-title">{{ notification.name }}</div>
+                  <div class="noti-message">{{ notification.message }}</div>
+                </div>
+              </li>
+            </ul>
+            <div *ngIf="loading" class="loading-spinner">Loading more...</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="user-info">
+        <!-- <img
+          src="https://secure.gravatar.com/avatar/d09eaad01aea86c51b4f892b4f8abf6f?s=100&d=wavatar&r=g"
+          alt="User Avatar"
+          class="user-avatar"
+        /> -->
+        <img *ngIf="profilePicture" [src]="profilePicture.savedName" alt="test" data-fallback-src="/assets/images/profile_sample_image.png"
+        class="user-avatar">
+        <span *ngIf="!profilePicture" class="profilePhoto">{{ getInitials(profileName)
+            }}</span>
+        <div class="d-flex flex-column">
+          <span class="user-name">{{ this.profileName }}</span>
+          <span class="user-role">{{ this.role }}</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+</section>

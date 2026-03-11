@@ -1,0 +1,1219 @@
+<div id="content">
+  <button
+    *ngIf="activeCallSession"
+    type="button"
+    class="chat-call-capsule"
+    (click)="resumeActiveCall()"
+    title="Return to ongoing call"
+  >
+    <i class="bx" [ngClass]="activeCallSession?.audio ? 'bx-phone' : 'bx-video'"></i>
+    <span>{{ activeCallSession?.audio ? 'Back to Audio Call' : 'Back to Video Call' }}</span>
+  </button>
+
+  <div class="container-fluid chat-container chat-shell px-4">
+    <div class="row chat-layout-row">
+      <!-- Left Sidebar -->
+      <div class="col-md-5 col-lg-3 left-sidebar chat-panel">
+        <div class="tab-navigation">
+          <a href="#" class="tab-button active">Chats</a>
+          <!-- <a href="#" class="tab-button">Fax</a> -->
+          <div class="actions">
+            <button class="btn add-btn confirm newchatbtn" *ngIf="loginrole != 'superadmin'"  (click)="openChatModal()">
+              New Chat
+            </button>
+            <!-- <a class="add-group" (click)="openChatModal()"><i class="bx bx-plus"></i></a> -->
+          </div>
+        </div>
+
+        <!-- Chat Tabs: Users and Groups -->
+        <div class="chat-tabs-container">
+          <button class="chat-tab-button" [class.active]="selectedChatTab === 'users'" (click)="selectedChatTab = 'users'">
+            <i class="bx bx-user"></i> Users
+          </button>
+          <button class="chat-tab-button" [class.active]="selectedChatTab === 'groups'" (click)="selectedChatTab = 'groups'">
+            <i class="bx bx-group"></i> Groups
+          </button>
+        </div>
+
+        <!-- <h6>Chats</h6> -->
+        <div class="chats">
+          <input type='text' [(ngModel)]="searchgroupname" (keydown.enter)="getgrouplist()" (input)="getgrouplist()"
+            class="chat-search-input" placeholder="Search group name...">
+          
+          <!-- USERS TAB -->
+          <ng-container *ngIf="selectedChatTab === 'users'">
+            <ng-container *ngIf="(groupList | filter: {group: false}).length > 0">
+              <ng-container *ngFor="let groupList1 of groupList; trackBy: trackByGroupId">
+                <ng-container *ngIf="!groupList1.group">
+                  <div (click)="selectGroup(groupList1)" class="chat-item d-block" [ngClass]="{
+                      active: groupList1.groupId == activeGroup.groupId
+                    }">
+                    <div class="d-flex">
+                      <img [src]="
+                          groupList1.image
+                            ? backendUrl +
+                              '/user-uploads/profiles/' +
+                              groupList1.image
+                            : sampleImage
+                        " alt="Profile" class="profile-image" />
+
+                      <div class="chat-details">
+                        <div class="title-container">
+                          <p class="name">
+                            <span class="presence-dot" *ngIf="onlineuser.indexOf(groupList1.userid) != -1 && groupList1.userid != ''">
+                              <svg width="16" height="16" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="40" fill="green" />
+                              </svg>
+                            </span>
+
+                            <span class="presence-dot" *ngIf="onlineuser.indexOf(groupList1.userid) == -1 && groupList1.userid != ''">
+                              <svg width="16" height="16" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="40" fill="red" />
+                              </svg>
+                            </span>
+
+                            <span class="usernameChat">{{ groupList1.title }}</span>
+                            <span *ngIf="groupList1.count > 0" class="message-count">{{ groupList1.count || 0 }}</span>
+                          </p>
+
+                          <i class="bx bx-trash text-danger" title="Delete" (click)="toggleDeleteChat(groupList1)"></i>
+                        </div>
+                        <div class="title-time">
+                          <p class="message" *ngIf="groupList1.latestMessage !== 'attachement.png' && groupList1.latestMessage !== 'call.png' && groupList1.latestMessage !== 'video.png'">
+                            {{ groupList1.latestMessage }}
+                          </p>
+                          <span *ngIf="groupList1.latestMessage === 'attachement.png'"><i class="bx bxs-camera"></i></span>
+                          <span *ngIf="groupList1.latestMessage === 'call.png'"><i class="bx bx-phone"></i></span>
+                          <span *ngIf="groupList1.latestMessage === 'video.png'"><i class="bx bx-video"></i></span>
+
+                          <span class="time">{{
+                            groupList1.timestamp | date : "HH:mm"
+                            }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </ng-container>
+              </ng-container>
+            </ng-container>
+            <ng-container *ngIf="(groupList | filter: {group: false}).length === 0">
+              <div class="no-conversation">
+                <span>No users found</span>
+              </div>
+            </ng-container>
+          </ng-container>
+
+          <!-- GROUPS TAB -->
+          <ng-container *ngIf="selectedChatTab === 'groups'">
+            <ng-container *ngIf="(groupList | filter: {group: true}).length > 0">
+              <ng-container *ngFor="let groupList1 of groupList; trackBy: trackByGroupId">
+                <ng-container *ngIf="groupList1.group">
+                  <div (click)="selectGroup(groupList1)" class="chat-item d-block" [ngClass]="{
+                      active: groupList1.groupId == activeGroup.groupId
+                    }">
+                    <div class="d-flex">
+                      <img [src]="
+                          groupList1.image
+                            ? backendUrl +
+                              '/user-uploads/profiles/' +
+                              groupList1.image
+                            : sampleImage
+                        " alt="Profile" class="profile-image" />
+
+                      <div class="chat-details">
+                        <div class="title-container">
+                          <p class="name">
+                            <span class="usernameChat">{{ groupList1.title }}</span>
+                            <span *ngIf="groupList1.count > 0" class="message-count">{{ groupList1.count || 0 }}</span>
+                          </p>
+
+                          <i class="bx bx-log-out text-warning" title="Exit Group"
+                            (click)="toggleDeleteChat(groupList1)"></i>
+                        </div>
+                        <div class="title-time">
+                          <p class="message" *ngIf="groupList1.latestMessage !== 'attachement.png' && groupList1.latestMessage !== 'call.png' && groupList1.latestMessage !== 'video.png'">
+                            {{ groupList1.latestMessage }}
+                          </p>
+                          <span *ngIf="groupList1.latestMessage === 'attachement.png'"><i class="bx bxs-camera"></i></span>
+                          <span *ngIf="groupList1.latestMessage === 'call.png'"><i class="bx bx-phone"></i></span>
+                          <span *ngIf="groupList1.latestMessage === 'video.png'"><i class="bx bx-video"></i></span>
+
+                          <span class="time">{{
+                            groupList1.timestamp | date : "HH:mm"
+                            }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </ng-container>
+              </ng-container>
+            </ng-container>
+            <ng-container *ngIf="(groupList | filter: {group: true}).length === 0">
+              <div class="no-conversation">
+                <span>No groups found</span>
+              </div>
+            </ng-container>
+          </ng-container>
+        </div>
+      </div>
+
+      <!-- Right Chat Area -->
+      <div class="col-md-7 col-lg-9 right-chat-area chat-panel px-0">
+        <div class="chat-header">
+          <div class="profile-items">
+            <div class="action-items"></div>
+            <img
+              *ngIf="activeGroup && activeGroup?.image && !activeGroup.image.includes('profile_sample_image')"
+              [src]="backendUrl + '/user-uploads/profiles/' + activeGroup.image"
+              alt="Profile"
+              class="profile-image"
+            />
+            <span
+              *ngIf="activeGroup && (!activeGroup?.image || activeGroup.image.includes('profile_sample_image'))"
+              class="profile-initial-avatar"
+            >
+              {{ getInitials(activeGroup?.title || 'User') }}
+            </span>
+            <div>
+              <p class="name">
+                <span
+                  class="header-presence"
+                  *ngIf="activeGroup && activeGroup.userid != ''"
+                  [ngClass]="onlineuser.indexOf(activeGroup.userid) != -1 ? 'is-online' : 'is-offline'"
+                ></span>
+                <span class="nameUserinchat">{{activeGroup.title }}</span>
+                <!-- <i *ngIf="activeGroup?.title" class="bx bx-pencil" (click)="editGroupName(activeGroup)"></i> -->
+                <!-- {{activeGroup.title }} -->
+                <i *ngIf="activeGroup?.title&&activeGroup?.group" class="bx bx-pencil"
+                  (click)="editGroupName(activeGroup)"></i>
+
+              </p>
+
+              <!-- {{activeGroup | json}} -->
+              <div class="group-members-row" *ngIf="activeGroup?.group">
+                <span class="userNames group-members-text" *ngIf="activeGroup.names != ''">{{ activeGroup.names }}</span>
+                <button
+                  *ngIf="activeGroup?.names&&activeGroup?.group"
+                  class="add-group group-add-member"
+                  type="button"
+                  title="Add Members"
+                  (click)="editeMembers(activeGroup)"
+                >
+                  <i class="bx bx-plus"></i>
+                </button>
+              </div>
+
+              <p class="typing" *ngIf="
+                  typingUsers.indexOf(activeGroup.groupId) != -1 && activeGroup
+                ">
+                Typing
+              </p>
+            </div>
+
+            <!-- <p>{{activeGroup.group?'':onlineuser.includes(activeGroup.userid)}}</p> -->
+          </div>
+
+          <!-- Show action items when user is NOT busy -->
+          <ng-container *ngIf="!userCallingparticipantInfo">
+            <div class="action-items"
+              *ngIf="activeGroup && (callstartedstatus?.participant==null || callstartedstatus?.participant.length==0)">
+              <a class="action-export" title="Export Chat" (click)="exportChat(activeGroup.groupId)">
+                <i class='bx bxs-download'></i>
+              </a>
+              <a class="action-audio-call" *ngIf="activeGroup && dynamicpath != 'superadmin'" [class.call-action-disabled]="isCallActionLocked" (click)="startAudioCall()"><i
+                  class="bx bxs-phone"></i></a>
+              <a class="action-video-call" *ngIf="activeGroup && dynamicpath != 'superadmin'" [class.call-action-disabled]="isCallActionLocked" (click)="startVideoCall()"><i
+                  class="bx bxs-video"></i></a>
+            </div>
+            <div
+              *ngIf="callstartedstatus?.participant && callstartedstatus?.participant.length>0">
+              <a [class.call-action-disabled]="isCallActionLocked" (click)="joincall()">JOIN</a>
+            </div>
+          </ng-container>
+
+          <!-- Show busy status when user IS busy -->
+          <div *ngIf="userCallingparticipantInfo" class="busy-status">
+            <i class='bx bxs-phone-call'></i>
+            <span>In Call - Busy</span>
+          </div>
+
+          <!-- AI Catch Me Up -->
+          <button
+            *ngIf="activeGroup"
+            class="catch-me-up-btn"
+            (click)="catchMeUp()"
+            [disabled]="aiSummaryLoading"
+            title="AI Summary"
+          >
+            <i class="bx" [ngClass]="aiSummaryLoading ? 'bx-loader-alt bx-spin' : 'bx-bulb'"></i>
+            <span>Catch me up</span>
+          </button>
+
+          <!-- PCC Patient Context Toggle -->
+          <button
+            *ngIf="activeGroup"
+            class="pcc-toggle-btn"
+            [class.active]="showPatientPanel"
+            (click)="togglePatientPanel()"
+            title="Patient Context"
+          >
+            <i class="bx bx-body"></i>
+          </button>
+
+          <!-- Invite Family -->
+          <button
+            *ngIf="activeGroup"
+            class="family-invite-btn"
+            (click)="openInviteFamilyModal()"
+            title="Invite Family Member"
+          >
+            <i class="bx bx-user-plus"></i>
+          </button>
+        </div>
+        <!-- AI Summary Overlay -->
+        <div class="ai-summary-panel" *ngIf="showAiSummary">
+          <div class="ai-summary-header">
+            <div class="ai-summary-title">
+              <i class="bx bx-bulb"></i> AI Summary
+            </div>
+            <button class="ai-summary-close" (click)="dismissAiSummary()">
+              <i class="bx bx-x"></i>
+            </button>
+          </div>
+          <div class="ai-summary-body">
+            <div *ngIf="aiSummaryLoading" class="ai-summary-loading">
+              <i class="bx bx-loader-alt bx-spin"></i> Generating summary...
+            </div>
+            <div *ngIf="!aiSummaryLoading && aiSummary" class="ai-summary-content" [innerHTML]="aiSummary"></div>
+          </div>
+        </div>
+
+        <div style="overflow-y: auto" #scrollMe class="chat-messages" *ngIf="activeGroup" (scroll)="onScroll($event)">
+          <ng-container *ngFor="let message of dateWiseGroup(messageList)">
+            <div class="date-separator" *ngIf="message.group_date">{{message.group_date}}</div>
+            <div class="message received" [ngClass]="{'call-log-popup': isCallLogMessage(message), 'call-log-audio': isAudioCallLogMessage(message), 'call-log-video': isVideoCallLogMessage(message), 'priority-critical': message.priority === 'CRITICAL', 'priority-urgent': message.priority === 'URGENT'}" *ngIf="message.senderID != loginId && hasRenderableMessage(message)">
+              <div class="sender-info">
+                <span *ngIf="message.isImportant" class="chat-icon" title="Mark as Important">
+                  <svg class="important-icon" fill="currentColor" aria-hidden="true" width="1em" height="1em"
+                    viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M10 2a3 3 0 0 0-3 3c0 2.23.79 5.2 1.22 6.69.24.79.97 1.31 1.78 1.31s1.54-.52 1.78-1.31C12.2 10.2 13 7.25 13 5a3 3 0 0 0-3-3Zm0 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"
+                      fill="currentColor"></path>
+                  </svg>
+                </span>
+                <div *ngIf="activeGroup.group">
+                  <img [src]="
+                    message?.senderDetails?.profilePicture?.savedName
+                      ? backendUrl + '/user-uploads/profiles/' + message?.senderDetails?.profilePicture?.savedName
+                      : sampleImage
+                  " alt="User" class="user-image" />
+                  <span class="user-name">{{message?.group_name ? message?.group_name : message?.senderDetails?.fullName
+                    }}</span>
+                </div>
+              </div>
+              <div class="message-container">
+                <ng-container *ngIf="message?.attachments.length > 0">
+                  <ng-container *ngFor="let attachment of message.attachments; let i = index">
+                    <!-- <img [src]="attachment.data" style="width: 100px; height: 100px" class="message-image pdfimage"
+                      *ngIf="
+                        attachment.type == 'image/jpeg' ||
+                        attachment.type == 'image/jpg' ||
+                        attachment.type == 'image/png'
+                      " (click)="openImageModal(attachment.data)" /> -->
+                      <div class="attachment-thumb-wrap" *ngIf="
+                          attachment.type == 'image/jpeg' ||
+                          attachment.type == 'image/jpg' ||
+                          attachment.type == 'image/png'
+                        ">
+                        <img [src]="attachment.data"
+                          class="message-image" *ngIf="
+                          attachment.type == 'image/jpeg' ||
+                          attachment.type == 'image/jpg' ||
+                          attachment.type == 'image/png'
+                        " (click)="openImageModal(attachment.data)" />
+                        <div *ngIf="attachment.uploading" class="attachment-uploading">
+                          <i class="bx bx-loader-circle bx-spin"></i>
+                          <span>{{ attachment.uploadProgress || 0 }}%</span>
+                          <button
+                            *ngIf="message.senderID === loginId"
+                            type="button"
+                            class="attachment-cancel-btn"
+                            (click)="cancelAttachmentUpload(message.messageId, $event)">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    <div class="pdf-preview-card" *ngIf="attachment.type === 'application/pdf'"
+                      (click)="openPdfPreview(attachment.data, attachment.name, $event)">
+                      <div class="pdf-preview-static">
+                        <i class='bx bxs-file-pdf'></i>
+                        <p>Tap to preview PDF</p>
+                      </div>
+                      <div class="pdf-preview-overlay-label">
+                        <i class='bx bxs-file-pdf'></i>
+                        <span>{{ attachment.name || 'PDF Document' }}</span>
+                      </div>
+                    </div>
+                    <a class="pdfimage" *ngIf="
+                        attachment.type ===
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                      " target="_blank" href="{{attachment.data}}">
+                      <img src="{{ imgUrl }}/assets/images/word-doc-icon-down.png" class="attachment-file-thumb" />
+                    </a>
+                    <div class="audio-attachment-wrap" *ngIf="isAudioAttachmentType(attachment.type)">
+                      <audio class="audio-control" [src]="attachment.data" controls></audio>
+                      <div *ngIf="attachment.uploading" class="attachment-uploading">
+                        <i class="bx bx-loader-circle bx-spin"></i>
+                        <span>{{ attachment.uploadProgress || 0 }}%</span>
+                        <button
+                          *ngIf="message.senderID === loginId"
+                          type="button"
+                          class="attachment-cancel-btn"
+                          (click)="cancelAttachmentUpload(message.messageId, $event)">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </ng-container>
+                </ng-container>
+
+                <div class="message-text-left">
+                  <button type="button" class="reply-trigger" *ngIf="!isCallLogMessage(message)" (click)="startReply(message, $event)">
+                    <i class='bx bx-reply'></i>
+                  </button>
+                  <div class="reply-snippet" *ngIf="hasReplyMeta(message)">
+                    <span class="reply-author">{{ message.replyMeta.sender }}</span>
+                    <span class="reply-body">{{ message.replyMeta.preview }}</span>
+                  </div>
+                  <i *ngIf="isCallLogMessage(message)" class="bx call-type-icon" [ngClass]="isVideoCallLogMessage(message) ? 'bx-video call-type-video' : 'bx-phone call-type-audio'"></i>
+                  {{ getReplyDisplayText(message) }}
+                 <span class="message-time">
+                   {{ message.timestamp | date : "h:mm a" }}
+
+                <!-- ✔✔ TICKS -->
+                 <!-- <span class="ticks">
+                  <span *ngIf="message.status === 'SENT'"><svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+  <path
+    d="M2 8.5L6 12L14 4"
+    stroke="#6b7280"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
+</span>
+                  <span *ngIf="message.status === 'DELIVERED'"><svg width="18" height="16" viewBox="0 0 18 16" fill="none">
+  <path
+    d="M1 8.5L5 12L12 4"
+    stroke="#6b7280"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M6 8.5L10 12L17 4"
+    stroke="#6b7280"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
+</span>
+                  <span *ngIf="message.status === 'READ'" class="blue"><svg width="18" height="16" viewBox="0 0 18 16" fill="none">
+  <path
+    d="M1 8.5L5 12L12 4"
+    stroke="#1DA1F2"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M6 8.5L10 12L17 4"
+    stroke="#1DA1F2"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
+</span>
+                </span> -->
+              </span>
+                </div>
+              </div>
+            </div>
+            <!-- Chat Message Section -->
+            <div class="message sent" [ngClass]="{'call-log-popup': isCallLogMessage(message), 'call-log-audio': isAudioCallLogMessage(message), 'call-log-video': isVideoCallLogMessage(message), 'priority-critical': message.priority === 'CRITICAL', 'priority-urgent': message.priority === 'URGENT'}" *ngIf="message.senderID === loginId && hasRenderableMessage(message)" (mouseenter)="hover = message._id"
+              (mouseleave)="hover = null">
+              <div class="message-container-wrapper">
+                <!-- <div class="message-action-modal" *ngIf="hover===message._id">
+                  <i class="bx bx-pencil" *ngIf="message.message!=''" (click)="editMsg(message)" title="Edit"></i>
+                  <i class="bx bx-trash text-danger" (click)="openDeleteModel(message.messageId)" title="Delete"></i>
+                </div> -->
+                <div class="message-container">
+                  <ng-container *ngIf="message?.attachments.length > 0">
+                    <ng-container *ngFor="let attachment of message.attachments; let i = index">
+                      <!-- For Images: Add a click event that opens the modal -->
+                      <!-- <img [src]="attachment.data" style="width: 100px; height: 100px; cursor: pointer"
+                        class="message-image" *ngIf="
+                        attachment.type == 'image/jpeg' ||
+                        attachment.type == 'image/jpg' ||
+                        attachment.type == 'image/png'
+                      " (click)="openImageModal(attachment.data)" /> -->
+                      <div class="attachment-thumb-wrap" *ngIf="
+                          attachment.type == 'image/jpeg' ||
+                          attachment.type == 'image/jpg' ||
+                          attachment.type == 'image/png'
+                        ">
+                        <img [src]="attachment.data"
+                          class="message-image" *ngIf="
+                          attachment.type == 'image/jpeg' ||
+                          attachment.type == 'image/jpg' ||
+                          attachment.type == 'image/png'
+                        " (click)="openImageModal(attachment.data)" />
+                        <div *ngIf="attachment.uploading" class="attachment-uploading">
+                          <i class="bx bx-loader-circle bx-spin"></i>
+                          <span>{{ attachment.uploadProgress || 0 }}%</span>
+                          <button
+                            *ngIf="message.senderID === loginId"
+                            type="button"
+                            class="attachment-cancel-btn"
+                            (click)="cancelAttachmentUpload(message.messageId, $event)">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- For PDFs -->
+                      <div class="pdf-preview-card" *ngIf="attachment.type === 'application/pdf'"
+                        (click)="openPdfPreview(attachment.data, attachment.name, $event)">
+                        <div class="pdf-preview-static">
+                          <i class='bx bxs-file-pdf'></i>
+                          <p>Tap to preview PDF</p>
+                        </div>
+                        <div class="pdf-preview-overlay-label">
+                          <i class='bx bxs-file-pdf'></i>
+                          <span>{{ attachment.name || 'PDF Document' }}</span>
+                        </div>
+                      </div>
+
+                      <!-- For DOCX -->
+                      <a *ngIf="
+                        attachment.type ===
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                      " target="_blank" href="{{attachment.data}}">
+                        <img src="{{ imgUrl }}/assets/images/word-doc-icon-down.png" class="attachment-file-thumb" />
+                      </a>
+                      <!-- For Audio -->
+                      <div class="audio-attachment-wrap" *ngIf="isAudioAttachmentType(attachment.type)">
+                        <audio class="audio-control" [src]="attachment.data" controls></audio>
+                        <div *ngIf="attachment.uploading" class="attachment-uploading">
+                          <i class="bx bx-loader-circle bx-spin"></i>
+                          <span>{{ attachment.uploadProgress || 0 }}%</span>
+                          <button
+                            *ngIf="message.senderID === loginId"
+                            type="button"
+                            class="attachment-cancel-btn"
+                            (click)="cancelAttachmentUpload(message.messageId, $event)">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </ng-container>
+                  </ng-container>
+                  <div class="message-text">
+                    <button type="button" class="reply-trigger" *ngIf="!isCallLogMessage(message)" (click)="startReply(message, $event)">
+                      <i class='bx bx-reply'></i>
+                    </button>
+                    <div class="reply-snippet" *ngIf="hasReplyMeta(message)">
+                      <span class="reply-author">{{ message.replyMeta.sender }}</span>
+                      <span class="reply-body">{{ message.replyMeta.preview }}</span>
+                    </div>
+                    <i *ngIf="isCallLogMessage(message)" class="bx call-type-icon" [ngClass]="isVideoCallLogMessage(message) ? 'bx-video call-type-video' : 'bx-phone call-type-audio'"></i>
+                    <ng-container *ngIf="message.isImportant">
+                      <svg class="important-icon" fill="currentColor" aria-hidden="true" width="1em" height="1em"
+                        viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M10 2a3 3 0 0 0-3 3c0 2.23.79 5.2 1.22 6.69.24.79.97 1.31 1.78 1.31s1.54-.52 1.78-1.31C12.2 10.2 13 7.25 13 5a3 3 0 0 0-3-3Zm0 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"
+                          fill="currentColor"></path>
+                      </svg>
+                    </ng-container>
+
+                    {{ getReplyDisplayText(message) }}
+                 <span class="message-time">
+                   {{ message.timestamp | date : "h:mm a" }}
+
+                <!-- ✔✔ TICKS -->
+                <span class="ticks-whatsapp">
+                  <i *ngIf="message.status === 'SENT'" class="bx bx-check tick-icon tick-sent"></i>
+                  <i *ngIf="message.status === 'DELIVERED'" class="bx bx-check-double tick-icon tick-delivered"></i>
+                  <i *ngIf="message.status === 'READ'" class="bx bx-check-double tick-icon tick-read"></i>
+                </span>
+              </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- <div class="message sent" *ngIf="message.senderID == loginId">
+              <div class="message-container">
+                <ng-container *ngIf="message?.attachments.length > 0">
+                  <ng-container *ngFor="let attachment of message.attachments">
+                    <img
+                      [src]="attachment.data"
+                      style="width: 100px; height: 100px"
+                      class="message-image"
+                      *ngIf="
+                        attachment.type == 'image/jpeg' ||
+                        attachment.type == 'image/jpg' ||
+                        attachment.type == 'image/png'
+                      "
+                    />
+                    <a
+                      *ngIf="attachment.type === 'application/pdf'"
+                      target="_blank"
+                      href="{{attachment.data}}"
+                    >
+                      <img
+                        src="{{ imgUrl }}/assets/images/pdf_4726010.png"
+                        style="width: 100px; height: 100px"
+                      />
+                    </a>
+                    <a
+                      *ngIf="
+                        attachment.type ===
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                      "
+                      target="_blank"
+                      href="{{attachment.data}}"
+                    >
+                      <img
+                        src="{{ imgUrl }}/assets/images/word-doc-icon-down.png"
+                        style="width: 100px; height: 100px"
+                      />
+                    </a>
+                    <audio
+                      *ngIf="attachment.type === 'mp3'"
+                      style="width: 235px"
+                      controls
+                    >
+                      <source [src]="attachment.data" type="audio/webm" />
+                      Your browser does not support the audio element.
+                    </audio>
+                  </ng-container>
+                </ng-container>
+                <div class="message-text">
+                  {{ message.message }}
+                  <span class="message-time">{{
+                    message.timestamp | date : "h:mm a"
+                  }}</span>
+                </div>
+              </div>
+            </div> -->
+            </div>
+          </ng-container>
+          <div #scrollBottom></div>
+        </div>
+        <div class="chat-messages empty-chat-state" *ngIf="!activeGroup">No Group Selected</div>
+
+        <div class="chat-input" *ngIf="activeGroup && dynamicpath != 'superadmin'">
+          <ng-container *ngIf="!recording; else recordingBar">
+            <div class="input-container">
+              <div class="reply-compose-preview" *ngIf="replyingTo">
+                <div class="reply-compose-content">
+                  <span class="reply-compose-label">Replying to {{ replyingTo.sender }}</span>
+                  <span class="reply-compose-text">{{ replyingTo.preview }}</span>
+                </div>
+                <button type="button" class="reply-compose-close" (click)="cancelReply($event)">
+                  <i class='bx bx-x'></i>
+                </button>
+              </div>
+              <input type="text" placeholder="Write a message" (keydown.enter)="is_msg_edit?updateMsg():sendMessage()"
+                [(ngModel)]="message" (input)="onInputChange($event)" (paste)="onMessageInputPaste($event)" />
+              <div class="input-icons">
+                <input style="display: none" type="file" id="profile-upload" #fileInput
+                  accept="image/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  multiple (change)="onFileSelectedforattache($event)" />
+
+                <span class="chat-icon" title="Mark as Important" (click)="handleImportant()">
+                  <svg class="important-icon" fill="currentColor" aria-hidden="true" width="1em" height="1em"
+                    [ngStyle]="{'color': isImportant ? '#ef4444' : 'var(--h)','cursor':'pointer'}" viewBox="0 0 20 20"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M10 2a3 3 0 0 0-3 3c0 2.23.79 5.2 1.22 6.69.24.79.97 1.31 1.78 1.31s1.54-.52 1.78-1.31C12.2 10.2 13 7.25 13 5a3 3 0 0 0-3-3Zm0 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"
+                      fill="currentColor"></path>
+                  </svg>
+                </span>
+
+                <i for="pdf-download" class="bx bx-plus inputicon" (click)="openIntakeFormModel()"></i>
+                <label for="profile-upload" style="cursor: pointer">
+                  <i class="bx bx-paperclip"></i>
+                </label>
+                <i class="inputicon" [ngClass]="recording ? 'bx bx-stop' : 'bx bx-microphone'"
+                  (click)="recording ? stopRecording() : startRecording()" [class.recording]="recording"></i>
+              </div>
+
+              <div class="message-picker" *ngIf="showMessagePicker" (click)="keepMessagePickerOpen($event)">
+                <div class="message-picker-search">
+                  <i class="bx bx-search"></i>
+                  <input
+                    type="text"
+                    placeholder="Search"
+                    [(ngModel)]="messagePickerSearch"
+                    (ngModelChange)="onMessagePickerSearchChange()"
+                    (click)="$event.stopPropagation()"
+                  />
+                </div>
+
+                <div class="message-picker-tabs">
+                  <button type="button" [class.active]="messagePickerTab === 'emojis'" (click)="setMessagePickerTab('emojis', $event)">Emojis</button>
+                  <button type="button" [class.active]="messagePickerTab === 'gifs'" (click)="setMessagePickerTab('gifs', $event)">GIFs</button>
+                  <button type="button" [class.active]="messagePickerTab === 'stickers'" (click)="setMessagePickerTab('stickers', $event)">Stickers</button>
+                </div>
+
+                <div class="message-picker-grid" *ngIf="messagePickerTab === 'emojis'">
+                  <button type="button" *ngFor="let emoji of filteredEmojiOptions" (click)="insertPickerItem(emoji, $event)">{{ emoji }}</button>
+                </div>
+
+                <div class="message-picker-grid labels" *ngIf="messagePickerTab === 'gifs'">
+                  <button type="button" *ngFor="let gif of filteredGifOptions" (click)="insertPickerItem(gif, $event)">{{ gif }}</button>
+                </div>
+
+                <div class="message-picker-grid labels" *ngIf="messagePickerTab === 'stickers'">
+                  <button type="button" *ngFor="let sticker of filteredStickerOptions" (click)="insertPickerItem(sticker, $event)">{{ sticker }}</button>
+                </div>
+              </div>
+
+              <div class="file-preview" *ngIf="selectedimage && selectedimage.length">
+                <div class="file-box" *ngFor="let file of selectedimage; let i = index">
+                  <div class="file-icon">
+                    <img *ngIf="
+                        file.type == 'image/jpeg' ||
+                        file.type == 'image/jpg' ||
+                        file.type == 'image/png'
+                      " [src]="file.data" class="preview-img" />
+
+                    <div class="file-icon-doc" *ngIf="file.type === 'application/pdf'">
+                      <i class='bx bxs-file-pdf'></i>
+                    </div>
+
+                    <div class="file-icon-doc" *ngIf="
+                        file.type ===
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                        file.type === 'application/msword'
+                      ">
+                      <i class='bx bxs-file-doc'></i>
+                    </div>
+
+                    <div class="file-icon-doc" *ngIf="isAudioAttachmentType(file.type)">
+                      <i class='bx bxs-music'></i>
+                    </div>
+                  </div>
+
+                  <div class="file-details">
+                    <div class="file-name" [title]="file.name">{{ file.name }}</div>
+                    <div class="file-meta">{{ formatAttachmentSize(file.size) }}</div>
+
+                    <div *ngIf="isAudioAttachmentType(file.type)" class="composer-audio-shell">
+                      <div class="composer-audio-wave" aria-hidden="true"></div>
+                      <audio class="composer-audio-preview" [src]="file.data" controls></audio>
+                    </div>
+
+                    <div class="composer-audio-actions" *ngIf="file.recorded">
+                      <button type="button" class="composer-audio-btn send" (click)="sendRecordedAudioNow($event)">
+                        Send now
+                      </button>
+                      <button type="button" class="composer-audio-btn cancel" (click)="removeSelectedFilevalue(i)">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+
+                  <button type="button" class="file-close" (click)="removeSelectedFilevalue(i)">
+                    <i class="bx bx-x"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button (click)="is_msg_edit?updateMsg():sendMessage()" class="send-button">
+              <i class="bx bxs-send"></i>
+            </button>
+          </ng-container>
+
+          <ng-template #recordingBar>
+            <div class="voice-recorder-bar">
+              <button type="button" class="voice-btn square" (click)="stopRecording()" title="Stop">
+                <i class='bx bx-stop'></i>
+              </button>
+              <div class="voice-wave">
+                <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <div class="voice-timer">{{ getFormattedTime() }}</div>
+              <div class="voice-recorder-actions">
+                <button type="button" class="voice-btn ghost" (click)="cancelRecording($event)" title="Delete">
+                  <i class='bx bx-trash'></i>
+                </button>
+                <button type="button" class="voice-btn send" (click)="sendRecordingAfterStop()" title="Send">
+                  <i class='bx bxs-send'></i>
+                </button>
+              </div>
+            </div>
+          </ng-template>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PCC Patient Context Panel -->
+  <div class="pcc-patient-panel" *ngIf="showPatientPanel && activeGroup" [class.open]="showPatientPanel">
+    <div class="pcc-panel-header">
+      <h3>Patient Context</h3>
+      <button class="pcc-panel-close" (click)="showPatientPanel = false"><i class="bx bx-x"></i></button>
+    </div>
+
+    <div class="pcc-panel-body">
+      <!-- Loading -->
+      <div *ngIf="patientSummaryLoading" class="pcc-loading">
+        <i class="bx bx-loader-alt bx-spin"></i>
+        <span>Loading patient data...</span>
+      </div>
+
+      <!-- No linked patient -->
+      <div *ngIf="!patientSummaryLoading && !patientLink" class="pcc-empty">
+        <i class="bx bx-link"></i>
+        <p>No patient linked to this conversation</p>
+        <button class="btn pcc-link-btn" (click)="openLinkPatientModal()">Link a Patient</button>
+      </div>
+
+      <!-- Linked patient with summary -->
+      <ng-container *ngIf="!patientSummaryLoading && patientLink">
+        <div class="pcc-patient-card">
+          <div class="pcc-patient-name">{{ patientLink.patientName || 'Unknown Patient' }}</div>
+          <div class="pcc-patient-id">PCC ID: {{ patientLink.pccPatientId }}</div>
+          <button class="pcc-unlink-btn" (click)="unlinkPatient()">
+            <i class="bx bx-unlink"></i> Unlink
+          </button>
+        </div>
+
+        <ng-container *ngIf="patientSummary">
+          <!-- Demographics -->
+          <div class="pcc-section" *ngIf="patientSummary.demographics">
+            <h4 class="pcc-section-title">Demographics</h4>
+            <div class="pcc-field" *ngIf="patientSummary.demographics.birthDate">
+              <span class="pcc-label">DOB</span>
+              <span class="pcc-value">{{ patientSummary.demographics.birthDate }}</span>
+            </div>
+            <div class="pcc-field" *ngIf="patientSummary.demographics.gender">
+              <span class="pcc-label">Gender</span>
+              <span class="pcc-value">{{ patientSummary.demographics.gender }}</span>
+            </div>
+            <div class="pcc-field" *ngIf="patientSummary.demographics.roomBed">
+              <span class="pcc-label">Room/Bed</span>
+              <span class="pcc-value">{{ patientSummary.demographics.roomBed }}</span>
+            </div>
+            <div class="pcc-field" *ngIf="patientSummary.demographics.admissionDate">
+              <span class="pcc-label">Admitted</span>
+              <span class="pcc-value">{{ patientSummary.demographics.admissionDate }}</span>
+            </div>
+          </div>
+
+          <!-- Medications -->
+          <div class="pcc-section" *ngIf="patientSummary.medications?.length">
+            <h4 class="pcc-section-title">Active Medications</h4>
+            <div class="pcc-med-item" *ngFor="let med of patientSummary.medications.slice(0, 5)">
+              <span class="pcc-med-name">{{ med.drugName || med.description }}</span>
+              <span class="pcc-med-dose" *ngIf="med.dosage">{{ med.dosage }}</span>
+            </div>
+            <div class="pcc-more" *ngIf="patientSummary.medications.length > 5">
+              +{{ patientSummary.medications.length - 5 }} more
+            </div>
+          </div>
+
+          <!-- Vitals -->
+          <div class="pcc-section" *ngIf="patientSummary.vitals?.length">
+            <h4 class="pcc-section-title">Recent Vitals</h4>
+            <div class="pcc-vital-item" *ngFor="let vital of patientSummary.vitals.slice(0, 3)">
+              <span class="pcc-vital-type">{{ vital.type }}</span>
+              <span class="pcc-vital-value">{{ vital.value }} {{ vital.unit }}</span>
+              <span class="pcc-vital-date">{{ vital.recordedAt | date:'short' }}</span>
+            </div>
+          </div>
+        </ng-container>
+
+        <div *ngIf="!patientSummary && !patientSummaryLoading" class="pcc-no-summary">
+          <p>Patient linked but summary unavailable from PointClickCare.</p>
+          <button class="btn pcc-link-btn" (click)="loadPatientSummary()">Retry</button>
+        </div>
+      </ng-container>
+    </div>
+  </div>
+
+  <!-- PCC Link Patient Modal -->
+  <div class="modal" *ngIf="showLinkPatientModal" tabindex="-1">
+    <div class="modal-content pcc-link-modal">
+      <div class="pcc-modal-header">
+        <h3>Link Patient from PointClickCare</h3>
+        <button class="pcc-panel-close" (click)="closeLinkPatientModal()"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="pcc-search-row">
+        <input
+          type="text"
+          [(ngModel)]="pccSearchQuery"
+          (keydown.enter)="searchPccPatients()"
+          placeholder="Search by patient name..."
+          class="pcc-search-input"
+        />
+        <button class="btn pcc-search-btn" (click)="searchPccPatients()" [disabled]="pccSearchLoading">
+          <i class="bx" [ngClass]="pccSearchLoading ? 'bx-loader-alt bx-spin' : 'bx-search'"></i>
+        </button>
+      </div>
+      <div class="pcc-results">
+        <div
+          class="pcc-result-item"
+          *ngFor="let patient of pccSearchResults"
+          (click)="selectPccPatient(patient)"
+        >
+          <div class="pcc-result-name">{{ patient.name || patient.fullName }}</div>
+          <div class="pcc-result-meta">
+            <span *ngIf="patient.birthDate">DOB: {{ patient.birthDate }}</span>
+            <span *ngIf="patient.patientId"> &middot; ID: {{ patient.patientId }}</span>
+          </div>
+        </div>
+        <div *ngIf="pccSearchResults.length === 0 && pccSearchQuery && !pccSearchLoading" class="pcc-no-results">
+          No patients found
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Download UI -->
+  <section class="download-app">
+    <h2>Download Our App</h2>
+    <p>Use our app for a better experience on mobile.</p>
+    <button class="android-btn">Download for Android</button>
+    <button class="ios-btn">Download for iOS</button>
+  </section>
+
+  <!-- Image Viewer -->
+  <div class="image-preview-overlay" *ngIf="selectedImageForModal" (click)="closeModal()">
+    <div class="image-preview-dialog" (click)="$event.stopPropagation()">
+      <div class="image-preview-toolbar">
+        <div class="image-preview-zoom-value">{{ (selectedImageZoom * 100) | number:'1.0-0' }}%</div>
+        <div class="image-preview-actions">
+          <button type="button" class="image-preview-btn" (click)="zoomOutImagePreview()" title="Zoom Out">-</button>
+          <button type="button" class="image-preview-btn" (click)="resetImagePreviewZoom()" title="Reset Zoom">100%</button>
+          <button type="button" class="image-preview-btn" (click)="zoomInImagePreview()" title="Zoom In">+</button>
+          <button type="button" class="image-preview-btn close" (click)="closeModal()" title="Close">
+            <i class='bx bx-x'></i>
+          </button>
+        </div>
+      </div>
+
+      <div
+        class="image-preview-body"
+        [class.can-pan]="selectedImageZoom > 1"
+        [class.is-panning]="isImagePreviewDragging"
+        (wheel)="onImagePreviewWheel($event)"
+        (mousedown)="startImagePreviewDrag($event)"
+        (mousemove)="onImagePreviewDrag($event)"
+        (mouseup)="endImagePreviewDrag()"
+        (mouseleave)="endImagePreviewDrag()"
+        (touchstart)="startImagePreviewDrag($event)"
+        (touchmove)="onImagePreviewDrag($event)"
+        (touchend)="endImagePreviewDrag()"
+        (touchcancel)="endImagePreviewDrag()">
+        <img
+          [src]="selectedImageForModal"
+          class="image-preview-img"
+          [style.transform]="getImagePreviewTransform()"
+          alt="Full Size"
+        />
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+
+<div class="modal" *ngIf="showAddChatModal" tabindex="-1">
+  <div class="modal-content new-chat-modal">
+    <div class="group-container">
+      <header class="new-chat-header">
+        <h2>New Chat</h2>
+        <button class="new-chat-close" (click)="closeLogoutModal()" title="Close">
+          <i class="bx bx-x"></i>
+        </button>
+      </header>
+
+      <div class="search-bar new-chat-search">
+        <i class="fas fa-search"></i>
+        <input type="text" placeholder="Search users..." />
+      </div>
+
+      <div class="tabs new-chat-tabs">
+        <button *ngFor="let role of roleTab" class="tab" [class.active]="role.id === selectedTab" (click)="onTabClick(role.id)">
+          {{ role.name }}
+        </button>
+      </div>
+
+      <div class="list-area new-chat-list-area">
+        <ul class="user-list new-chat-user-list">
+          <li class="user" *ngFor="let user of userList">
+            <img *ngIf="user.profilePicture" [src]="user.profilePicture.savedName" alt="profile" class="profile" />
+            <span *ngIf="!user.profilePicture" class="profilePhoto">{{ getInitials(user.fullName) }}</span>
+
+            <div class="user-info">
+              <h4>{{ user.fullName }}</h4>
+            </div>
+
+            <input
+              type="checkbox"
+              [checked]="isUserSelected(user._id)"
+              (click)="selecteduserfunciton(user._id, user.fullName, user.profilePicture, user.status)"
+            />
+          </li>
+        </ul>
+      </div>
+
+      <div class="modal-actions new-chat-actions">
+        <button class="btn add-btn confirm" (click)="is_edit?updateGroupMember():openChatModalGroupName()">
+          {{is_edit?"Update":"Next"}}
+        </button>
+        <button class="btn add-btn cancel" (click)="closeLogoutModal()">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="pdf-modal-overlay" *ngIf="selectedPdfForModal" (click)="closePdfPreview()">
+  <div class="pdf-modal-dialog" (click)="$event.stopPropagation()">
+    <div class="pdf-modal-header">
+      <h3>{{ selectedPdfName || 'PDF Preview' }}</h3>
+      <div class="pdf-modal-actions">
+        <button type="button" class="pdf-modal-btn" (click)="downloadCurrentPdf()">
+          <i class='bx bx-download'></i>
+          <span>Download</span>
+        </button>
+        <button type="button" class="pdf-modal-btn close" (click)="closePdfPreview()">
+          <i class='bx bx-x'></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="pdf-modal-body">
+      <iframe class="pdf-modal-frame" [src]="selectedPdfPreviewUrl"></iframe>
+    </div>
+  </div>
+</div>
+
+<div class="modal" *ngIf="showAddChatModalGroupName" tabindex="-1">
+  <div class="modal-content confirmation group-name-modal">
+    <div class="group-container">
+      <div class="picture-selector" (click)="triggerFileInput()">
+        <input type="file" id="group-profile-upload" accept="image/*" (change)="onFileSelected($event)"
+          style="display: none" />
+        <img *ngIf="previewUrl" [src]="previewUrl" alt="Profile Picture Preview" />
+        <label for="group-profile-upload" *ngIf="!previewUrl" class="picture-upload-label">
+          <i class="fa fa-camera"></i>
+        </label>
+      </div>
+      <header class="group-name-header">
+        <h2>{{is_edit ? 'Update Group Name' : 'Create Group'}}</h2>
+        <button class="new-chat-close" (click)="closeChatModalGroupName()" title="Close">
+          <i class="bx bx-x"></i>
+        </button>
+      </header>
+
+      <div class="group-name-input-wrap">
+        <label class="group-name-label" for="group-name-input">Group Name</label>
+        <input id="group-name-input" type="text" placeholder="Enter group name" [(ngModel)]="groupName" />
+      </div>
+
+      <div class="modal-actions group-name-actions">
+        <button class="btn add-btn confirm"
+          (click)="is_edit?UpdateImageName():creategroup()">{{is_edit?'Update':'Create Group'}}</button>
+        <button class="btn add-btn cancel" (click)="closeChatModalGroupName()">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<form #intakeForm="ngForm">
+  <div class="modal intake-form-overlay" role="dialog" *ngIf="showIntakeForm" [class.is-closing]="isIntakeFormClosing" tabindex="-1">
+    <div class="modal-dialog dialogwidth intake-form-dialog" role="document">
+      <div #intakeFormContent class="modal-content intake-form-modal">
+        <div class="intake-form-header">
+          <h5 class="modal-title" id="intakeFormTitle">Provider-Nurse Communication Form</h5>
+          <button type="button" class="close intake-close-btn" (click)="closeIntakeFormModel()" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+
+        <div class="intake-form-body">
+          <section class="intake-form-section">
+            <h6 class="intake-section-title">1. Patient Info</h6>
+            <div class="intake-grid intake-grid-patient">
+              <div class="intake-field intake-field-name">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" [(ngModel)]="formData.name" #name="ngModel" required />
+                <div *ngIf="name.invalid && name.touched" class="intake-error">Name is required.</div>
+              </div>
+
+              <div class="intake-field">
+                <label for="room">Room #</label>
+                <input type="text" id="room" />
+              </div>
+
+              <div class="intake-field">
+                <label for="dob">DOB</label>
+                <input type="text" id="dob" />
+              </div>
+            </div>
+          </section>
+
+          <section class="intake-form-section">
+            <h6 class="intake-section-title">2. Reason for Message</h6>
+            <div class="intake-checkbox-grid">
+              <label class="intake-check"><input type="checkbox" /> <span>Change in condition</span></label>
+              <label class="intake-check"><input type="checkbox" /> <span>Abnormal vital signs</span></label>
+              <label class="intake-check"><input type="checkbox" /> <span>Pain</span></label>
+              <label class="intake-check"><input type="checkbox" /> <span>Fall</span></label>
+              <label class="intake-check"><input type="checkbox" /> <span>New symptom</span></label>
+              <label class="intake-check"><input type="checkbox" /> <span>Wound issue</span></label>
+              <label class="intake-check"><input type="checkbox" /> <span>Medication-related</span></label>
+              <label class="intake-check"><input type="checkbox" /> <span>Lab/result concern</span></label>
+            </div>
+            <div class="intake-field intake-inline-field">
+              <label class="intake-inline-label"><input type="checkbox" /> <span>Other</span></label>
+              <input type="text" />
+            </div>
+          </section>
+
+          <section class="intake-form-section">
+            <h6 class="intake-section-title">3. Summary of Concern</h6>
+            <textarea class="intake-textarea"></textarea>
+          </section>
+
+          <section class="intake-form-section">
+            <h6 class="intake-section-title">4. Most Recent Vital Signs (if applicable)</h6>
+            <div class="intake-grid intake-grid-vitals">
+              <label class="intake-inline-label">BP <input type="text" /> <span>mmHg</span></label>
+              <label class="intake-inline-label">HR <input type="text" /> <span>bpm</span></label>
+              <label class="intake-inline-label">RR <input type="text" /></label>
+              <label class="intake-inline-label">Temp <input type="text" /> <span>°F</span></label>
+              <label class="intake-inline-label">SpO₂ <input type="text" /> <span>%</span></label>
+              <label class="intake-inline-label">On O₂ <input type="text" /> <span>L/min</span></label>
+            </div>
+          </section>
+
+          <section class="intake-form-section">
+            <h6 class="intake-section-title">5. Actions Already Taken</h6>
+            <input type="text" class="intake-input-full" />
+          </section>
+
+          <section class="intake-form-section">
+            <h6 class="intake-section-title">6. Requested Action from Provider</h6>
+            <div class="intake-checkbox-grid intake-checkbox-grid-short">
+              <label class="intake-check"><input type="checkbox" /> <span>Provide orders</span></label>
+              <label class="intake-check"><input type="checkbox" /> <span>Review labs/results</span></label>
+              <label class="intake-check"><input type="checkbox" /> <span>Call back</span></label>
+            </div>
+            <div class="intake-field intake-inline-field">
+              <label class="intake-inline-label"><input type="checkbox" /> <span>Other</span></label>
+              <input type="text" />
+            </div>
+          </section>
+
+          <section class="intake-form-section">
+            <h6 class="intake-section-title">7. Provider Response</h6>
+            <textarea class="intake-textarea"></textarea>
+          </section>
+
+          <div class="modal-actions intake-form-actions" *ngIf="showIntakeFormButtons">
+            <button type="button" class="btn add-btn confirm" [disabled]="intakeForm.invalid" (click)="generateIntakeFormPdf()">
+              Send
+            </button>
+            <button type="button" class="btn add-btn cancel" (click)="closeIntakeFormModel()">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+<div class="modal" *ngIf="showDeleteModal" tabindex="-1">
+  <div class="modal-content">
+    <h3>Delete Message</h3>
+    <p>Do you want to delete this message?</p>
+    <div class="modal-actions">
+      <button class="btn danger-btn" (click)="deleteMessage('everyone')">Delete for Everyone</button>
+      <button class="btn warning-btn" (click)="deleteMessage('me')">Delete for Me</button>
+      <button class="btn cancel-btn" (click)="openDeleteModel('')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- delete-conversation-modal.component.html -->
+<div class="modal" *ngIf="deleteChat" tabindex="-1">
+  <div class="modal">
+    <div class="modal-content">
+      <h3>{{ isGroup ? 'Exit from Group' : 'Delete Conversation' }}</h3>
+      <p>
+        {{ selectedConversationId?.group
+        ? 'Are you sure you want to exit this group?'
+        : 'Are you sure you want to delete this conversation?' }}
+      </p>
+      <div class="modal-actions">
+        <button class="btn warning-btn" (click)="selectedConversationId?.group ? exitGroup() : deleteConversation()">
+          {{ selectedConversationId?.group ? 'Exit Group' : 'Delete' }}
+        </button>
+        <button class="btn cancel-btn" (click)="toggleDeleteChat('')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Invite Family Modal -->
+  <div class="modal-overlay" *ngIf="showInviteFamilyModal" (click)="closeInviteFamilyModal()">
+    <div class="family-invite-modal" (click)="$event.stopPropagation()">
+      <div class="family-invite-header">
+        <h3><i class="bx bx-user-plus"></i> Invite Family Member</h3>
+        <button class="close-btn" (click)="closeInviteFamilyModal()"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="family-invite-body">
+        <div class="form-group">
+          <label>Email Address *</label>
+          <input type="email" [(ngModel)]="inviteFamilyEmail" placeholder="family@example.com" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" [(ngModel)]="inviteFamilyName" placeholder="Family member name" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label>Relationship</label>
+          <select [(ngModel)]="inviteFamilyRelationship" class="form-control">
+            <option value="spouse">Spouse</option>
+            <option value="child">Child</option>
+            <option value="parent">Parent</option>
+            <option value="sibling">Sibling</option>
+            <option value="guardian">Guardian</option>
+            <option value="power_of_attorney">Power of Attorney</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <p class="family-invite-note">A magic link will be sent to the family member's email. They will have read-only access to care updates.</p>
+      </div>
+      <div class="family-invite-footer">
+        <button class="btn cancel-btn" (click)="closeInviteFamilyModal()">Cancel</button>
+        <button class="btn confirm" (click)="sendFamilyInvite()" [disabled]="inviteFamilyLoading || !inviteFamilyEmail">
+          <i class="bx" [ngClass]="inviteFamilyLoading ? 'bx-loader-alt bx-spin' : 'bx-send'"></i>
+          {{ inviteFamilyLoading ? 'Sending...' : 'Send Invitation' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

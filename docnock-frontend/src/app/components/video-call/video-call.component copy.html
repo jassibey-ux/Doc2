@@ -1,0 +1,83 @@
+<div id="content">
+  <div class="container chat-ui">
+    <div class="video-call-wrapper">
+      <!-- Remote videos container -->
+      <div class="remote-videos">
+        <div #remoteVideo class="append_main_videoBox video-grid"></div>
+      </div>
+
+      <!-- Local video -->
+      <video #localVideo id="localVideo" autoplay muted playsinline></video>
+      <audio #ringtone src="../../assets/messenger_video_call.mp3" loop></audio>
+
+      <!-- Bottom center controls -->
+      <div class="control-buttons">
+        <button *ngIf="!audio" (click)="mutesvideo()" class="mute-btn">
+          <i [class]="isVideoMuted ? 'bx bx-video-off' : 'bx bx-video'"></i>
+        </button>
+
+        <button (click)="mutesAudio()" class="mute-btn">
+          <i [class]="isAudioMuted ? 'bx bx-microphone-off' : 'bx bx-microphone'"></i>
+        </button>
+      </div>
+
+      <!-- Top timer + leave -->
+      <div class="call-timer">Call Duration: {{ callDuration }}</div>
+      <button (click)="leaveCall()" class="btn leave">Leave Call</button>
+
+      <!-- Incoming Call Overlay -->
+      <div *ngIf="incomingCall" class="overlay">
+        <div class="call-popup">
+          <img
+            [src]="incomingCall.callerImage"
+            style="width: 200px"
+            alt="Caller Image"
+            class="caller-img"
+          />
+          <h3>{{ incomingCall.callerName }}</h3>
+          <p>Incoming {{ incomingCall.audio ? "Audio" : "Video" }} Call...</p>
+
+          <div class="button-group">
+            <button (click)="acceptCall()" class="accept-btn">Accept</button>
+            <button (click)="rejectCall()" class="reject-btn">Reject</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Outgoing Call Ringing Overlay -->
+      <div *ngIf="isRinging" class="overlay">
+        <div class="call-popup">
+          <img
+            [src]="recievetitle.image"
+            style="width: 200px"
+            alt="Receiver Image"
+            class="caller-img"
+          />
+          <h3>{{ callstatus }}.. {{ recievetitle.name }}...</h3>
+          <p>Waiting for answer...</p>
+          <div class="button-group">
+            <button (click)="cancelCall()" class="reject-btn">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rejected Overlay -->
+      <div *ngIf="isReject" class="overlay">
+        <div class="call-popup">
+          <p>Partner has rejected the call...</p>
+          <div class="button-group">
+            <button (click)="redirectchat()" class="reject-btn">Please try again</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile download CTA -->
+  <section class="download-app">
+    <h2>Download Our App</h2>
+    <p>For the best video calling experience, please download our mobile app.</p>
+    <button class="android-btn">Download for Android</button>
+    <button class="ios-btn">Download for iOS</button>
+  </section>
+</div>

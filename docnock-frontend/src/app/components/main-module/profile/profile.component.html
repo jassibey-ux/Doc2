@@ -1,0 +1,142 @@
+<main>
+  <div id="content" class="backdrop">
+    <div class="card-container w-100 m-3 p-3">
+      <h2>Profile</h2>
+      <form class="d-flex flex-column" [formGroup]="profileSetup"
+      (ngSubmit)="profileSetupSubmit()">
+
+        <div class="row">
+          <div class="col-md-6">
+            <div class="form-group">
+              <label for="name">Name</label>
+              <input
+                type="text"
+                id="name"
+                formControlName="name"
+                placeholder="Enter Name"
+                class="form-control"
+              />
+              <div
+                  class="text-danger"
+                  *ngIf="
+                    profileSetup.get('name')?.touched &&
+                    profileSetup.get('name')?.invalid
+                  "
+                  class="text-danger"
+                >
+                  Name is required.
+                </div>
+            </div>
+
+            <div class="form-group">
+              <label for="mobile">Mobile</label>
+              <input
+                type="number"
+                id="mobile"
+                formControlName="mobile"
+                placeholder="Enter Mobile"
+                class="form-control"
+              />
+              <div
+              class="error"
+              *ngIf="
+                profileSetup.get('mobile')?.touched &&
+                profileSetup.get('mobile')?.invalid
+              "
+            >
+              <div
+                class="text-danger"
+                *ngIf="profileSetup.get('mobile')?.errors?.['required']"
+              >
+                Mobile is required.
+              </div>
+              <div
+                class="text-danger"
+                *ngIf="profileSetup.get('mobile')?.errors?.['pattern']"
+              >
+                Enter a valid 10-digit mobile number.
+              </div>
+            </div>
+            </div>
+
+            <div class="toggle-container m-3 align-self-center">
+              <span>Geolocation</span>
+              <label class="toggle">
+                <input
+                  type="checkbox"
+                  id="geolocation"
+                  formControlName="geolocation"
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="form-group">
+              <label for="email">Email</label>
+              <input
+                type="email"
+                id="email"
+                formControlName="email"
+                placeholder="Enter Email"
+                class="form-control"
+              />
+              <div
+              class="error"
+              *ngIf="
+                profileSetup.get('email')?.touched &&
+                profileSetup.get('email')?.invalid
+              "
+            >
+              <div class="text-danger">Email is required.</div>
+              <div class="text-danger">Enter a valid email.</div>
+            </div>
+            </div>
+
+            <div class="form-group">
+              <label for="role-name">Location</label>
+              <input
+                type="text"
+                id="role-name"
+                formControlName="location"
+                placeholder="Enter Location"
+                class="form-control"
+                #placesRef="ngx-places"
+                ngx-gp-autocomplete
+                (onAddressChange)="handleAddressChange($event)"
+              />
+              <div
+              *ngIf="
+                profileSetup.get('location')?.touched &&
+                profileSetup.get('location')?.invalid
+              "
+              class="error"
+            >
+              <div
+                class="text-danger"
+                *ngIf="profileSetup.get('location')?.errors?.['required']"
+              >
+                Location is required.
+              </div>
+              <div
+                class="text-danger"
+                *ngIf="profileSetup.get('location')?.errors?.['invalidAddress']"
+              >
+                Please select a valid address.
+              </div>
+            </div>
+            </div>
+           
+          </div>
+        </div>
+
+     
+        <div class="actions">
+            <!-- <button type="button" class="cancel-btn">Cancel</button> -->
+            <button type="submit" class="add-btn">Update</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</main>

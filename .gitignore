@@ -40,3 +40,19 @@ nul
 # Backup files
 *.backup
 *.bak
+
+# DocNock build/dependency artifacts
+.angular/
+.env
+.env.*
+*.p8
+*ServiceKey.json
+*ServiceAccountKey.json
+package-lock.json
+yarn.lock
+*.tsbuildinfo
+coverage/
+.nyc_output/
+android/
+ios/
+Pods/

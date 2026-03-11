@@ -1,0 +1,445 @@
+diff --git a/node_modules/react-native-voips-calls/android/build.gradle b/node_modules/react-native-voips-calls/android/build.gradle
+index 47503ef..dcdbae7 100644
+--- a/node_modules/react-native-voips-calls/android/build.gradle
++++ b/node_modules/react-native-voips-calls/android/build.gradle
+@@ -12,12 +12,12 @@ buildscript {
+ apply plugin: 'com.android.library'
+ 
+ android {
+-    compileSdkVersion 28
++    compileSdkVersion 30
+     buildToolsVersion "23.0.1"
+ 
+     defaultConfig {
+-        minSdkVersion 16
+-        targetSdkVersion 28
++        minSdkVersion 24
++        targetSdkVersion 30
+         versionCode 1
+         versionName "1.0"
+     }
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/386348ea2f4a61b73f8da1399c904512/results.bin b/node_modules/react-native-voips-calls/android/build/.transforms/386348ea2f4a61b73f8da1399c904512/results.bin
+new file mode 100644
+index 0000000..0d259dd
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/.transforms/386348ea2f4a61b73f8da1399c904512/results.bin
+@@ -0,0 +1 @@
++o/classes
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/386348ea2f4a61b73f8da1399c904512/transformed/classes/classes_dex/classes.dex b/node_modules/react-native-voips-calls/android/build/.transforms/386348ea2f4a61b73f8da1399c904512/transformed/classes/classes_dex/classes.dex
+new file mode 100644
+index 0000000..ca6c815
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/.transforms/386348ea2f4a61b73f8da1399c904512/transformed/classes/classes_dex/classes.dex differ
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/results.bin b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/results.bin
+new file mode 100644
+index 0000000..7ed749e
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/results.bin
+@@ -0,0 +1 @@
++o/bundleLibRuntimeToDirDebug
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/BuildConfig.dex b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/BuildConfig.dex
+new file mode 100644
+index 0000000..c69b0fa
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/BuildConfig.dex differ
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipBroadcastReciever.dex b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipBroadcastReciever.dex
+new file mode 100644
+index 0000000..e863ee0
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipBroadcastReciever.dex differ
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipCallModule.dex b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipCallModule.dex
+new file mode 100644
+index 0000000..ea7d2b0
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipCallModule.dex differ
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipCallPackage.dex b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipCallPackage.dex
+new file mode 100644
+index 0000000..310efeb
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipCallPackage.dex differ
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipConfig.dex b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipConfig.dex
+new file mode 100644
+index 0000000..b73b3c5
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipConfig.dex differ
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipNotificationHelper.dex b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipNotificationHelper.dex
+new file mode 100644
+index 0000000..7bb2238
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipNotificationHelper.dex differ
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipRingtunePlayer$1.dex b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipRingtunePlayer$1.dex
+new file mode 100644
+index 0000000..c0d09a3
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipRingtunePlayer$1.dex differ
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipRingtunePlayer.dex b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipRingtunePlayer.dex
+new file mode 100644
+index 0000000..56a7db7
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipRingtunePlayer.dex differ
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipSendData.dex b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipSendData.dex
+new file mode 100644
+index 0000000..8e4f544
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/ajith/voipcall/RNVoipSendData.dex differ
+diff --git a/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/desugar_graph.bin b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/desugar_graph.bin
+new file mode 100644
+index 0000000..a49bab8
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/.transforms/fda8811b29f330360b1bc3b3c697ef03/transformed/bundleLibRuntimeToDirDebug/desugar_graph.bin differ
+diff --git a/node_modules/react-native-voips-calls/android/build/generated/source/buildConfig/debug/com/ajith/voipcall/BuildConfig.java b/node_modules/react-native-voips-calls/android/build/generated/source/buildConfig/debug/com/ajith/voipcall/BuildConfig.java
+new file mode 100644
+index 0000000..1bfb8b4
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/generated/source/buildConfig/debug/com/ajith/voipcall/BuildConfig.java
+@@ -0,0 +1,10 @@
++/**
++ * Automatically generated file. DO NOT MODIFY
++ */
++package com.ajith.voipcall;
++
++public final class BuildConfig {
++  public static final boolean DEBUG = Boolean.parseBoolean("true");
++  public static final String LIBRARY_PACKAGE_NAME = "com.ajith.voipcall";
++  public static final String BUILD_TYPE = "debug";
++}
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml b/node_modules/react-native-voips-calls/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+new file mode 100644
+index 0000000..5d469c4
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="com.ajith.voipcall" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++    <application>
++        <receiver android:name="com.ajith.voipcall.RNVoipBroadcastReciever" />
++    </application>
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json b/node_modules/react-native-voips-calls/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+new file mode 100644
+index 0000000..e875465
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+@@ -0,0 +1,18 @@
++{
++  "version": 3,
++  "artifactType": {
++    "type": "AAPT_FRIENDLY_MERGED_MANIFESTS",
++    "kind": "Directory"
++  },
++  "applicationId": "com.ajith.voipcall",
++  "variantName": "debug",
++  "elements": [
++    {
++      "type": "SINGLE",
++      "filters": [],
++      "attributes": [],
++      "outputFile": "AndroidManifest.xml"
++    }
++  ],
++  "elementType": "File"
++}
+\ No newline at end of file
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties b/node_modules/react-native-voips-calls/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+new file mode 100644
+index 0000000..1211b1e
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+@@ -0,0 +1,6 @@
++aarFormatVersion=1.0
++aarMetadataVersion=1.0
++minCompileSdk=1
++minCompileSdkExtension=0
++minAndroidGradlePluginVersion=1.0.0
++coreLibraryDesugaringEnabled=false
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json b/node_modules/react-native-voips-calls/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+new file mode 100644
+index 0000000..9e26dfe
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+@@ -0,0 +1 @@
++{}
+\ No newline at end of file
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar b/node_modules/react-native-voips-calls/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar
+new file mode 100644
+index 0000000..6ef11e5
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar b/node_modules/react-native-voips-calls/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar
+new file mode 100644
+index 0000000..9f78139
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt b/node_modules/react-native-voips-calls/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt
+new file mode 100644
+index 0000000..b17b9cf
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt
+@@ -0,0 +1,4 @@
++int drawable ic_call_black_24dp 0x0
++int drawable ic_phone_missed_black_24dp 0x0
++int raw nosound 0x0
++int raw ringtune 0x0
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/compiled_local_resources/debug/compileDebugLibraryResources/out/drawable_ic_call_black_24dp.xml.flat b/node_modules/react-native-voips-calls/android/build/intermediates/compiled_local_resources/debug/compileDebugLibraryResources/out/drawable_ic_call_black_24dp.xml.flat
+new file mode 100644
+index 0000000..68963a0
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/compiled_local_resources/debug/compileDebugLibraryResources/out/drawable_ic_call_black_24dp.xml.flat differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/compiled_local_resources/debug/compileDebugLibraryResources/out/drawable_ic_phone_missed_black_24dp.xml.flat b/node_modules/react-native-voips-calls/android/build/intermediates/compiled_local_resources/debug/compileDebugLibraryResources/out/drawable_ic_phone_missed_black_24dp.xml.flat
+new file mode 100644
+index 0000000..bd93f15
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/compiled_local_resources/debug/compileDebugLibraryResources/out/drawable_ic_phone_missed_black_24dp.xml.flat differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/compiled_local_resources/debug/compileDebugLibraryResources/out/raw_nosound.mp3.flat b/node_modules/react-native-voips-calls/android/build/intermediates/compiled_local_resources/debug/compileDebugLibraryResources/out/raw_nosound.mp3.flat
+new file mode 100644
+index 0000000..c8936bf
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/compiled_local_resources/debug/compileDebugLibraryResources/out/raw_nosound.mp3.flat differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/compiled_local_resources/debug/compileDebugLibraryResources/out/raw_ringtune.mp3.flat b/node_modules/react-native-voips-calls/android/build/intermediates/compiled_local_resources/debug/compileDebugLibraryResources/out/raw_ringtune.mp3.flat
+new file mode 100644
+index 0000000..5519fd8
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/compiled_local_resources/debug/compileDebugLibraryResources/out/raw_ringtune.mp3.flat differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties b/node_modules/react-native-voips-calls/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+new file mode 100644
+index 0000000..1867004
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+@@ -0,0 +1,5 @@
++#Tue Aug 05 23:53:43 IST 2025
++com.ajith.voipcall.react-native-voips-calls-main-6\:/raw/nosound.mp3=/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/raw/nosound.mp3
++com.ajith.voipcall.react-native-voips-calls-main-6\:/raw/ringtune.mp3=/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/raw/ringtune.mp3
++com.ajith.voipcall.react-native-voips-calls-main-6\:/drawable/ic_phone_missed_black_24dp.xml=/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/drawable/ic_phone_missed_black_24dp.xml
++com.ajith.voipcall.react-native-voips-calls-main-6\:/drawable/ic_call_black_24dp.xml=/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/drawable/ic_call_black_24dp.xml
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml b/node_modules/react-native-voips-calls/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+new file mode 100644
+index 0000000..d6a905c
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main" generated-set="main$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/res"><file name="ic_call_black_24dp" path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/res/drawable/ic_call_black_24dp.xml" qualifiers="" type="drawable"/><file name="ic_phone_missed_black_24dp" path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/res/drawable/ic_phone_missed_black_24dp.xml" qualifiers="" type="drawable"/><file name="ringtune" path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/res/raw/ringtune.mp3" qualifiers="" type="raw"/><file name="nosound" path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/res/raw/nosound.mp3" qualifiers="" type="raw"/></source></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/debug/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug" generated-set="debug$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/debug/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/build/generated/res/resValues/debug"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated" generated-set="generated$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/build/generated/res/resValues/debug"/></dataSet><mergedItems/></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/incremental/mergeDebugShaders/merger.xml b/node_modules/react-native-voips-calls/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+new file mode 100644
+index 0000000..dccd6e1
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/shaders"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/debug/shaders"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/incremental/packageDebugAssets/merger.xml b/node_modules/react-native-voips-calls/android/build/intermediates/incremental/packageDebugAssets/merger.xml
+new file mode 100644
+index 0000000..53e14fd
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/incremental/packageDebugAssets/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/assets"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/debug/assets"/></dataSet><dataSet config="generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/build/intermediates/shader_assets/debug/compileDebugShaders/out"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/BuildConfig.class b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/BuildConfig.class
+new file mode 100644
+index 0000000..7d3dc46
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/BuildConfig.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipBroadcastReciever.class b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipBroadcastReciever.class
+new file mode 100644
+index 0000000..ed28797
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipBroadcastReciever.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipCallModule.class b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipCallModule.class
+new file mode 100644
+index 0000000..ca503dd
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipCallModule.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipCallPackage.class b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipCallPackage.class
+new file mode 100644
+index 0000000..133aa0a
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipCallPackage.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipConfig.class b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipConfig.class
+new file mode 100644
+index 0000000..f5a1698
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipConfig.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipNotificationHelper.class b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipNotificationHelper.class
+new file mode 100644
+index 0000000..91e44f8
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipNotificationHelper.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipRingtunePlayer$1.class b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipRingtunePlayer$1.class
+new file mode 100644
+index 0000000..b1fbfb2
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipRingtunePlayer$1.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipRingtunePlayer.class b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipRingtunePlayer.class
+new file mode 100644
+index 0000000..d4a5966
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipRingtunePlayer.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipSendData.class b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipSendData.class
+new file mode 100644
+index 0000000..705977e
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/ajith/voipcall/RNVoipSendData.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt b/node_modules/react-native-voips-calls/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+new file mode 100644
+index 0000000..a576041
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+@@ -0,0 +1,6 @@
++R_DEF: Internal format may change without notice
++local
++drawable ic_call_black_24dp
++drawable ic_phone_missed_black_24dp
++raw nosound
++raw ringtune
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt b/node_modules/react-native-voips-calls/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+new file mode 100644
+index 0000000..8112cd4
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+@@ -0,0 +1,14 @@
++1<?xml version="1.0" encoding="utf-8"?>
++2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++3    package="com.ajith.voipcall" >
++4
++5    <uses-sdk android:minSdkVersion="24" />
++6
++7    <application>
++7-->/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml:4:9-6:23
++8        <receiver android:name="com.ajith.voipcall.RNVoipBroadcastReciever" />
++8-->/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml:5:13-83
++8-->/Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml:5:23-80
++9    </application>
++10
++11</manifest>
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml b/node_modules/react-native-voips-calls/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+new file mode 100644
+index 0000000..5d469c4
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="com.ajith.voipcall" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++    <application>
++        <receiver android:name="com.ajith.voipcall.RNVoipBroadcastReciever" />
++    </application>
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json b/node_modules/react-native-voips-calls/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+new file mode 100644
+index 0000000..0637a08
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+@@ -0,0 +1 @@
++[]
+\ No newline at end of file
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt b/node_modules/react-native-voips-calls/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+new file mode 100644
+index 0000000..08f4ebe
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+@@ -0,0 +1 @@
++0 Warning/Error
+\ No newline at end of file
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/drawable/ic_call_black_24dp.xml b/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/drawable/ic_call_black_24dp.xml
+new file mode 100644
+index 0000000..eda99ef
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/drawable/ic_call_black_24dp.xml
+@@ -0,0 +1,5 @@
++<vector android:height="24dp" android:tint="#1B3383"
++    android:viewportHeight="24.0" android:viewportWidth="24.0"
++    android:width="24dp" xmlns:android="http://schemas.android.com/apk/res/android">
++    <path android:fillColor="#FF000000" android:pathData="M6.62,10.79c1.44,2.83 3.76,5.14 6.59,6.59l2.2,-2.2c0.27,-0.27 0.67,-0.36 1.02,-0.24 1.12,0.37 2.33,0.57 3.57,0.57 0.55,0 1,0.45 1,1V20c0,0.55 -0.45,1 -1,1 -9.39,0 -17,-7.61 -17,-17 0,-0.55 0.45,-1 1,-1h3.5c0.55,0 1,0.45 1,1 0,1.25 0.2,2.45 0.57,3.57 0.11,0.35 0.03,0.74 -0.25,1.02l-2.2,2.2z"/>
++</vector>
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/drawable/ic_phone_missed_black_24dp.xml b/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/drawable/ic_phone_missed_black_24dp.xml
+new file mode 100644
+index 0000000..a5c7979
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/drawable/ic_phone_missed_black_24dp.xml
+@@ -0,0 +1,5 @@
++<vector android:height="24dp" android:tint="#83110B"
++    android:viewportHeight="24.0" android:viewportWidth="24.0"
++    android:width="24dp" xmlns:android="http://schemas.android.com/apk/res/android">
++    <path android:fillColor="#FF000000" android:pathData="M6.5,5.5L12,11l7,-7 -1,-1 -6,6 -4.5,-4.5L11,4.5L11,3L5,3v6h1.5L6.5,5.5zM23.71,16.67C20.66,13.78 16.54,12 12,12 7.46,12 3.34,13.78 0.29,16.67c-0.18,0.18 -0.29,0.43 -0.29,0.71s0.11,0.53 0.29,0.71l2.48,2.48c0.18,0.18 0.43,0.29 0.71,0.29 0.27,0 0.52,-0.11 0.7,-0.28 0.79,-0.74 1.69,-1.36 2.66,-1.85 0.33,-0.16 0.56,-0.5 0.56,-0.9v-3.1c1.45,-0.48 3,-0.73 4.6,-0.73 1.6,0 3.15,0.25 4.6,0.72v3.1c0,0.39 0.23,0.74 0.56,0.9 0.98,0.49 1.87,1.12 2.67,1.85 0.18,0.18 0.43,0.28 0.7,0.28 0.28,0 0.53,-0.11 0.71,-0.29l2.48,-2.48c0.18,-0.18 0.29,-0.43 0.29,-0.71s-0.12,-0.52 -0.3,-0.7z"/>
++</vector>
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/raw/nosound.mp3 b/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/raw/nosound.mp3
+new file mode 100644
+index 0000000..a3b6b2f
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/raw/nosound.mp3 differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/raw/ringtune.mp3 b/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/raw/ringtune.mp3
+new file mode 100644
+index 0000000..67a904d
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/packaged_res/debug/packageDebugResources/raw/ringtune.mp3 differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/BuildConfig.class b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/BuildConfig.class
+new file mode 100644
+index 0000000..7d3dc46
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/BuildConfig.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipBroadcastReciever.class b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipBroadcastReciever.class
+new file mode 100644
+index 0000000..ed28797
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipBroadcastReciever.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipCallModule.class b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipCallModule.class
+new file mode 100644
+index 0000000..ca503dd
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipCallModule.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipCallPackage.class b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipCallPackage.class
+new file mode 100644
+index 0000000..133aa0a
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipCallPackage.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipConfig.class b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipConfig.class
+new file mode 100644
+index 0000000..f5a1698
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipConfig.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipNotificationHelper.class b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipNotificationHelper.class
+new file mode 100644
+index 0000000..91e44f8
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipNotificationHelper.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipRingtunePlayer$1.class b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipRingtunePlayer$1.class
+new file mode 100644
+index 0000000..b1fbfb2
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipRingtunePlayer$1.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipRingtunePlayer.class b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipRingtunePlayer.class
+new file mode 100644
+index 0000000..d4a5966
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipRingtunePlayer.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipSendData.class b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipSendData.class
+new file mode 100644
+index 0000000..705977e
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/ajith/voipcall/RNVoipSendData.class differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar
+new file mode 100644
+index 0000000..23aa759
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar differ
+diff --git a/node_modules/react-native-voips-calls/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt b/node_modules/react-native-voips-calls/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+new file mode 100644
+index 0000000..5b6c3e9
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+@@ -0,0 +1,5 @@
++com.ajith.voipcall
++drawable ic_call_black_24dp
++drawable ic_phone_missed_black_24dp
++raw nosound
++raw ringtune
+diff --git a/node_modules/react-native-voips-calls/android/build/outputs/logs/manifest-merger-debug-report.txt b/node_modules/react-native-voips-calls/android/build/outputs/logs/manifest-merger-debug-report.txt
+new file mode 100644
+index 0000000..514efcc
+--- /dev/null
++++ b/node_modules/react-native-voips-calls/android/build/outputs/logs/manifest-merger-debug-report.txt
+@@ -0,0 +1,23 @@
++-- Merging decision tree log ---
++manifest
++ADDED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml:2:1-7:12
++INJECTED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml:2:1-7:12
++	package
++		ADDED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml:3:11-39
++		INJECTED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml
++	xmlns:android
++		ADDED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml:2:11-69
++application
++ADDED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml:4:9-6:23
++receiver#com.ajith.voipcall.RNVoipBroadcastReciever
++ADDED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml:5:13-83
++	android:name
++		ADDED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml:5:23-80
++uses-sdk
++INJECTED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml reason: use-sdk injection requested
++INJECTED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml
++INJECTED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml
++	android:targetSdkVersion
++		INJECTED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml
++	android:minSdkVersion
++		INJECTED from /Users/user/Desktop/React_Native/DocnockMobile/node_modules/react-native-voips-calls/android/src/main/AndroidManifest.xml
+diff --git a/node_modules/react-native-voips-calls/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin b/node_modules/react-native-voips-calls/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin
+new file mode 100644
+index 0000000..a6cef47
+Binary files /dev/null and b/node_modules/react-native-voips-calls/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin differ

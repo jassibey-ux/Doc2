@@ -1,0 +1,87 @@
+<section id="sidebar" [ngClass]="isCollapsed?'hide':''">
+  <div class="brand" >
+    <!-- <div  class="sidebar_toggle"><i (click)="toggleSidebar()" class='bx bx-menu'></i></div> -->
+    <img src="../../../assets/images/dash-logo.png" alt="">
+  </div>
+  <ul class="side-menu top">
+    <li class="incoBx" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" routerLink="/{{dynamicpath}}/dashboard">
+      <a >
+        <i class='bx bxs-dashboard'></i>
+        <span class="text">Dashboard</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/facilitycenter/list" *ngIf="allowedModules.has('F')">
+      <a>
+        <i class='bx bxs-shopping-bag-alt'></i>
+        <span class="text">Facility Center</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/physician/list" *ngIf="allowedModules.has('P')">
+      <a>
+        <i class='bx bxs-message-dots'></i>
+        <span class="text">Physicians</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/nurse/list" *ngIf="allowedModules.has('N')">
+      <a>
+        <i class='bx bxs-group'></i>
+        <span class="text">Nurses</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/chats" *ngIf="allowedModules.has('C')">
+      <a>
+        <i class='bx bxs-group'></i>
+        <span class="text">Chats</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/main/role-permission" *ngIf="allowedModules.has('R')">
+      <!-- [routerLink]="['/role-permission']" -->
+      <a >
+          <i class='bx bxs-group'></i>
+          <span class="text">Role and Permission</span>
+      </a>
+  </li>
+
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/subadmin/list" *ngIf="allowedModules.has('S')">
+      <a>
+        <i class='bx bxs-group'></i>
+        <span class="text">Sub Admin</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/other/list" *ngIf="allowedModules.has('O')">
+      <a>
+        <i class='bx bxs-group'></i>
+        <span class="text">Others</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/setting">
+      <a>
+        <i class='bx bxs-group'></i>
+        <span class="text">Account Setting</span>
+      </a>
+    </li>
+    <!-- logout button positioned at bottom like menu items -->
+    <li class="incoBx logout" (click)="openLogoutModal()">
+      <a>
+        <i class='bx bx-log-out'></i>
+        <span class="text">Logout</span>
+      </a>
+    </li>
+  </ul>  
+
+  
+
+
+</section>
+
+
+<div class="modal" *ngIf="showLogoutModal" tabindex="-1">
+  <div class="modal-content">
+    <h3>Logout ?</h3>
+    <p>Are you sure you want to logout?</p>
+    <div class="modal-actions">
+      <button class="btn add-btn confirm" (click)="confirmLogout()">Yes</button>
+      <button class="btn add-btn cancel" (click)="closeLogoutModal()">Cancel</button>
+    </div>
+  </div>
+</div>

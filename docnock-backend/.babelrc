@@ -1,0 +1,21 @@
+// {
+//   "plugins": [
+//     [
+//       "@babel/plugin-transform-modules-commonjs",
+//       {
+//         "allTopLevelThis": true
+//       }
+//     ]
+//   ]
+// }
+{
+  "presets": ["@babel/preset-env"],
+  "plugins": [
+    [
+      "@babel/plugin-transform-modules-commonjs",
+      {
+        "allTopLevelThis": true
+      }
+    ]
+  ]
+}

@@ -1,0 +1,279 @@
+<main>
+  <div id="content" class="backdrop">
+    <div class="card-container account-card w-100">
+      <div class="tab-buttons d-flex justify-content-start">
+        <button
+          class="add-btn"
+          [ngClass]="{
+            active: activeTab === 'profile',
+            nonactive: activeTab !== 'profile'
+          }"
+          (click)="showTab('profile')"
+        >
+          Profile
+        </button>
+        <button
+          class="add-btn"
+          [ngClass]="{
+            active: activeTab === 'settings',
+            nonactive: activeTab !== 'settings'
+          }"
+          (click)="showTab('settings')"
+        >
+          Change Password
+        </button>
+      </div>
+
+      <!-- Profile Section -->
+      <div *ngIf="activeTab === 'profile'" class="profile-section">
+        <form
+          class="d-flex flex-column profile-form"
+          [formGroup]="profileSetup"
+          (ngSubmit)="profileSetupSubmit()"
+        >
+          <div class="profile-header">
+            <div class="profile-picture" (click)="triggerFileInput()">
+              <input
+                type="file"
+                id="profile-upload"
+                accept="image/*"
+                style="display: none"
+                (change)="onFileSelected($event)"
+              />
+              <img
+                *ngIf="previewUrl"
+                [src]="previewUrl"
+                alt="Profile Picture Preview"
+                class="profile-preview"
+              />
+              <span *ngIf="!previewUrl" class="profilePhoto">{{ getInitials(profileName) }}</span>
+              <label for="profile-upload" class="camera-overlay">
+                <i class="bx bxs-camera"></i>
+              </label>
+            </div>
+          </div>
+          <div class="row w-100 g-3">
+            <div class="col-md-6">
+              <div class="form-group">
+                <label for="name">Name</label>
+                <input
+                  type="text"
+                  id="name"
+                  formControlName="name"
+                  placeholder="Enter Name"
+                  class="form-control"
+                />
+                <div
+                  class="text-danger"
+                  *ngIf="
+                    profileSetup.get('name')?.touched &&
+                    profileSetup.get('name')?.invalid
+                  "
+                  class="text-danger"
+                >
+                  Name is required.
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="mobile">Mobile</label>
+                <input
+                  type="number"
+                  id="mobile"
+                  formControlName="mobile"
+                  placeholder="Enter Mobile"
+                  class="form-control"
+                />
+                <div
+                  class="error"
+                  *ngIf="
+                    profileSetup.get('mobile')?.touched &&
+                    profileSetup.get('mobile')?.invalid
+                  "
+                >
+                  <div
+                    class="text-danger"
+                    *ngIf="profileSetup.get('mobile')?.errors?.['required']"
+                  >
+                    Mobile is required.
+                  </div>
+                  <div
+                    class="text-danger"
+                    *ngIf="profileSetup.get('mobile')?.errors?.['pattern']"
+                  >
+                    Enter a valid 10-digit mobile number.
+                  </div>
+                </div>
+              </div>
+              <div class="toggle-container geo-toggle align-self-center">
+                <span>Geolocation</span>
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    id="geolocation"
+                    formControlName="geolocation"
+                  />
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="form-group">
+                <label for="email">Email</label>
+                <input
+                  type="email"
+                  id="email"
+                  formControlName="email"
+                  placeholder="Enter Email"
+                  class="form-control"
+                />
+                <div
+                *ngIf="
+                  (profileSetup.get('email')?.dirty || profileSetup.get('email')?.touched) &&
+                  profileSetup.get('email')?.invalid
+                "
+                class="error"
+              >
+                <div
+                  class="text-danger"
+                  *ngIf="profileSetup.get('email')?.errors?.['required']"
+                >
+                  Email is required.
+                </div>
+                <div
+                  class="text-danger"
+                  *ngIf="profileSetup.get('email')?.errors?.['email']"
+                >
+                  Enter a valid email.
+                </div>
+              </div>
+              </div>
+
+              <div class="form-group">
+                <label for="role-name">Location</label>
+                <input
+                  type="text"
+                  id="role-name"
+                  formControlName="location"
+                  placeholder="Enter Location"
+                  class="form-control"
+                  #placesRef="ngx-places"
+                  ngx-gp-autocomplete
+                  (onAddressChange)="handleAddressChange($event)"
+                  (input)="onLocationChange()"
+                />
+                <div
+                  *ngIf="
+                    profileSetup.get('location')?.touched &&
+                    profileSetup.get('location')?.invalid
+                  "
+                  class="error"
+                >
+                  <div
+                    class="text-danger"
+                    *ngIf="profileSetup.get('location')?.errors?.['required']"
+                  >
+                    Location is required.
+                  </div>
+                  <div
+                    class="text-danger"
+                    *ngIf="profileSetup.get('location')?.errors?.['invalidAddress']"
+                  >
+                    Please select a valid address.
+                  </div>
+                </div>
+              </div>
+
+              <!-- <div class="form-group">
+                    <label for="password">Confirm Password</label>
+                    <input type="number" id="Confirm " formControlName="passwordConfirm" placeholder="Enter Password" class="form-control" />
+                    <div class="error">
+                      <div class="text-danger">Password is required.</div>
+
+                    </div>
+                  </div> -->
+            </div>
+          </div>
+
+          <div class="actions">
+            <!-- <button type="button" class="cancel-btn">Cancel</button> -->
+            <button type="submit" class="add-btn">Update</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Settings Section -->
+      <div *ngIf="activeTab === 'settings'" class="settings-section">
+        <form
+          class="d-flex flex-column profile-form password-form"
+          [formGroup]="changePassword"
+          (ngSubmit)="onSubmit()"
+        >
+          <div class="form-group">
+            <label for="oldPassword">Old Password</label>
+            <input
+              type="password"
+              id="oldPassword"
+              formControlName="oldPassword"
+              placeholder="Enter old password"
+              class="form-control"
+            />
+            <div
+              *ngIf="
+                changePassword.get('oldPassword')?.touched &&
+                changePassword.get('oldPassword')?.invalid
+              "
+              class="text-danger"
+            >
+              Old password is required.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="newpassword">New Password</label>
+            <input
+              type="password"
+              id="newpassword"
+              formControlName="newpassword"
+              placeholder="Enter new password"
+              class="form-control"
+            />
+            <div
+              *ngIf="
+                changePassword.get('newpassword')?.touched &&
+                changePassword
+                  .get('newpassword')
+                  ?.hasError('minlength')
+              "
+              class="text-danger"
+            >
+              Password must be at least 6 characters long.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="confirm-password">Confirm Password</label>
+            <input
+              type="password"
+              id="confirm-password"
+              formControlName="confirmpassword"
+              placeholder="Confirm new password"
+              class="form-control"
+            />
+            <div
+              *ngIf="changePassword.hasError('passwordsDoNotMatch')"
+              class="text-danger mt-2"
+            >
+              Passwords do not match.
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="submit" class="add-btn">Update</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</main>

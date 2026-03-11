@@ -1,0 +1,22 @@
+version: "3.8"
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: .
+    container_name: dockbackend-docknockbackend
+    restart: always
+    depends_on:
+      - redis
+    ports:
+      - "8055:8055"    # API server
+      - "8056:8056"    # WebSocket server (Ensure it matches SOCKETPORT)
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SOCKETPORT: 8056  # Ensure WebSocket port is set

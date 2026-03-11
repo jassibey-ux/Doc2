@@ -1,0 +1,13 @@
+#!/bin/sh
+
+if command -v lint-staged >/dev/null 2>&1; then
+	lint-staged
+else
+	./node_modules/.bin/lint-staged
+fi
+
+if command -v cspell >/dev/null 2>&1; then
+	cspell "src/**/*.{js,ts,tsx}"
+else
+	./node_modules/.bin/cspell "src/**/*.{js,ts,tsx}"
+fi

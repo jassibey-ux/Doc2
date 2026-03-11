@@ -1,0 +1,8 @@
+<!-- layout.component.html -->
+<div class="layout" [class.collapsed]="isSidebarCollapsed">
+  <app-side-bar [isCollapsed]="isSidebarCollapsed"></app-side-bar>
+  <div class="main-content">
+    <app-nav-bar (toggle)="toggleSidebar()"></app-nav-bar>
+    <router-outlet></router-outlet>
+  </div>
+</div>

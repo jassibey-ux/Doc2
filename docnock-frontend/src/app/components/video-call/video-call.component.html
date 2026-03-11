@@ -1,0 +1,170 @@
+<div id="content">
+  <div class="container chat-ui">
+    <div class="video-call-wrapper" [class.chat-panel-collapsed]="!isCallChatOpen">
+
+      <div class="top-bar">
+        <div class="call-timer">
+          {{ callDuration }}
+        </div>
+      </div>
+
+      <aside class="call-chat-panel" *ngIf="isCallChatOpen">
+        <div class="call-chat-header">Room Chat</div>
+
+        <div #callChatScroll class="call-chat-messages">
+          <div *ngIf="callChatMessages.length === 0" class="call-chat-empty">
+            No messages yet
+          </div>
+
+          <div
+            *ngFor="let chat of callChatMessages"
+            class="call-chat-item"
+            [class.own]="isOwnCallChatMessage(chat)">
+            <div class="call-chat-meta">
+              <span class="call-chat-name">{{ isOwnCallChatMessage(chat) ? 'You' : chat.senderName }}</span>
+              <span class="call-chat-time">{{ formatCallChatTime(chat.timestamp) }}</span>
+            </div>
+            <div class="call-chat-text">{{ chat.message }}</div>
+
+            <div *ngIf="chat.attachments.length" class="call-chat-attachments">
+              <a
+                *ngFor="let attachment of chat.attachments"
+                class="call-chat-attachment-link"
+                [href]="attachment.data"
+                target="_blank"
+                rel="noopener noreferrer">
+                <i class='bx bx-paperclip'></i>
+                <span>{{ attachment.name || 'Attachment' }}</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div class="call-chat-input-wrap">
+          <input
+            type="file"
+            id="call-chat-attachment"
+            multiple
+            class="call-chat-file-input"
+            (change)="onCallChatFileSelected($event)" />
+
+          <label for="call-chat-attachment" class="call-chat-attach" title="Attach files">
+            <i class='bx bx-paperclip'></i>
+          </label>
+
+          <input
+            type="text"
+            [(ngModel)]="callChatText"
+            (keydown.enter)="onCallChatEnter($event)"
+            placeholder="Type a message"
+            class="call-chat-input" />
+
+          <button type="button" class="call-chat-send" (click)="sendCallChatMessage()" [disabled]="!callChatCanSend() || isSendingCallChat">
+            Send
+          </button>
+        </div>
+
+        <div *ngIf="callChatSelectedFiles.length" class="call-chat-file-list">
+          <div *ngFor="let file of callChatSelectedFiles; let idx = index" class="call-chat-file-chip">
+            <span>{{ file.name }}</span>
+            <button type="button" (click)="removeCallChatFile(idx)">
+              <i class='bx bx-x'></i>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <div *ngIf="remoteReconnecting" class="reconnect-banner">
+        <i class='bx bx-wifi-off'></i>
+        <span>{{ remoteReconnectMessage || 'Connection lost. Trying to reconnect...' }}</span>
+      </div>
+
+      <!-- Remote videos -->
+      <div class="remote-videos">
+        <div
+          #remoteVideo
+          class="append_main_videoBox video-grid">
+        </div>
+      </div>
+
+      <!-- Local Preview (video or avatar) -->
+      <div class="local-preview" [class.audio-mode]="audio">
+        <video
+          #localVideo
+          id="localVideo"
+          autoplay
+          muted
+          playsinline>
+        </video>
+        <div class="local-badge" *ngIf="!audio && loginuserresponse?.fullName as localName">
+          {{ localName }}
+        </div>
+        <div class="local-avatar" *ngIf="audio">
+          <div class="local-avatar__circle">{{ getInitialsForName(loginuserresponse?.fullName || '') || 'Y' }}</div>
+          <div class="local-avatar__label">{{ loginuserresponse?.fullName || 'You' }}</div>
+        </div>
+      </div>
+
+      <audio #ringtone src="../../assets/messenger_video_call.mp3" loop></audio>
+
+      <!-- Bottom Controls -->
+      <div class="control-buttons">
+        <button (click)="toggleCallChatPanel()" class="mute-btn chat-toggle-btn" [class.active]="isCallChatOpen"
+          [title]="isCallChatOpen ? 'Hide Chat' : 'Show Chat'">
+          <i [class]="isCallChatOpen ? 'bx bx-message-square-x' : 'bx bx-message-square-detail'"></i>
+        </button>
+
+        <button *ngIf="!audio" (click)="mutesvideo()" class="mute-btn" [class.active]="isVideoMuted">
+          <i [class]="isVideoMuted ? 'bx bx-video-off' : 'bx bx-video'"></i>
+        </button>
+
+        <button *ngIf="!audio" (click)="toggleScreenShare()" class="mute-btn" [class.active]="isScreenSharing"
+          [title]="isScreenSharing ? 'Stop Sharing' : 'Share Screen'">
+          <i [class]="isScreenSharing ? 'bx bx-stop-circle' : 'bx bx-desktop'"></i>
+        </button>
+
+        <button (click)="mutesAudio()" class="mute-btn" [class.active]="isAudioMuted">
+          <i [class]="isAudioMuted ? 'bx bx-microphone-off' : 'bx bx-microphone'"></i>
+        </button>
+
+        <button (click)="leaveCall()" class="mute-btn leave-btn" title="Leave Call">
+          <i class="bx bx-phone-off"></i>
+        </button>
+      </div>
+
+      <div *ngIf="callUiState !== 'idle'" class="call-state-surface" [ngClass]="'state-' + callUiState">
+        <div class="call-state-panel">
+          <div class="call-state-avatar">
+            <img *ngIf="callPartnerImage" [src]="callPartnerImage" alt="Caller" />
+            <div *ngIf="!callPartnerImage" class="call-state-initial">
+              {{ getInitialsForName(callPartnerName) || 'U' }}
+            </div>
+          </div>
+
+          <div class="call-state-title">{{ callStateTitle }}</div>
+          <div class="call-state-subtitle">{{ callStateSubtitle }}</div>
+          <div class="call-state-meta">{{ audio ? 'Audio' : 'Video' }} call · {{ callPartnerName }}</div>
+
+          <div class="call-state-actions">
+            <button *ngIf="callUiState === 'incoming'" class="call-state-btn accept" (click)="acceptCall()">Accept</button>
+            <button *ngIf="callUiState === 'incoming'" class="call-state-btn reject" (click)="rejectCall()">Reject</button>
+
+            <button *ngIf="callUiState === 'outgoing'" class="call-state-btn reject" (click)="cancelCall()">Cancel</button>
+
+            <button *ngIf="callUiState === 'missed' || callUiState === 'rejected'" class="call-state-btn primary" (click)="retryCall()">Try Again</button>
+            <button *ngIf="callUiState === 'missed' || callUiState === 'rejected'" class="call-state-btn ghost" (click)="redirectchat()">Back to chats</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Mobile CTA -->
+  <section class="download-app">
+    <h2>Download Our App</h2>
+    <p>Best experience on mobile app</p>
+    <button class="android-btn">Android</button>
+    <button class="ios-btn">iOS</button>
+  </section>
+</div>

@@ -1,0 +1,231 @@
+.backdrop {
+  width: 100%;
+  min-height: calc(100vh - 64px);
+  padding: 0 !important;
+}
+
+.account-card {
+  margin: 0;
+  padding: 20px 20px 24px;
+  border-radius: 0;
+  border: 1px solid var(--line);
+  background: var(--bg-light);
+  box-shadow: none;
+  min-height: calc(100vh - 64px);
+}
+
+.tab-buttons {
+  gap: 14px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.tab-buttons .add-btn {
+  width: 220px;
+  max-width: 100%;
+  margin: 0 !important;
+  padding: 10px 16px;
+  font-weight: 600;
+}
+
+.profile-form {
+  gap: 10px;
+  max-width: 760px;
+}
+
+.profile-section,
+.settings-section {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  margin: 2px 0 12px;
+}
+
+  .profile-picture {
+    position: relative;
+    width: 92px;
+    height: 92px;
+    margin: 0;
+    border: 2px solid var(--line);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: var(--bg);
+    box-shadow: -4px 4px 9px 0px #00000024;
+    cursor: pointer;
+}
+
+.profile-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  inset: 0;
+}
+
+.profile-picture .profilePhoto {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--bg-light);
+    color: var(--h);
+    font-size: 22px;
+    font-weight: bold;
+}
+
+.profile-picture .camera-overlay {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    background-color: var(--primary);
+    color: var(--white);
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: 12px;
+    border: 2px solid var(--bg-light);
+}
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+.form-group label {
+  margin-bottom: 6px;
+  color: var(--h);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.backdrop .card-container form .form-group input {
+  color: var(--h);
+  height: 46px;
+  border-color: var(--line);
+  background: var(--bg-light);
+}
+
+.backdrop .card-container form .form-group input:focus {
+  border-color: var(--primary);
+  box-shadow: none;
+}
+
+.geo-toggle {
+  margin: 4px 0 0 !important;
+  align-self: flex-start !important;
+}
+
+.actions {
+  margin-top: 10px;
+}
+
+.actions .add-btn {
+  width: auto;
+  min-width: 132px;
+  margin: 0 !important;
+}
+
+.password-container {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.password-form {
+  max-width: 540px;
+}
+
+input::placeholder {
+  color: var(--h); /* your desired color */
+  opacity: 1;  /* make sure it's fully visible */
+}
+
+  .add-btn {
+    background-color: var(--primary);
+    color: var(--white);
+    padding: 10px 20px;
+    border: none;
+    width: 20%;
+    border-radius: 36px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.3s ease-in-out;
+    margin: 0 2% !important;
+}
+
+.add-btn.active {
+    background-color: var(--primary);
+    color: var(--white);
+    padding: 10px 20px;
+    border: none;
+    width: 17%;
+    border-radius: 36px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.3s ease-in-out;
+}
+
+.add-btn.nonactive {
+    background: var(--light-bg); /* Non-active tab background */
+    color: var(--h); /* Non-active tab text color */
+    border: 1px solid var(--line);
+}
+
+.tab-buttons .add-btn.active,
+.tab-buttons .add-btn.nonactive {
+  width: 220px;
+}
+
+.backdrop .card-container form .actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.backdrop .card-container form{
+  align-items: stretch !important;
+}
+
+
+@media screen and (max-width: 768px) {
+
+  .account-card {
+    padding: 16px;
+    min-height: calc(100vh - 56px);
+  }
+
+  .profile-section,
+  .settings-section {
+    padding: 14px;
+  }
+
+  .tab-buttons .add-btn,
+  .tab-buttons .add-btn.active,
+  .tab-buttons .add-btn.nonactive {
+    width: 100%;
+  }
+
+  .actions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .actions button {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+}

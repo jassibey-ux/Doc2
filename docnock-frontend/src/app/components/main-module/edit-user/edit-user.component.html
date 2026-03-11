@@ -1,0 +1,232 @@
+<div id="content" class="backdrop">
+    <div class="card-container w-100 m-3 p-3">
+      <h2>Edit {{ getTitle(dynamicPathDetails) | titlecase }}</h2>
+      <form
+        [formGroup]="addAssistedLiving"
+        (ngSubmit)="onSubmit()"
+        class="d-flex flex-column"
+      >
+        <div class="profile-picture" (click)="triggerFileInput()">
+          <input
+            type="file"
+            id="profile-upload"
+            accept="image/*"
+            style="display: none"
+            (change)="onFileSelected($event)"
+          />
+          <img
+            *ngIf="previewUrl"
+            [src]="previewUrl"
+            alt="Profile Picture Preview"
+            style="
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              position: absolute;
+              top: 0;
+              left: 0;
+            "
+          />
+          <label for="profile-upload" *ngIf="!previewUrl">
+            <i class="fa fa-camera"></i>
+          </label>
+        </div>
+
+        <div class="row w-100">
+          <div class="col-md-6">
+            <div class="form-group">
+              <label for="name">Name</label>
+              <input
+                type="text"
+                id="name"
+                formControlName="name"
+                placeholder="Enter Name"
+                class="form-control"
+              />
+              <div
+                *ngIf="
+                  addAssistedLiving.get('name')?.touched &&
+                  addAssistedLiving.get('name')?.invalid
+                "
+                class="error"
+              >
+                Name is required.
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="mobile">Mobile</label>
+              <input
+                type="number"
+                id="mobile"
+                formControlName="mobile"
+                placeholder="Enter Mobile"
+                class="form-control"
+              />
+              <div
+                *ngIf="
+                  addAssistedLiving.get('mobile')?.touched &&
+                  addAssistedLiving.get('mobile')?.invalid
+                "
+                class="error"
+              >
+                <div
+                  class="text-danger"
+                  *ngIf="addAssistedLiving.get('mobile')?.errors?.['required']"
+                >
+                  Mobile is required.
+                </div>
+                <div
+                  class="text-danger"
+                  *ngIf="addAssistedLiving.get('mobile')?.errors?.['pattern']"
+                >
+                  Enter a valid 10-digit mobile number.
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group" *ngIf="showSelectUser">
+              <label for="status-select">Select Associate User</label>
+              <app-multi-select
+              [items]="diagnosisList"
+              class="custom-multi-select"
+              bindLabel="fullName"
+              bindValue="_id"
+              [multiple]="multiple"
+              [searchable]="true"
+              [loading]="loading"
+              [selectedItems]="patientSelectedIds"
+              (selectionChange)="onSelectionChange($event)"
+              (loadMore)="loadMoreItems()"
+              [compareWith]="compareFn"
+              (search)="onSearch($event)"
+              formControlName="selectUser"
+            >
+            </app-multi-select>
+            <div
+            *ngIf="
+              addAssistedLiving.get('selectUser')?.touched &&
+              addAssistedLiving.get('selectUser')?.invalid
+            "
+            class="error"
+          >
+            <div
+              class="text-danger"
+              *ngIf="addAssistedLiving.get('selectUser')?.errors?.['required']"
+            >
+              User Selection is required.
+            </div>
+          </div>
+            </div>
+
+            <div class="toggle-container m-3 align-self-center">
+              <span>Geolocation</span>
+              <label class="toggle">
+                <input
+                  type="checkbox"
+                  id="geolocation"
+                  formControlName="geolocation"
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <div class="form-group">
+              <label for="email">Email</label>
+              <input
+                type="email"
+                id="email"
+                formControlName="email"
+                placeholder="Enter Email"
+                class="form-control"
+              />
+              <div
+                *ngIf="
+                  (addAssistedLiving.get('email')?.dirty || addAssistedLiving.get('email')?.touched) &&
+                  addAssistedLiving.get('email')?.invalid
+                "
+                class="error"
+              >
+                <div
+                  class="text-danger"
+                  *ngIf="addAssistedLiving.get('email')?.errors?.['required']"
+                >
+                  Email is required.
+                </div>
+                <div
+                  class="text-danger"
+                  *ngIf="addAssistedLiving.get('email')?.errors?.['email']"
+                >
+                  Enter a valid email.
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="role-name">Location</label>
+              <input
+                type="text"
+                id="role-name"
+                formControlName="location"
+                placeholder="Enter Location"
+                class="form-control"
+                #placesRef="ngx-places"
+                ngx-gp-autocomplete
+                (onAddressChange)="handleAddressChange($event)"
+              (input)="onLocationChange()"
+              />
+              <div
+                *ngIf="
+                  addAssistedLiving.get('location')?.touched &&
+                  addAssistedLiving.get('location')?.invalid
+                "
+                class="error"
+              >
+                <div
+                  class="text-danger"
+                  *ngIf="addAssistedLiving.get('location')?.errors?.['required']"
+                >
+                  Location is required.
+                </div>
+                <div
+                  class="text-danger"
+                  *ngIf="addAssistedLiving.get('location')?.errors?.['invalidAddress']"
+                >
+                  Please select a valid address.
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group" *ngIf="showRoleName">
+              <label for="role-name">Role Name</label>
+              <input
+                type="text"
+                id="role-name"
+                formControlName="roleName"
+                placeholder="Enter Role Name"
+                class="form-control"
+              />
+              <div
+              *ngIf="
+                addAssistedLiving.get('roleName')?.touched &&
+                addAssistedLiving.get('roleName')?.invalid
+              "
+              class="error"
+            >
+              Role Name is required.
+            </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="cancel-btn" (click)="cancel()">
+            Cancel
+          </button>
+          <button type="submit" class="add-btn">Update</button>
+        </div>
+      </form>
+    </div>
+  </div>

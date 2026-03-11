@@ -1,0 +1,360 @@
+<div id="content">
+  <main>
+    <div class="head-title pb-3 dashboard-toolbar">
+      <div class="left">
+        <h4>Dashboard</h4>
+      </div>
+
+      <div class="dashboard-toolbar-filters">
+        <select
+          id="month"
+          class="form-select"
+          [(ngModel)]="selectedMonth"
+          (ngModelChange)="onMonthChange($event)">
+          <option [ngValue]="null">-- Select Month --</option>
+          <option *ngFor="let month of months" [value]="month.value">
+            {{ month.name }}
+          </option>
+        </select>
+
+        <select
+          id="year"
+          class="form-select"
+          [(ngModel)]="selectedYear"
+          (ngModelChange)="onYearChange($event)">
+          <option [ngValue]="null">-- Select Year --</option>
+          <option *ngFor="let y of years" [value]="y">{{ y }}</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- <div class="row">
+      <div class="col-md-4 my-3">
+        <div class="card">
+          <section class="info-section">
+            <div class="background-design greenlight">
+              <div class="circle green"></div>
+              <div class="circle green"></div>
+              <div class="circle green"></div>
+              <div class="circle green"></div>
+            </div>
+            <div class="left-side">
+              <div class="temperature">Dashboard</div>
+              <div class="range">56</div>
+            </div>
+            <div class="right-side">
+              <div>
+                <div class="hour"><i class='bx bxs-doughnut-chart'></i></div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <div class="col-md-4 my-3">
+        <div class="card">
+          <section class="info-section">
+            <div class="background-design yellowlight">
+              <div class="circle yellow"></div>
+              <div class="circle yellow"></div>
+              <div class="circle yellow"></div>
+              <div class="circle yellow"></div>
+            </div>
+            <div class="left-side">
+              <div class="temperature">Physicians</div>
+              <div class="range">120</div>
+            </div>
+            <div class="right-side">
+              <div>
+                <div class="hour"><i class='bx bxs-group'></i></div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <div class="col-md-4 my-3">
+        <div class="card">
+          <section class="info-section">
+            <div class="background-design redlight">
+              <div class="circle red"></div>
+              <div class="circle red"></div>
+              <div class="circle red"></div>
+              <div class="circle red"></div>
+            </div>
+            <div class="left-side">
+              <div class="temperature">Nurses</div>
+              <div class="range">93</div>
+            </div>
+            <div class="right-side">
+              <div>
+                <div class="hour"><i class='bx bxs-group'></i></div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div> -->
+
+    <div class="row dashboard-cards-row">
+      <div
+        class="dashboard-card-col"
+        *ngFor="let item of items"
+        [ngClass]="getResponsiveClasses(items.length)"
+      >
+        <div class="card dashboard-stat-card" [attr.data-count]="items.length">
+          <section class="info-section">
+            <div class="background-design" [ngClass]="item.lightClass">
+              <div
+                class="circle"
+                *ngFor="let circle of createArray(item.circleCount)"
+                [ngClass]="item.circleClass"
+              ></div>
+            </div>
+            <div class="left-side">
+              <div class="temperature">{{ item.title }}</div>
+              <div class="range">{{ item.value }}</div>
+            </div>
+            <div class="right-side">
+              <div>
+                <div class="hour">
+                  <i class="bx" [ngClass]="item.iconClass"></i>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-data mt-3 row dashboard-chart-row">
+      <!-- <div class="col-md-7">
+        <div class="order ">
+          <div class="head">
+            <h3>Physicians</h3>
+            <i class='bx bx-search'></i>
+            <i class='bx bx-filter'></i>
+          </div>
+          <div class="card-bg min-vh-200">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email ID</th>
+                  <th>Contact No.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <img src="https://secure.gravatar.com/avatar/d09eaad01aea86c51b4f892b4f8abf6f?s=100&d=wavatar&r=g">
+                    <p>John Doe</p>
+                  </td>
+                  <td>01-10-2023</td>
+                  <td>012300324988</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div> -->
+      <div class="col-12">
+        <div class="dashboard-chart-card">
+          <div class="dashboard-chart-head">
+            <h5>Communication Trends</h5>
+            <select id="chart-filter" class="form-select" [(ngModel)]="selectedFilter" (ngModelChange)="getFilterChange($event)">
+              <option [ngValue]="null">-- Select Filter --</option>
+              <option value="date">Date Wise</option>
+              <option value="month">Month Wise</option>
+              <option value="year">Year Wise</option>
+            </select>
+          </div>
+          <div class="chart dashboard-chart-wrap">
+            <apx-chart
+              class="dashboard-apx-chart"
+              [series]="chartOptions.series"
+              [chart]="chartOptions.chart"
+              [fill]="chartOptions.fill"
+              [dataLabels]="chartOptions.dataLabels"
+              [stroke]="chartOptions.stroke"
+              [xaxis]="chartOptions.xaxis"
+              [yaxis]="chartOptions.yaxis"
+              [tooltip]="chartOptions.tooltip"
+              [legend]="chartOptions.legend"
+              [grid]="chartOptions.grid"
+              [colors]="chartOptions.colors"
+            ></apx-chart>
+          </div>
+          <!-- <div class="order mt-3">
+            <div class="head">
+              <h3>Nurses</h3>
+              <i class='bx bx-search'></i>
+              <i class='bx bx-filter'></i>
+            </div>
+            <div class="card-bg min-vh-100">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Linked by Physician</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <img
+                        src="https://secure.gravatar.com/avatar/d09eaad01aea86c51b4f892b4f8abf6f?s=100&d=wavatar&r=g">
+                      <p>John Doe</p>
+                    </td>
+                    <td>01-10-2023</td>
+
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div> -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Enhanced Analytics Section ──────────────────────────────────── -->
+    <div class="analytics-section mt-3" *ngIf="analyticsData">
+
+      <!-- KPI Cards -->
+      <div class="row analytics-kpi-row">
+        <div class="col-12 col-md-4">
+          <div class="analytics-kpi-card kpi-critical">
+            <div class="kpi-icon"><i class='bx bx-error-circle'></i></div>
+            <div class="kpi-content">
+              <div class="kpi-value">{{ analyticsData.unacknowledgedCritical?.count || 0 }}</div>
+              <div class="kpi-label">Unacknowledged Critical Alerts</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="analytics-kpi-card kpi-forms">
+            <div class="kpi-icon"><i class='bx bx-list-check'></i></div>
+            <div class="kpi-content">
+              <div class="kpi-value">{{ analyticsData.formCompletionRate?.rate || 0 }}%</div>
+              <div class="kpi-label">Form Completion Rate</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="analytics-kpi-card kpi-gaps">
+            <div class="kpi-icon"><i class='bx bx-calendar-exclamation'></i></div>
+            <div class="kpi-content">
+              <div class="kpi-value">{{ analyticsData.onCallCoverageGaps?.length || 0 }}</div>
+              <div class="kpi-label">On-Call Coverage Gaps</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Response Time + Priority Breakdown -->
+      <div class="row mt-3">
+        <div class="col-12 col-md-6">
+          <div class="analytics-chart-card">
+            <h6>Avg Response Time by Role</h6>
+            <div *ngIf="responseTimeChart?.series">
+              <apx-chart
+                [series]="responseTimeChart.series"
+                [chart]="responseTimeChart.chart"
+                [xaxis]="responseTimeChart.xaxis"
+                [colors]="responseTimeChart.colors"
+                [plotOptions]="responseTimeChart.plotOptions"
+                [dataLabels]="responseTimeChart.dataLabels"
+              ></apx-chart>
+            </div>
+            <div *ngIf="!responseTimeChart?.series" class="analytics-empty">
+              No response time data available
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-md-6">
+          <div class="analytics-chart-card">
+            <h6>Message Priority (7 days)</h6>
+            <div *ngIf="priorityChart?.series">
+              <apx-chart
+                [series]="priorityChart.series"
+                [chart]="priorityChart.chart"
+                [labels]="priorityChart.labels"
+                [colors]="priorityChart.colors"
+                [legend]="priorityChart.legend"
+                [plotOptions]="priorityChart.plotOptions"
+              ></apx-chart>
+            </div>
+            <div *ngIf="!priorityChart?.series" class="analytics-empty">
+              No priority data available
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fax Volume + Form Completion -->
+      <div class="row mt-3">
+        <div class="col-12 col-md-6" *ngIf="faxVolumeChart?.series">
+          <div class="analytics-chart-card">
+            <h6>Fax Volume (30 days)</h6>
+            <apx-chart
+              [series]="faxVolumeChart.series"
+              [chart]="faxVolumeChart.chart"
+              [xaxis]="faxVolumeChart.xaxis"
+              [colors]="faxVolumeChart.colors"
+              [plotOptions]="faxVolumeChart.plotOptions"
+              [dataLabels]="faxVolumeChart.dataLabels"
+            ></apx-chart>
+          </div>
+        </div>
+        <div class="col-12" [ngClass]="faxVolumeChart?.series ? 'col-md-6' : 'col-md-6 offset-md-3'">
+          <div class="analytics-chart-card" *ngIf="formCompletionChart?.series">
+            <h6>Form Submissions</h6>
+            <apx-chart
+              [series]="formCompletionChart.series"
+              [chart]="formCompletionChart.chart"
+              [labels]="formCompletionChart.labels"
+              [colors]="formCompletionChart.colors"
+              [legend]="formCompletionChart.legend"
+              [plotOptions]="formCompletionChart.plotOptions"
+            ></apx-chart>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Conversations by Facility -->
+      <div class="row mt-3" *ngIf="analyticsData.activeConversationsByFacility?.length">
+        <div class="col-12">
+          <div class="analytics-chart-card">
+            <h6>Active Conversations by Facility (7 days)</h6>
+            <div class="facility-list">
+              <div class="facility-item" *ngFor="let f of analyticsData.activeConversationsByFacility">
+                <div class="facility-name">{{ f.facilityName || 'Unknown' }}</div>
+                <div class="facility-bar-wrap">
+                  <div class="facility-bar" [style.width.%]="(f.activeChats / (analyticsData.activeConversationsByFacility[0]?.activeChats || 1)) * 100"></div>
+                </div>
+                <div class="facility-count">{{ f.activeChats }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- On-Call Coverage Gaps -->
+      <div class="row mt-3" *ngIf="analyticsData.onCallCoverageGaps?.length">
+        <div class="col-12">
+          <div class="analytics-chart-card gap-warning">
+            <h6><i class='bx bx-error' style="color: #D5600A"></i> On-Call Coverage Gaps (Next 7 Days)</h6>
+            <div class="gap-list">
+              <div class="gap-item" *ngFor="let gap of analyticsData.onCallCoverageGaps">
+                <span class="gap-facility">{{ gap.facilityName }}</span>
+                <span class="gap-time">{{ gap.gapStart | date:'MMM d, h:mm a' }} — {{ gap.gapEnd | date:'MMM d, h:mm a' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="analytics-loading" *ngIf="analyticsLoading">
+      <i class='bx bx-loader-alt bx-spin'></i> Loading analytics...
+    </div>
+  </main>
+</div>

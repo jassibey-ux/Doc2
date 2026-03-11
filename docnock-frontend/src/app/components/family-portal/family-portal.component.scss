@@ -1,0 +1,302 @@
+$primary: #005EB8;
+$primary-light: #E3F0FF;
+$text-primary: #212121;
+$text-secondary: #757575;
+$border: #E0E0E0;
+$bg: #F8F9FA;
+$success: #007F3B;
+$error: #D5281B;
+
+.family-portal {
+  min-height: 100vh;
+  background: $bg;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.family-loading, .family-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  padding: 32px;
+  color: $text-secondary;
+
+  i { font-size: 48px; margin-bottom: 16px; }
+  h3 { color: $text-primary; margin: 0 0 8px; }
+  p { font-size: 16px; margin: 0 0 8px; max-width: 400px; }
+  .help-text { font-size: 14px; color: $text-secondary; }
+}
+
+.family-error i { color: $error; }
+
+.family-header {
+  background: #FFFFFF;
+  padding: 20px 24px;
+  border-bottom: 1px solid $border;
+  text-align: center;
+
+  h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: $text-primary;
+    margin: 8px 0 0;
+  }
+}
+
+.family-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: $primary;
+  font-size: 18px;
+  font-weight: 600;
+
+  i { font-size: 24px; }
+}
+
+.family-body {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.patient-card {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 20px 24px;
+  border: 1px solid $border;
+  margin-bottom: 16px;
+}
+
+.patient-name-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  > i {
+    font-size: 48px;
+    color: $primary;
+  }
+
+  h3 {
+    font-size: 20px;
+    font-weight: 600;
+    color: $text-primary;
+    margin: 0;
+  }
+}
+
+.relationship-badge {
+  display: inline-block;
+  background: $primary-light;
+  color: $primary;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 12px;
+  margin-top: 4px;
+}
+
+.family-section {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 20px 24px;
+  border: 1px solid $border;
+  margin-bottom: 16px;
+
+  h4 {
+    font-size: 16px;
+    font-weight: 600;
+    color: $text-primary;
+    margin: 0 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    i { color: $primary; font-size: 20px; }
+  }
+}
+
+.care-team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.care-team-member {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.member-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background: $primary-light;
+  color: $primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.member-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: $text-primary;
+}
+
+.member-role {
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.updates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.update-item {
+  padding: 12px;
+  background: $bg;
+  border-radius: 8px;
+}
+
+.update-from {
+  font-size: 12px;
+  font-weight: 600;
+  color: $primary;
+  margin-bottom: 4px;
+}
+
+.update-message {
+  font-size: 14px;
+  color: $text-primary;
+  line-height: 1.5;
+}
+
+.update-date {
+  font-size: 11px;
+  color: $text-secondary;
+  margin-top: 4px;
+}
+
+.no-data {
+  font-size: 14px;
+  color: $text-secondary;
+  text-align: center;
+  padding: 16px;
+}
+
+.btn-video-request {
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: 8px;
+  background: $primary;
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  &:hover { background: darken($primary, 10%); }
+
+  i { font-size: 20px; }
+}
+
+.video-request-form {
+  h4 {
+    font-size: 15px;
+    margin-bottom: 16px;
+  }
+}
+
+.form-field {
+  margin-bottom: 12px;
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: $text-secondary;
+    margin-bottom: 6px;
+  }
+}
+
+.family-input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid #AAAAAA;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 14px;
+  color: $text-primary;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: $primary;
+    border-width: 2px;
+    outline: none;
+  }
+}
+
+.family-textarea {
+  height: 80px;
+  padding: 12px;
+  resize: vertical;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.btn-cancel {
+  height: 40px;
+  padding: 0 20px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: #FFFFFF;
+  color: $text-secondary;
+  font-size: 14px;
+  cursor: pointer;
+
+  &:hover { background: $bg; }
+}
+
+.btn-submit {
+  height: 40px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 8px;
+  background: $primary;
+  color: #FFFFFF;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover { background: darken($primary, 10%); }
+}
+
+.video-request-success {
+  text-align: center;
+  padding: 16px;
+  background: #E8F5E9;
+  border-radius: 8px;
+  color: $success;
+  font-size: 14px;
+  font-weight: 500;
+
+  i { margin-right: 6px; }
+}

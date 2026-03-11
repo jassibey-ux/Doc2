@@ -1,0 +1,200 @@
+<div class="schedule-page">
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="header-left">
+      <h1 class="page-title">On-Call Schedule</h1>
+      <p class="page-subtitle">Manage shift coverage for all roles</p>
+    </div>
+    <button class="btn-primary" (click)="openAddModal()" [disabled]="!selectedFacilityId">
+      <mat-icon>add</mat-icon>
+      Add Shift
+    </button>
+  </div>
+
+  <!-- Controls Row -->
+  <div class="controls-row">
+    <!-- Facility Picker -->
+    <div class="facility-select-wrapper">
+      <label class="field-label">Facility</label>
+      <select class="select-input" [(ngModel)]="selectedFacilityId" (ngModelChange)="onFacilityChange()">
+        <option value="">Select a facility…</option>
+        <option *ngFor="let f of facilities" [value]="f._id">{{ f.fullName }}</option>
+      </select>
+    </div>
+
+    <!-- Week Navigation -->
+    <div class="week-nav">
+      <button class="icon-btn" (click)="prevWeek()" aria-label="Previous week">
+        <mat-icon>chevron_left</mat-icon>
+      </button>
+      <span class="week-label">
+        {{ weekDays[0] | date:'MMM d' }} – {{ weekDays[6] | date:'MMM d, yyyy' }}
+      </span>
+      <button class="icon-btn" (click)="nextWeek()" aria-label="Next week">
+        <mat-icon>chevron_right</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <!-- On-Call Now Banner -->
+  <div class="oncall-banner" *ngIf="onCallNow">
+    <mat-icon class="banner-icon">person_pin_circle</mat-icon>
+    <span>
+      On-call now:
+      <strong>{{ onCallNow.userDetails?.fullName || getUserName(onCallNow.userId) }}</strong>
+      ({{ roleLabel(onCallNow.role) }}) until {{ formatTime(onCallNow.endTime) }}
+      <span *ngIf="onCallNow.isBackup" class="backup-chip">Backup</span>
+    </span>
+  </div>
+  <div class="no-coverage-banner" *ngIf="selectedFacilityId && !onCallNow">
+    <mat-icon>warning_amber</mat-icon>
+    <span>No on-call coverage active right now. Consider adding a shift.</span>
+  </div>
+
+  <!-- Week Grid -->
+  <div class="grid-wrapper" *ngIf="selectedFacilityId; else selectFacilityPrompt">
+    <table class="schedule-grid" aria-label="On-call schedule week view">
+      <thead>
+        <tr>
+          <th class="role-col">Role</th>
+          <th
+            *ngFor="let day of weekDays"
+            [class.today-col]="isToday(day)"
+            scope="col"
+          >
+            <div class="day-header">
+              <span class="day-name">{{ day | date:'EEE' }}</span>
+              <span class="day-num" [class.today-circle]="isToday(day)">{{ day | date:'d' }}</span>
+            </div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let role of roles">
+          <td class="role-label">{{ roleLabel(role) }}</td>
+          <td
+            *ngFor="let day of weekDays"
+            class="schedule-cell"
+            [class.today-col]="isToday(day)"
+            [class.gap-cell]="hasGap(role, day)"
+            (click)="openAddModal(role, day)"
+          >
+            <!-- Shift chips -->
+            <div
+              class="shift-chip"
+              *ngFor="let entry of getCell(role, day)"
+              [class.backup-shift]="entry.isBackup"
+              (click)="$event.stopPropagation(); openEditModal(entry)"
+              [title]="getUserName(entry.userId) + ' · ' + formatTime(entry.startTime) + '–' + formatTime(entry.endTime)"
+            >
+              <span class="shift-name">{{ getUserName(entry.userId) }}</span>
+              <span class="shift-time">{{ formatTime(entry.startTime) }}–{{ formatTime(entry.endTime) }}</span>
+              <span *ngIf="entry.isBackup" class="backup-label">BKP</span>
+              <button
+                class="delete-shift-btn"
+                (click)="$event.stopPropagation(); deleteSchedule(entry)"
+                aria-label="Delete shift"
+              >
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+
+            <!-- Gap indicator for today -->
+            <div class="gap-indicator" *ngIf="hasGap(role, day)">
+              <mat-icon>warning_amber</mat-icon>
+              <span>No cover</span>
+            </div>
+
+            <!-- Empty add hint -->
+            <div
+              class="add-hint"
+              *ngIf="!hasGap(role, day) && getCell(role, day).length === 0"
+            >
+              <mat-icon>add</mat-icon>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ng-template #selectFacilityPrompt>
+    <div class="empty-state">
+      <mat-icon>calendar_month</mat-icon>
+      <p>Select a facility above to view and manage on-call schedules.</p>
+    </div>
+  </ng-template>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal-backdrop" *ngIf="showAddModal" (click)="closeModal()">
+  <div class="modal-card" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>{{ editingEntry ? 'Edit Shift' : 'Add On-Call Shift' }}</h2>
+      <button class="icon-btn" (click)="closeModal()"><mat-icon>close</mat-icon></button>
+    </div>
+
+    <form [formGroup]="addForm" (ngSubmit)="saveSchedule()" class="modal-form">
+      <!-- Role -->
+      <div class="field-group">
+        <label class="field-label" for="role">Role</label>
+        <select id="role" class="select-input" formControlName="role">
+          <option *ngFor="let r of roles" [value]="r">{{ roleLabel(r) }}</option>
+        </select>
+      </div>
+
+      <!-- User -->
+      <div class="field-group">
+        <label class="field-label" for="userId">Person</label>
+        <select id="userId" class="select-input" formControlName="userId">
+          <option value="">Select user…</option>
+          <option *ngFor="let u of allUsers" [value]="u._id">{{ u.fullName }} ({{ u.role }})</option>
+        </select>
+      </div>
+
+      <!-- Start / End -->
+      <div class="field-row">
+        <div class="field-group">
+          <label class="field-label" for="startTime">Start</label>
+          <input id="startTime" type="datetime-local" class="text-input" formControlName="startTime" />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="endTime">End</label>
+          <input id="endTime" type="datetime-local" class="text-input" formControlName="endTime" />
+        </div>
+      </div>
+
+      <!-- Timezone -->
+      <div class="field-group">
+        <label class="field-label" for="timezone">Timezone</label>
+        <select id="timezone" class="select-input" formControlName="timezone">
+          <option value="America/New_York">Eastern (ET)</option>
+          <option value="America/Chicago">Central (CT)</option>
+          <option value="America/Denver">Mountain (MT)</option>
+          <option value="America/Los_Angeles">Pacific (PT)</option>
+          <option value="America/Anchorage">Alaska (AKT)</option>
+          <option value="Pacific/Honolulu">Hawaii (HT)</option>
+        </select>
+      </div>
+
+      <!-- Backup toggle -->
+      <div class="field-group checkbox-group">
+        <input type="checkbox" id="isBackup" formControlName="isBackup" />
+        <label for="isBackup">Backup on-call (used if primary is unavailable)</label>
+      </div>
+
+      <!-- Notes -->
+      <div class="field-group">
+        <label class="field-label" for="notes">Notes (optional)</label>
+        <textarea id="notes" class="text-input" rows="2" formControlName="notes" placeholder="e.g. Available by phone only"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button type="submit" class="btn-primary" [disabled]="addForm.invalid">
+          {{ editingEntry ? 'Update' : 'Add Shift' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

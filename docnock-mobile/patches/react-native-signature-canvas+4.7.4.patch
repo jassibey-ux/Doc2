@@ -1,0 +1,105 @@
+diff --git a/node_modules/react-native-signature-canvas/h5/html.js b/node_modules/react-native-signature-canvas/h5/html.js
+index 292fb87..7446108 100644
+--- a/node_modules/react-native-signature-canvas/h5/html.js
++++ b/node_modules/react-native-signature-canvas/h5/html.js
+@@ -20,6 +20,7 @@ export default (script) =>
+       -ms-user-select: none;
+       margin:0;
+       overflow:hidden;
++      // background-color: #fff;
+     }
+     body,html {
+       width: 100%;
+@@ -52,7 +53,7 @@ export default (script) =>
+       font-size: 10px;
+       width: 100%;
+       height: 100%;
+-      border: 1px solid #e8e8e8;
++      border: 1px solid 'transparent;
+       background-color: #fff;
+       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.27), 0 0 40px rgba(0, 0, 0, 0.08) inset;
+     }
+@@ -60,7 +61,6 @@ export default (script) =>
+     .m-signature-pad--body {
+       position: relative;
+       height: 100%;
+-      border: 1px solid #f4f4f4;
+     }
+     
+     .m-signature-pad--body
+@@ -72,11 +72,14 @@ export default (script) =>
+         height: 100%;
+         border-radius: 4px;
+         box-shadow: 0 0 5px rgba(0, 0, 0, 0.02) inset;
++        background-color: #FFFFFF;
++        border-radius: 20px;
++        overflow: hidden,
+       }
+     
+     .m-signature-pad--footer {
+       padding: 0px 20px;
+-      margin-top: 10px;
++      margin-top: 20px;
+       position: relative;
+       height: 40px;
+       display: flex;
+@@ -86,31 +89,36 @@ export default (script) =>
+     
+     .m-signature-pad--footer
+       .description {
+-        color: #C3C3C3;
++        color: #FFFFFF;
+         text-align: center;
+-        font-size: 1.2em;
++        font-size: 1.3em;
++        font-weight: 500
+       }
+     
+     .m-signature-pad--footer
+       .button {
+-        background-color: #3F99F7;
+-        height: 32px;
++        background-color: #2F936D;
++        height: 40px;
+         padding: 0 20px;
+         line-height: 32px;
+         text-align: center;
+         color: #FFF;
+         border: 1px solid transparent;
+-        border-radius: 4px;
++        border-radius: 50px;
+         outline: none;
+         box-shadow: none;
+       }
+     
+     .m-signature-pad--footer
+       .button.clear {
++        font-size: 0.8rem;
++        font-weight: 500
+       }
+     
+     .m-signature-pad--footer
+       .button.save {
++        font-size: 0.8rem;
++        font-weight: 500
+       }
+     
+     @media screen and (max-width: 1024px) {
+diff --git a/node_modules/react-native-signature-canvas/index.js b/node_modules/react-native-signature-canvas/index.js
+index 7f9f0e8..ff7dd80 100644
+--- a/node_modules/react-native-signature-canvas/index.js
++++ b/node_modules/react-native-signature-canvas/index.js
+@@ -281,12 +281,8 @@ const SignatureView = forwardRef(
+           onLoadEnd={handleLoadEnd}
+           nestedScrollEnabled={nestedScrollEnabled}
+           showsVerticalScrollIndicator={showsVerticalScrollIndicator}
++          renderLoading={()=><></>}
+         />
+-        {loading && (
+-          <View style={styles.loadingOverlayContainer}>
+-            <ActivityIndicator color={"transparent"} />
+-          </View>
+-        )}
+       </View>
+     );
+   }

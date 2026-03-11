@@ -1,0 +1,304 @@
+.dashboard-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-toolbar-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dashboard-toolbar-filters .form-select {
+  min-width: 168px;
+}
+
+select#month,
+select#year,
+select#chart-filter {
+  background: var(--bg-light);
+  color: var(--p);
+  border: 1px solid var(--line);
+}
+
+.dashboard-cards-row {
+  --bs-gutter-x: 14px;
+  --bs-gutter-y: 14px;
+}
+
+.dashboard-card-col {
+  display: flex;
+}
+
+.dashboard-stat-card {
+  width: 100%;
+  height: 150px;
+  margin: 0;
+}
+
+.dashboard-chart-row {
+  --bs-gutter-x: 0;
+}
+
+.dashboard-chart-card {
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg-light);
+  padding: 14px;
+}
+
+.dashboard-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.dashboard-chart-head h5 {
+  margin: 0;
+  color: var(--h);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.dashboard-chart-head .form-select {
+  width: 180px;
+}
+
+#content main .table-data .dashboard-chart-wrap {
+  width: 100%;
+  min-height: 420px;
+  padding: 0;
+  overflow: visible;
+}
+
+.dashboard-apx-chart {
+  display: block;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .col-md-custom-20 {
+    flex: 0 0 20%;
+    max-width: 20%;
+  }
+}
+
+@media (max-width: 992px) {
+  .dashboard-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dashboard-toolbar-filters {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dashboard-toolbar-filters .form-select {
+    min-width: 0;
+  }
+
+  .dashboard-chart-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dashboard-chart-head .form-select {
+    width: 100%;
+  }
+
+  #content main .table-data .dashboard-chart-wrap {
+    min-height: 340px;
+  }
+}
+
+
+
+/* Your styles here, like .info-section, .background-design, etc. */
+
+// ─── Enhanced Analytics ─────────────────────────────────────────────────────
+$primary: #005EB8;
+$primary-light: #E3F0FF;
+$error: #D5281B;
+$success: #007F3B;
+$warning: #D5600A;
+$text-primary: #212121;
+$text-secondary: #757575;
+
+.analytics-section {
+  margin-top: 16px;
+}
+
+.analytics-kpi-row {
+  --bs-gutter-x: 14px;
+  --bs-gutter-y: 14px;
+}
+
+.analytics-kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #E0E0E0);
+  background: var(--bg-light, #FFFFFF);
+
+  .kpi-icon {
+    font-size: 32px;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+  }
+
+  .kpi-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--h, $text-primary);
+    line-height: 1.2;
+  }
+
+  .kpi-label {
+    font-size: 13px;
+    color: var(--p, $text-secondary);
+  }
+
+  &.kpi-critical .kpi-icon {
+    background: #FFF5F5;
+    color: $error;
+  }
+  &.kpi-forms .kpi-icon {
+    background: $primary-light;
+    color: $primary;
+  }
+  &.kpi-gaps .kpi-icon {
+    background: #FFF3E0;
+    color: $warning;
+  }
+}
+
+.analytics-chart-card {
+  border-radius: 8px;
+  border: 1px solid var(--line, #E0E0E0);
+  background: var(--bg-light, #FFFFFF);
+  padding: 16px;
+
+  h6 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--h, $text-primary);
+    margin: 0 0 12px;
+  }
+}
+
+.analytics-empty {
+  text-align: center;
+  padding: 32px;
+  color: var(--p, $text-secondary);
+  font-size: 13px;
+}
+
+.analytics-loading {
+  text-align: center;
+  padding: 32px;
+  color: var(--p, $text-secondary);
+  font-size: 14px;
+  i { margin-right: 8px; }
+}
+
+// Facility bar chart
+.facility-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.facility-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.facility-name {
+  width: 140px;
+  font-size: 13px;
+  color: var(--h, $text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.facility-bar-wrap {
+  flex: 1;
+  height: 20px;
+  background: #F0F4F5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.facility-bar {
+  height: 100%;
+  background: $primary;
+  border-radius: 4px;
+  min-width: 4px;
+  transition: width 0.3s ease;
+}
+
+.facility-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--h, $text-primary);
+  width: 40px;
+  text-align: right;
+}
+
+// Coverage gaps
+.gap-warning {
+  border-color: #FFF3E0;
+}
+
+.gap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gap-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #FFF8F0;
+  border-radius: 6px;
+  border-left: 3px solid $warning;
+}
+
+.gap-facility {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--h, $text-primary);
+}
+
+.gap-time {
+  font-size: 12px;
+  color: var(--p, $text-secondary);
+}
+
+@media (max-width: 768px) {
+  .facility-name {
+    width: 100px;
+  }
+  .gap-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}

@@ -1,0 +1,62 @@
+<section class="login-page">
+  <div class="bg_container">
+    <div class="logo-main">
+      <img src="../../assets/images/logo.png" alt="" />
+    </div>
+    <div class="bg-image"></div>
+  </div>
+
+  <div class="row w-100">
+    <div class="col-lg-6 desc justify-content-center col-6 text-left px-5 py-3">
+      <h2>Doc-Nock</h2>
+      <p class="text-bold">Professional communication for modern healthcare teams</p>
+      <p>Streamlines discussions, reduces delays, and enhances overall care delivery efficiency.</p>
+    </div>
+    <div class="col-lg-6 d-flex align-items-center justify-content-center">
+      <div class="form-2-wrapper p-5">
+        <div class="logo text-left">
+          <h2>Enter OTP</h2>
+          <p>A 6-digit code has been sent to your email.</p>
+        </div>
+        <form class="mt-3">
+          <ng-otp-input
+            #ngOtpInput
+            (onInputChange)="onOtpChnage($event)"
+            [config]="config"
+          >
+          </ng-otp-input>
+
+          <div class="row">
+            <div class="col-12">
+              <p>
+                I didn't receive the code.
+                <a style="cursor: pointer">
+                  <b>Resend Code</b>
+                </a>
+              </p>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-12 mt-4">
+              <button
+                type="submit"
+                class="btn btn-outline-secondary login-btn w-100 mb-3"
+                (click)="verifyOtp(ngOtpInput)"
+                [disabled]="isDisabled"
+              >
+                Submit
+              </button>
+            </div>
+            <div class="col-12 mt-4 text-center">
+              <p>
+                Back to login?
+                <a class="bold" href="/login"> Log in </a>
+              </p>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
