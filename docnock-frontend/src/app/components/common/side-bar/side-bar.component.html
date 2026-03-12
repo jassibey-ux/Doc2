@@ -54,9 +54,42 @@
         <span class="text">Others</span>
       </a>
     </li>
+    <!-- Admin Section (superadmin only) -->
+    <li class="sidebar-divider" *ngIf="dynamicpath === 'superadmin'"><span>Admin</span></li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/integrations" *ngIf="dynamicpath === 'superadmin'">
+      <a>
+        <i class='bx bxs-plug-connected'></i>
+        <span class="text">Integrations</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/audit-logs" *ngIf="dynamicpath === 'superadmin'">
+      <a>
+        <i class='bx bxs-file-find'></i>
+        <span class="text">Audit Logs</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/system-health" *ngIf="dynamicpath === 'superadmin'">
+      <a>
+        <i class='bx bxs-heart-circle'></i>
+        <span class="text">System Health</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/security" *ngIf="dynamicpath === 'superadmin'">
+      <a>
+        <i class='bx bxs-shield-alt-2'></i>
+        <span class="text">Security</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/system-settings" *ngIf="dynamicpath === 'superadmin'">
+      <a>
+        <i class='bx bxs-wrench'></i>
+        <span class="text">System Settings</span>
+      </a>
+    </li>
+
     <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/setting">
       <a>
-        <i class='bx bxs-group'></i>
+        <i class='bx bxs-cog'></i>
         <span class="text">Account Setting</span>
       </a>
     </li>

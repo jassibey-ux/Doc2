@@ -21,6 +21,10 @@ export default function (express) {
   require("./aiService/Route").default(router);
   /* Family Communication Portal */
   require("./familyPortal/Route").default(router);
+  /* Clinical Management */
+  require("./clinicalManagement/Route").default(router);
+  /* Admin Management */
+  require("./adminManagement/Route").default(router);
 
   return router;
 }

@@ -1,0 +1,226 @@
+<div id="content">
+  <main>
+    <div class="head-title pb-3 dashboard-toolbar">
+      <div class="left">
+        <h4>Clinical Alerts</h4>
+        <span class="subtitle" *ngIf="totalRecords">{{ totalRecords }} total alerts</span>
+      </div>
+      <div class="right">
+        <button class="btn add-btn" (click)="openCreateModal()">
+          <i class='bx bx-plus'></i> New Alert
+        </button>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-row">
+      <div class="kpi-card kpi-critical">
+        <div class="kpi-icon"><i class='bx bxs-error'></i></div>
+        <div class="kpi-data">
+          <span class="kpi-value">{{ criticalCount }}</span>
+          <span class="kpi-label">Critical</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-warning">
+        <div class="kpi-icon"><i class='bx bxs-error-circle'></i></div>
+        <div class="kpi-data">
+          <span class="kpi-value">{{ warningCount }}</span>
+          <span class="kpi-label">Warning</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-info">
+        <div class="kpi-icon"><i class='bx bxs-info-circle'></i></div>
+        <div class="kpi-data">
+          <span class="kpi-value">{{ infoCount }}</span>
+          <span class="kpi-label">Info</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-active">
+        <div class="kpi-icon"><i class='bx bxs-bell-ring'></i></div>
+        <div class="kpi-data">
+          <span class="kpi-value">{{ activeCount }}</span>
+          <span class="kpi-label">Active</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>Severity</label>
+        <select [(ngModel)]="severityFilter" (ngModelChange)="applyFilter()">
+          <option value="">All Severities</option>
+          <option *ngFor="let s of severities" [value]="s">{{ s }}</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Status</label>
+        <select [(ngModel)]="statusFilter" (ngModelChange)="applyFilter()">
+          <option value="">All Statuses</option>
+          <option *ngFor="let s of statuses" [value]="s">{{ s | titlecase }}</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Type</label>
+        <select [(ngModel)]="alertTypeFilter" (ngModelChange)="applyFilter()">
+          <option value="">All Types</option>
+          <option *ngFor="let t of alertTypes" [value]="t">{{ t.replace('_', ' ') }}</option>
+        </select>
+      </div>
+      <button class="btn clear-btn" (click)="clearFilters()">Clear</button>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-state" *ngIf="loading">
+      <i class='bx bx-loader-alt bx-spin'></i> Loading alerts...
+    </div>
+
+    <!-- Alert List -->
+    <div class="table-container" *ngIf="!loading && alerts.length">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Severity</th>
+            <th>Type</th>
+            <th>Title</th>
+            <th>Patient</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let a of alerts" [ngClass]="{'row-critical': a.severity === 'CRITICAL' && a.status === 'active'}">
+            <td class="timestamp-cell">{{ a.createdAt | date:'short' }}</td>
+            <td>
+              <span class="severity-badge" [ngClass]="getSeverityClass(a.severity)">
+                {{ a.severity }}
+              </span>
+            </td>
+            <td class="type-cell">{{ a.alertType?.replace('_', ' ') || '-' }}</td>
+            <td class="title-cell">{{ a.title }}</td>
+            <td>
+              <span class="patient-name">{{ a.patientName || '-' }}</span>
+              <span class="patient-room" *ngIf="a.patientRoom">Rm {{ a.patientRoom }}</span>
+            </td>
+            <td>
+              <span class="status-badge" [ngClass]="getStatusClass(a.status)">
+                {{ a.status | titlecase }}
+              </span>
+            </td>
+            <td class="action-cell">
+              <button class="btn action-btn ack-btn"
+                      *ngIf="a.status === 'active'"
+                      (click)="acknowledgeAlert(a._id)"
+                      title="Acknowledge">
+                <i class='bx bx-check'></i>
+              </button>
+              <button class="btn action-btn resolve-btn"
+                      *ngIf="a.status === 'acknowledged'"
+                      (click)="openResolveModal(a)"
+                      title="Resolve">
+                <i class='bx bx-check-double'></i>
+              </button>
+              <button class="btn action-btn escalate-btn"
+                      *ngIf="a.status === 'active' || a.status === 'acknowledged'"
+                      (click)="escalateAlert(a._id)"
+                      title="Escalate">
+                <i class='bx bx-up-arrow-alt'></i>
+              </button>
+              <span class="no-action" *ngIf="a.status === 'resolved'">
+                <i class='bx bx-check-circle'></i>
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Empty -->
+    <div class="empty-state" *ngIf="!loading && !alerts.length">
+      <i class='bx bxs-bell-off'></i>
+      <p>No clinical alerts found.</p>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" *ngIf="totalPages > 1">
+      <button class="btn page-btn" (click)="prevPage()" [disabled]="currentPage <= 1">Previous</button>
+      <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
+      <button class="btn page-btn" (click)="nextPage()" [disabled]="currentPage >= totalPages">Next</button>
+    </div>
+
+    <!-- Create Alert Modal -->
+    <div class="modal-overlay" *ngIf="showCreateModal" (click)="closeCreateModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h5>New Clinical Alert</h5>
+          <button class="modal-close" (click)="closeCreateModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Alert Type</label>
+              <select [(ngModel)]="newAlert.alertType">
+                <option *ngFor="let t of alertTypes" [value]="t">{{ t.replace('_', ' ') }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Severity</label>
+              <select [(ngModel)]="newAlert.severity">
+                <option *ngFor="let s of severities" [value]="s">{{ s }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Title *</label>
+            <input type="text" [(ngModel)]="newAlert.title" placeholder="Brief alert title" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Patient Name</label>
+              <input type="text" [(ngModel)]="newAlert.patientName" placeholder="Patient name" />
+            </div>
+            <div class="form-group">
+              <label>Room</label>
+              <input type="text" [(ngModel)]="newAlert.patientRoom" placeholder="Room #" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea [(ngModel)]="newAlert.description" rows="4" placeholder="Detailed alert description..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn cancel-btn" (click)="closeCreateModal()">Cancel</button>
+          <button class="btn submit-btn" (click)="submitAlert()" [disabled]="submitting">
+            <i class='bx bx-loader-alt bx-spin' *ngIf="submitting"></i>
+            {{ submitting ? 'Creating...' : 'Create Alert' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resolve Modal -->
+    <div class="modal-overlay" *ngIf="showResolveModal" (click)="closeResolveModal()">
+      <div class="modal-content modal-sm" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h5>Resolve Alert</h5>
+          <button class="modal-close" (click)="closeResolveModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+          <p class="resolve-info">Resolving: <strong>{{ selectedAlert?.title }}</strong></p>
+          <div class="form-group">
+            <label>Resolution Notes</label>
+            <textarea [(ngModel)]="resolveNotes" rows="4" placeholder="Describe how this alert was resolved..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn cancel-btn" (click)="closeResolveModal()">Cancel</button>
+          <button class="btn submit-btn" (click)="resolveAlert()" [disabled]="submitting">
+            {{ submitting ? 'Resolving...' : 'Resolve' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

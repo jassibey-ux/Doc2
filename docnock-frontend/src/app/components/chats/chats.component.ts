@@ -143,6 +143,32 @@ export class ChatsComponent {
   onlineuser: any = [];
   dynamicpath: any = '';
 
+  // Slack features
+  reactionEmojis = ['👍', '✅', '👀', '❤️', '❗', '❓'];
+  reactionEmojiMap: Record<string, string> = {
+    'thumbsup': '👍', 'check': '✅', 'eyes': '👀',
+    'heart': '❤️', 'exclamation': '❗', 'question': '❓'
+  };
+  reactionNameMap: Record<string, string> = {
+    '👍': 'thumbsup', '✅': 'check', '👀': 'eyes',
+    '❤️': 'heart', '❗': 'exclamation', '❓': 'question'
+  };
+  showReactionPicker: string | null = null;
+  showPinnedPanel = false;
+  pinnedMessages: any[] = [];
+  pinnedLoading = false;
+  conversationTopic = '';
+  editingTopic = false;
+  topicDraft = '';
+  showMentionPopup = false;
+  mentionQuery = '';
+  mentionResults: any[] = [];
+  mentionLoading = false;
+  showThreadPanel = false;
+  threadParentMessage: any = null;
+  threadMessages: any[] = [];
+  threadLoading = false;
+
   mediaRecorder!: MediaRecorder;
   recordingMimeType: string = 'audio/webm';
   audioChunks: Blob[] = [];
@@ -422,6 +448,33 @@ export class ChatsComponent {
   });
 
   this.setupReminderAudioUnlock();
+
+  // Slack feature subscriptions
+  this.websocket.onReactionUpdated().subscribe((data: any) => {
+    if (data?.groupId === this.activeGroup?.groupId) {
+      const msg = this.messageList.find((m: any) => m.messageId === data.messageId);
+      if (msg) msg.reactions = data.reactions || [];
+    }
+  });
+
+  this.websocket.onTopicUpdated().subscribe((data: any) => {
+    if (data?.groupId === this.activeGroup?.groupId && data?.topic) {
+      this.conversationTopic = data.topic.text || '';
+    }
+  });
+
+  this.websocket.onMessagePinned().subscribe((data: any) => {
+    if (data?.groupId === this.activeGroup?.groupId) {
+      this.toastr.info('Message pinned');
+      if (this.showPinnedPanel) this.loadPinnedMessages();
+    }
+  });
+
+  this.websocket.onMessageUnpinned().subscribe((data: any) => {
+    if (data?.groupId === this.activeGroup?.groupId) {
+      if (this.showPinnedPanel) this.loadPinnedMessages();
+    }
+  });
 
   }
 
@@ -3287,5 +3340,141 @@ export class ChatsComponent {
         this.toastr.error('Failed to revoke access');
       },
     });
+  }
+
+  // ═══ Reactions ═══
+  toggleReactionPicker(messageId: string) {
+    this.showReactionPicker = this.showReactionPicker === messageId ? null : messageId;
+  }
+
+  addReaction(messageId: string, emoji: string) {
+    const emojiName = this.reactionNameMap[emoji] || emoji;
+    const userData = JSON.parse(localStorage.getItem('loginData') || '{}');
+    this.websocket.addReaction(
+      this.activeGroup.groupId, messageId, emojiName,
+      this.loginId, userData.fullName || 'User'
+    );
+    this.showReactionPicker = null;
+  }
+
+  removeReaction(messageId: string, emoji: string) {
+    const emojiName = this.reactionNameMap[emoji] || emoji;
+    this.websocket.removeReaction(
+      this.activeGroup.groupId, messageId, emojiName, this.loginId
+    );
+  }
+
+  hasUserReacted(message: any, emojiName: string): boolean {
+    return message.reactions?.some((r: any) => r.emoji === emojiName && r.userId === this.loginId) || false;
+  }
+
+  getReactionCount(message: any, emojiName: string): number {
+    return message.reactions?.filter((r: any) => r.emoji === emojiName).length || 0;
+  }
+
+  getUniqueReactions(message: any): string[] {
+    if (!message.reactions?.length) return [];
+    return [...new Set(message.reactions.map((r: any) => r.emoji))] as string[];
+  }
+
+  toggleReaction(message: any, emojiName: string) {
+    if (this.hasUserReacted(message, emojiName)) {
+      this.removeReaction(message.messageId, this.reactionEmojiMap[emojiName] || emojiName);
+    } else {
+      this.addReaction(message.messageId, this.reactionEmojiMap[emojiName] || emojiName);
+    }
+  }
+
+  // ═══ Pinning ═══
+  pinMessage(message: any) {
+    const userData = JSON.parse(localStorage.getItem('loginData') || '{}');
+    this.websocket.pinMessage(
+      this.activeGroup.groupId, message.messageId,
+      this.loginId, userData.fullName || 'User'
+    );
+  }
+
+  unpinMessage(messageId: string) {
+    this.websocket.unpinMessage(
+      this.activeGroup.groupId, messageId, this.loginId
+    );
+  }
+
+  togglePinnedPanel() {
+    this.showPinnedPanel = !this.showPinnedPanel;
+    if (this.showPinnedPanel) this.loadPinnedMessages();
+  }
+
+  loadPinnedMessages() {
+    this.pinnedLoading = true;
+    this.authService.getPinnedMessages(this.activeGroup.groupId).subscribe({
+      next: (res: any) => {
+        this.pinnedMessages = res.data || [];
+        this.pinnedLoading = false;
+      },
+      error: () => {
+        this.pinnedLoading = false;
+      }
+    });
+  }
+
+  // ═══ Topics ═══
+  startEditTopic() {
+    this.editingTopic = true;
+    this.topicDraft = this.conversationTopic;
+  }
+
+  saveTopic() {
+    const userData = JSON.parse(localStorage.getItem('loginData') || '{}');
+    this.websocket.setTopic(
+      this.activeGroup.groupId, this.topicDraft,
+      this.loginId, userData.fullName || 'User'
+    );
+    this.conversationTopic = this.topicDraft;
+    this.editingTopic = false;
+  }
+
+  cancelEditTopic() {
+    this.editingTopic = false;
+    this.topicDraft = '';
+  }
+
+  // ═══ Mentions ═══
+  onMessageInput(event: any) {
+    const value = event.target?.value || '';
+    const cursorPos = event.target?.selectionStart || 0;
+    const textBeforeCursor = value.substring(0, cursorPos);
+    const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
+    if (mentionMatch) {
+      this.showMentionPopup = true;
+      this.mentionQuery = mentionMatch[1];
+      this.searchMentions(this.mentionQuery);
+    } else {
+      this.showMentionPopup = false;
+      this.mentionResults = [];
+    }
+  }
+
+  searchMentions(query: string) {
+    if (!this.activeGroup?.groupId) return;
+    this.mentionLoading = true;
+    this.authService.getMentionableUsers(this.activeGroup.groupId, query).subscribe({
+      next: (res: any) => {
+        this.mentionResults = res.users || [];
+        this.mentionLoading = false;
+      },
+      error: () => {
+        this.mentionLoading = false;
+      }
+    });
+  }
+
+  insertMention(user: any) {
+    const mention = `@${user.fullName || user.name} `;
+    const input = this.message;
+    const mentionRegex = /@\w*$/;
+    this.message = input.replace(mentionRegex, mention);
+    this.showMentionPopup = false;
+    this.mentionResults = [];
   }
 }

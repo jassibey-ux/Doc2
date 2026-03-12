@@ -433,6 +433,7 @@ private callCapsuleInterval: any;
 }
 
   getInitials(name: string): string {
+    if (!name) return '';
     const nameParts = name.split(' ');
     return nameParts.map(part => part.charAt(0).toUpperCase()).join('');
   }

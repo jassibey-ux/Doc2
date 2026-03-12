@@ -1,4 +1,6 @@
 @use '@angular/material' as mat;
+@use 'styles/liquid-glass' as glass;
+
 @include mat.core();
 $DockFrontend-primary: mat.define-palette(mat.$green-palette);
 $DockFrontend-accent: mat.define-palette(mat.$lime-palette, A200, A100, A400);
@@ -8,6 +10,9 @@ $DockFrontend-theme: mat.define-light-theme((color: (primary: $DockFrontend-prim
         warn: $DockFrontend-warn,
       )));
 @include mat.all-component-themes($DockFrontend-theme);
+
+// Generate Liquid Glass utility classes
+@include glass.utility-classes();
 
 /*CUSTOM MAT*/
 
@@ -191,10 +196,23 @@ input:disabled,
 body {
   font-family: var(--font-family-base);
   background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(47, 147, 109, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(0, 145, 212, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 60% 80%, rgba(47, 147, 109, 0.03) 0%, transparent 50%);
+  background-attachment: fixed;
   color: var(--h);
   overflow-x: hidden;
   line-height: 1.45;
   transition: background-color .22s ease, color .22s ease;
+}
+
+.dark-mode body,
+body.dark-mode {
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(47, 147, 109, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(0, 145, 212, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 60% 80%, rgba(47, 147, 109, 0.04) 0%, transparent 50%);
 }
 
 .toast-container {
@@ -204,14 +222,15 @@ body {
 .toast-container .ngx-toastr {
   pointer-events: auto;
   width: 360px;
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 14px 16px 14px 46px;
-  border: 1px solid var(--line);
-  box-shadow: 0 12px 28px rgba(16, 24, 40, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25), 0 4px 16px rgba(0, 0, 0, 0.15);
   background-image: none !important;
-  background-color: #121a2a !important;
+  background-color: rgba(18, 26, 42, 0.85) !important;
   color: #eef3ff !important;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
   position: relative;
 }
 
@@ -374,23 +393,28 @@ textarea:focus {
 
 .dark-mode #content nav,
 .dark-mode .nav_bar {
-  background: #111722;
-  border-bottom: 1px solid var(--line);
+  @include glass.navbar-dark();
 }
 
 .dark-mode .card,
 .dark-mode .order,
 .dark-mode .todo,
+.dark-mode .dashboard-chart-card {
+  @include glass.panel-dark();
+}
+
 .dark-mode .modal-content,
-.dark-mode .notification-modal,
+.dark-mode .notification-modal {
+  @include glass.elevated-dark();
+}
+
 .dark-mode .chat-box,
 .dark-mode .chat-container,
 .dark-mode .chat-list,
 .dark-mode .chat-messages,
-.dark-mode .chat-input,
-.dark-mode .dashboard-chart-card {
-  background: var(--bg-light);
-  border-color: var(--line);
+.dark-mode .chat-input {
+  @include glass.panel-dark($opacity: 0.45);
+  border-radius: 0;
 }
 
 .dark-mode .table,
@@ -406,9 +430,7 @@ textarea:focus {
 .dark-mode input,
 .dark-mode textarea,
 .dark-mode select {
-  background: #1a2230;
-  border-color: var(--line);
-  color: var(--h);
+  @include glass.input-dark();
 }
 
 .dark-mode .form-control::placeholder,
@@ -423,15 +445,14 @@ textarea:focus {
 .dark-mode textarea:focus,
 .dark-mode select:focus {
   border-color: var(--primary-lighter);
-  box-shadow: 0 0 0 .12rem rgba(47, 147, 109, 0.22);
+  box-shadow: 0 0 0 3px rgba(47, 147, 109, 0.2);
 }
 
 .dark-mode .dropdown-menu,
 .dark-mode .ng-dropdown-panel,
 .dark-mode .mat-mdc-select-panel {
-  background: #1a2230;
+  @include glass.elevated-dark();
   color: var(--h);
-  border: 1px solid var(--line);
 }
 
 .dark-mode .apexcharts-tooltip,
@@ -443,8 +464,17 @@ textarea:focus {
 }
 
 .dark-mode .global-loader-box {
-  background: rgba(19, 25, 35, 0.95);
-  border: 1px solid var(--line);
+  @include glass.elevated-dark();
+}
+
+.dark-mode #sidebar {
+  @include glass.sidebar-dark();
+}
+
+.dark-mode #sidebar .side-menu li.active {
+  background: rgba(47, 147, 109, 0.12);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 a {
@@ -491,15 +521,14 @@ p {
   left: 0;
   width: 280px;
   height: 100%;
-  background: var(--bg-light);
+  @include glass.sidebar();
   z-index: 2000;
   font-family: var(--poppins);
-  transition: .3s ease; // uncomm ent for animation
+  transition: .3s ease;
   overflow: hidden;
   scrollbar-width: none;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--line);
 
 
 
@@ -527,7 +556,7 @@ p {
   }
 
   .brand {
-    background: var(--bg-light);
+    background: transparent;
     width: 100%;
     display: flex;
     flex-direction: column;
@@ -575,10 +604,12 @@ p {
       cursor: pointer;
 
       &.active {
-        background: var(--bg);
+        background: rgba(47, 147, 109, 0.1);
         position: relative;
         border-radius: 14px;
         box-shadow: inset 3px 0 0 var(--primary);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
 
         &::before,
         &::after {
@@ -701,7 +732,7 @@ p {
 /* NAVBAR */
 #content nav {
   height: 56px;
-  background: var(--bg);
+  @include glass.navbar();
   // padding: 0 24px;
   display: flex;
   align-items: center;
@@ -960,7 +991,8 @@ p {
 
   .card-bg {
     border-radius: 20px;
-    background: var(--bg-light);
+    @include glass.panel-strong();
+    border-radius: 20px;
     padding: 24px;
     overflow-x: hidden;
     overflow-y: auto;
@@ -1340,11 +1372,9 @@ input:checked+.slider:before {
   height: 150px;
   width: 97%;
   border-radius: 25px;
-  background: var(--bg-light);
+  @include glass.panel($opacity: 0.7);
   overflow: hidden;
-  transition: 100ms ease;
-  box-shadow: rgba(0, 0, 0, 0.15) 2px 3px 4px;
-  border: 1px solid var(--line);
+  border-radius: 25px;
 }
 
 /* ---------- Info section ---------- */
@@ -1663,13 +1693,12 @@ button {
       border-radius: 30px;
       margin: auto;
       max-width: 496px;
-      backdrop-filter: blur(30px);
-      background-color: var(--bg-light);
-      border: 1px solid var(--line);
+      @include glass.elevated($blur: 24px);
+      border-radius: 30px;
       top: 3%;
-      box-shadow: -4px 4px 9px 0px #00000040;
       padding: 3%;
       box-sizing: border-box;
+      @include glass.shimmer();
 
       .text-left {
         text-align: left;
@@ -1795,11 +1824,9 @@ button {
   // z-index: 1000;
 
   .card-container {
-    background: var(--bg-light);
-    color: var(--bg);
+    @include glass.elevated();
+    color: var(--h);
     padding: 2rem;
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
     text-align: center;
 
     .toggle-container {

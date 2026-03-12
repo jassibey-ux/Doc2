@@ -2,13 +2,20 @@ const logger = require("./logger").default;
 const admin = require("firebase-admin");
 const apn = require("apn");
 const path = require('path');
-const serviceAccount = require("./firebaseServiceKey.json");
 const { v4: uuidv4 } = require('uuid');
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+// Gracefully init Firebase — skip if service key is missing or invalid (local dev)
+let firebaseInitialized = false;
+try {
+  const serviceAccount = require("./firebaseServiceKey.json");
+  if (!admin.apps.length && serviceAccount?.private_key && serviceAccount.private_key.length > 100) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    firebaseInitialized = true;
+  }
+} catch (err) {
+  logger.warn("Firebase service key missing or invalid — push notifications disabled in dev mode");
 }
 
 const sendAndroidVoipCall = async (
@@ -20,6 +27,7 @@ const sendAndroidVoipCall = async (
   isGroup,
   activegrouuserids
 ) => {
+  if (!firebaseInitialized) { logger.warn("Firebase not initialized — skipping FCM VoIP"); return; }
   logger.debug({ tokenCount: fcmTokens?.length, callerName }, "sendAndroidVoipCall");
 
   if (!Array.isArray(fcmTokens)) {
@@ -68,6 +76,7 @@ const sendAndroidVoipCall = async (
 };
 
 const sendAndroidNonVoipCall = async (fcmTokens, callerName, body, groupId,userId) => {
+  if (!firebaseInitialized) { logger.warn("Firebase not initialized — skipping FCM non-VoIP"); return; }
   logger.debug({ tokenCount: fcmTokens?.length, callerName }, "sendAndroidNonVoipCall");
   if (!Array.isArray(fcmTokens)) {
     throw new Error("fcmTokens must be an array of strings");
@@ -213,6 +222,7 @@ const sendIosVoipCall = async (
  * @param {'ROUTINE'|'URGENT'|'CRITICAL'} priority
  */
 const sendPriorityNotification = async (fcmTokens, callerName, body, groupId, userId, priority = 'ROUTINE') => {
+  if (!firebaseInitialized) { logger.warn("Firebase not initialized — skipping priority notification"); return; }
   if (!Array.isArray(fcmTokens) || fcmTokens.length === 0) return;
 
   const uuid = uuidv4();

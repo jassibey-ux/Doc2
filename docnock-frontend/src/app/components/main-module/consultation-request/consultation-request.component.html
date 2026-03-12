@@ -1,0 +1,200 @@
+<div id="content">
+  <main>
+    <div class="head-title pb-3 dashboard-toolbar">
+      <div class="left">
+        <h4>Consultation Requests</h4>
+        <span class="subtitle" *ngIf="totalRecords">{{ totalRecords }} total requests</span>
+      </div>
+      <div class="right">
+        <button class="btn add-btn" (click)="openCreateModal()">
+          <i class='bx bx-plus'></i> New Consultation
+        </button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>Status</label>
+        <select [(ngModel)]="statusFilter" (ngModelChange)="applyFilter()">
+          <option value="">All Statuses</option>
+          <option *ngFor="let s of statuses" [value]="s">{{ s | titlecase }}</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Priority</label>
+        <select [(ngModel)]="priorityFilter" (ngModelChange)="applyFilter()">
+          <option value="">All Priorities</option>
+          <option *ngFor="let p of priorities" [value]="p">{{ p }}</option>
+        </select>
+      </div>
+      <button class="btn clear-btn" (click)="clearFilters()">Clear</button>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-state" *ngIf="loading">
+      <i class='bx bx-loader-alt bx-spin'></i> Loading consultations...
+    </div>
+
+    <!-- Table -->
+    <div class="table-container" *ngIf="!loading && consultations.length">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Priority</th>
+            <th>Patient</th>
+            <th>Specialty</th>
+            <th>Reason</th>
+            <th>Requested By</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let c of consultations">
+            <td class="timestamp-cell">{{ c.createdAt | date:'short' }}</td>
+            <td>
+              <span class="priority-badge" [ngClass]="getPriorityClass(c.priority)">
+                {{ c.priority }}
+              </span>
+            </td>
+            <td>
+              <span class="patient-name">{{ c.patientName || '-' }}</span>
+              <span class="patient-room" *ngIf="c.patientRoom">Rm {{ c.patientRoom }}</span>
+            </td>
+            <td>{{ c.specialty || '-' }}</td>
+            <td class="reason-cell">{{ c.reason | slice:0:50 }}{{ c.reason?.length > 50 ? '...' : '' }}</td>
+            <td>
+              <span class="user-name">{{ c.createdBy?.fullName || c.requestedBy || 'Unknown' }}</span>
+            </td>
+            <td>
+              <span class="status-badge" [ngClass]="getStatusClass(c.status)">
+                {{ c.status | titlecase }}
+              </span>
+            </td>
+            <td class="action-cell">
+              <button class="btn action-btn accept-btn"
+                      *ngIf="c.status === 'pending'"
+                      (click)="acceptConsultation(c._id)">
+                <i class='bx bx-check'></i> Accept
+              </button>
+              <button class="btn action-btn complete-btn"
+                      *ngIf="c.status === 'accepted'"
+                      (click)="openActionModal(c, 'complete')">
+                <i class='bx bx-check-double'></i> Complete
+              </button>
+              <button class="btn action-btn decline-btn"
+                      *ngIf="c.status === 'pending'"
+                      (click)="openActionModal(c, 'decline')">
+                <i class='bx bx-x'></i> Decline
+              </button>
+              <span class="no-action" *ngIf="c.status === 'completed'">
+                <i class='bx bx-check-circle'></i> Done
+              </span>
+              <span class="no-action declined" *ngIf="c.status === 'declined'">
+                <i class='bx bx-x-circle'></i> Declined
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Empty -->
+    <div class="empty-state" *ngIf="!loading && !consultations.length">
+      <i class='bx bxs-user-voice'></i>
+      <p>No consultation requests found. Create one to request a specialist consultation.</p>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" *ngIf="totalPages > 1">
+      <button class="btn page-btn" (click)="prevPage()" [disabled]="currentPage <= 1">Previous</button>
+      <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
+      <button class="btn page-btn" (click)="nextPage()" [disabled]="currentPage >= totalPages">Next</button>
+    </div>
+
+    <!-- Create Modal -->
+    <div class="modal-overlay" *ngIf="showCreateModal" (click)="closeCreateModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h5>New Consultation Request</h5>
+          <button class="modal-close" (click)="closeCreateModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Patient Name *</label>
+              <input type="text" [(ngModel)]="newConsultation.patientName" placeholder="Patient full name" />
+            </div>
+            <div class="form-group">
+              <label>Room</label>
+              <input type="text" [(ngModel)]="newConsultation.patientRoom" placeholder="Room #" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Specialty</label>
+              <select [(ngModel)]="newConsultation.specialty">
+                <option value="">Select specialty...</option>
+                <option *ngFor="let s of specialties" [value]="s">{{ s }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Priority</label>
+              <select [(ngModel)]="newConsultation.priority">
+                <option *ngFor="let p of priorities" [value]="p">{{ p }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Reason for Consultation *</label>
+            <textarea [(ngModel)]="newConsultation.reason" rows="3"
+                      placeholder="Why is this consultation needed?"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Clinical History</label>
+            <textarea [(ngModel)]="newConsultation.clinicalHistory" rows="3"
+                      placeholder="Relevant clinical history, current medications, recent labs..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn cancel-btn" (click)="closeCreateModal()">Cancel</button>
+          <button class="btn submit-btn" (click)="submitConsultation()" [disabled]="submitting">
+            <i class='bx bx-loader-alt bx-spin' *ngIf="submitting"></i>
+            {{ submitting ? 'Submitting...' : 'Submit Request' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Modal (Complete / Decline) -->
+    <div class="modal-overlay" *ngIf="showActionModal" (click)="closeActionModal()">
+      <div class="modal-content modal-sm" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h5>{{ actionType === 'complete' ? 'Complete' : 'Decline' }} Consultation</h5>
+          <button class="modal-close" (click)="closeActionModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+          <p class="action-info">
+            {{ actionType === 'complete' ? 'Completing' : 'Declining' }} consultation for
+            <strong>{{ selectedConsultation?.patientName }}</strong>
+            <span *ngIf="selectedConsultation?.specialty"> ({{ selectedConsultation?.specialty }})</span>
+          </p>
+          <div class="form-group">
+            <label>{{ actionType === 'complete' ? 'Findings / Notes' : 'Reason for Declining' }}</label>
+            <textarea [(ngModel)]="actionNotes" rows="4"
+                      [placeholder]="actionType === 'complete' ? 'Document your findings and recommendations...' : 'Explain why this consultation is being declined...'"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn cancel-btn" (click)="closeActionModal()">Cancel</button>
+          <button class="btn submit-btn" [ngClass]="{'decline-submit': actionType === 'decline'}"
+                  (click)="submitAction()" [disabled]="submitting">
+            {{ submitting ? 'Processing...' : (actionType === 'complete' ? 'Complete' : 'Decline') }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

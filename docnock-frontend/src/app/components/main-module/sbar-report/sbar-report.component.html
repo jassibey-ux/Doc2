@@ -1,0 +1,196 @@
+<div id="content">
+  <main>
+    <div class="head-title pb-3 dashboard-toolbar">
+      <div class="left">
+        <h4>SBAR Reports</h4>
+        <span class="subtitle" *ngIf="totalRecords">{{ totalRecords }} total reports</span>
+      </div>
+      <div class="right">
+        <button class="btn add-btn" (click)="openCreateModal()">
+          <i class='bx bx-plus'></i> New SBAR
+        </button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>Priority</label>
+        <select [(ngModel)]="priorityFilter" (ngModelChange)="applyFilter()">
+          <option value="">All Priorities</option>
+          <option *ngFor="let p of priorities" [value]="p">{{ p }}</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Status</label>
+        <select [(ngModel)]="statusFilter" (ngModelChange)="applyFilter()">
+          <option value="">All Statuses</option>
+          <option *ngFor="let s of statuses" [value]="s">{{ s | titlecase }}</option>
+        </select>
+      </div>
+      <button class="btn clear-btn" (click)="clearFilters()">Clear</button>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-state" *ngIf="loading">
+      <i class='bx bx-loader-alt bx-spin'></i> Loading SBAR reports...
+    </div>
+
+    <!-- Table -->
+    <div class="table-container" *ngIf="!loading && sbars.length">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Priority</th>
+            <th>Patient</th>
+            <th>Room</th>
+            <th>Situation</th>
+            <th>From</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let s of sbars">
+            <td class="timestamp-cell">{{ s.createdAt | date:'short' }}</td>
+            <td>
+              <span class="priority-badge" [ngClass]="getPriorityClass(s.priority)">
+                {{ s.priority }}
+              </span>
+            </td>
+            <td class="patient-name">{{ s.patientName || '-' }}</td>
+            <td>{{ s.patientRoom || '-' }}</td>
+            <td class="situation-cell">{{ s.situation | slice:0:60 }}{{ s.situation?.length > 60 ? '...' : '' }}</td>
+            <td>
+              <span class="user-name">{{ s.createdBy?.fullName || 'Unknown' }}</span>
+            </td>
+            <td>
+              <span class="status-badge" [ngClass]="getStatusClass(s.status)">
+                {{ s.status | titlecase }}
+              </span>
+            </td>
+            <td class="action-cell">
+              <button class="btn action-btn acknowledge-btn"
+                      *ngIf="s.status === 'submitted'"
+                      (click)="acknowledgeSbar(s._id)">
+                <i class='bx bx-check'></i> Acknowledge
+              </button>
+              <button class="btn action-btn resolve-btn"
+                      *ngIf="s.status === 'acknowledged'"
+                      (click)="openResolveModal(s)">
+                <i class='bx bx-check-double'></i> Resolve
+              </button>
+              <span class="no-action" *ngIf="s.status === 'resolved'">
+                <i class='bx bx-check-circle'></i> Resolved
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Empty -->
+    <div class="empty-state" *ngIf="!loading && !sbars.length">
+      <i class='bx bxs-report'></i>
+      <p>No SBAR reports found. Create one to communicate clinical concerns.</p>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" *ngIf="totalPages > 1">
+      <button class="btn page-btn" (click)="prevPage()" [disabled]="currentPage <= 1">Previous</button>
+      <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
+      <button class="btn page-btn" (click)="nextPage()" [disabled]="currentPage >= totalPages">Next</button>
+    </div>
+
+    <!-- Create SBAR Modal -->
+    <div class="modal-overlay" *ngIf="showCreateModal" (click)="closeCreateModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h5>New SBAR Report</h5>
+          <button class="modal-close" (click)="closeCreateModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Patient Name *</label>
+              <input type="text" [(ngModel)]="newSbar.patientName" placeholder="Patient full name" />
+            </div>
+            <div class="form-group">
+              <label>Room</label>
+              <input type="text" [(ngModel)]="newSbar.patientRoom" placeholder="Room #" />
+            </div>
+            <div class="form-group">
+              <label>Priority</label>
+              <select [(ngModel)]="newSbar.priority">
+                <option *ngFor="let p of priorities" [value]="p">{{ p }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="sbar-section">
+            <div class="sbar-label"><span class="sbar-letter">S</span> Situation *</div>
+            <div class="form-group">
+              <textarea [(ngModel)]="newSbar.situation" rows="3"
+                        placeholder="What is happening right now with this patient?"></textarea>
+            </div>
+          </div>
+
+          <div class="sbar-section">
+            <div class="sbar-label"><span class="sbar-letter">B</span> Background</div>
+            <div class="form-group">
+              <textarea [(ngModel)]="newSbar.background" rows="3"
+                        placeholder="Relevant history, context, and clinical background..."></textarea>
+            </div>
+          </div>
+
+          <div class="sbar-section">
+            <div class="sbar-label"><span class="sbar-letter">A</span> Assessment</div>
+            <div class="form-group">
+              <textarea [(ngModel)]="newSbar.assessment" rows="3"
+                        placeholder="Your clinical assessment of the situation..."></textarea>
+            </div>
+          </div>
+
+          <div class="sbar-section">
+            <div class="sbar-label"><span class="sbar-letter">R</span> Recommendation</div>
+            <div class="form-group">
+              <textarea [(ngModel)]="newSbar.recommendation" rows="3"
+                        placeholder="What action do you recommend?"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn cancel-btn" (click)="closeCreateModal()">Cancel</button>
+          <button class="btn submit-btn" (click)="submitSbar()" [disabled]="submitting">
+            <i class='bx bx-loader-alt bx-spin' *ngIf="submitting"></i>
+            {{ submitting ? 'Submitting...' : 'Submit SBAR' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resolve Modal -->
+    <div class="modal-overlay" *ngIf="showResolveModal" (click)="closeResolveModal()">
+      <div class="modal-content modal-sm" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h5>Resolve SBAR</h5>
+          <button class="modal-close" (click)="closeResolveModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+          <p class="resolve-info">Resolving SBAR for <strong>{{ selectedSbar?.patientName }}</strong></p>
+          <div class="form-group">
+            <label>Resolution Notes</label>
+            <textarea [(ngModel)]="resolveNotes" rows="4" placeholder="Describe the resolution..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn cancel-btn" (click)="closeResolveModal()">Cancel</button>
+          <button class="btn submit-btn" (click)="resolveSbar()" [disabled]="submitting">
+            {{ submitting ? 'Resolving...' : 'Resolve' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

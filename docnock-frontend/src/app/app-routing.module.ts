@@ -21,6 +21,15 @@ import { OnCallScheduleComponent } from './components/main-module/on-call-schedu
 import { FaxInboxComponent } from './components/main-module/fax-inbox/fax-inbox.component';
 import { FormBuilderComponent } from './components/main-module/form-builder/form-builder.component';
 import { FamilyPortalComponent } from './components/family-portal/family-portal.component';
+import { IntegrationMonitorComponent } from './components/main-module/integration-monitor/integration-monitor.component';
+import { AuditLogViewerComponent } from './components/main-module/audit-log-viewer/audit-log-viewer.component';
+import { SystemHealthComponent } from './components/main-module/system-health/system-health.component';
+import { SecurityMonitorComponent } from './components/main-module/security-monitor/security-monitor.component';
+import { SystemSettingsComponent } from './components/main-module/system-settings/system-settings.component';
+import { ShiftHandoffComponent } from './components/main-module/shift-handoff/shift-handoff.component';
+import { SbarReportComponent } from './components/main-module/sbar-report/sbar-report.component';
+import { ClinicalAlertsComponent } from './components/main-module/clinical-alerts/clinical-alerts.component';
+import { ConsultationRequestComponent } from './components/main-module/consultation-request/consultation-request.component';
 
 const routes: Routes = [
   { path: 'login', component: LoginComponent, canActivate: [AuthGuardLogin] },
@@ -48,7 +57,15 @@ const routes: Routes = [
       { path: 'form-builder', component: FormBuilderComponent },
       { path: 'profile', component: ProfileComponent },
       { path: 'setting', component: AccountSettingComponent },
-
+      { path: 'integrations', component: IntegrationMonitorComponent },
+      { path: 'audit-logs', component: AuditLogViewerComponent },
+      { path: 'system-health', component: SystemHealthComponent },
+      { path: 'security', component: SecurityMonitorComponent },
+      { path: 'system-settings', component: SystemSettingsComponent },
+      { path: 'shift-handoff', component: ShiftHandoffComponent },
+      { path: 'sbar', component: SbarReportComponent },
+      { path: 'clinical-alerts', component: ClinicalAlertsComponent },
+      { path: 'consultations', component: ConsultationRequestComponent },
     ],
     canActivate: [AuthGuard],
   },

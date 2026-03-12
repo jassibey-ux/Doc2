@@ -1,3 +1,5 @@
+@use '../../../../styles/liquid-glass' as glass;
+
 .dashboard-toolbar {
   display: flex;
   align-items: center;
@@ -18,9 +20,21 @@
 select#month,
 select#year,
 select#chart-filter {
-  background: var(--bg-light);
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   color: var(--p);
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  transition: border-color 0.15s ease;
+  &:focus { border-color: var(--primary-lighter); }
+}
+
+:host-context(.dark-mode) select#month,
+:host-context(.dark-mode) select#year,
+:host-context(.dark-mode) select#chart-filter {
+  background: rgba(26, 34, 48, 0.5);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .dashboard-cards-row {
@@ -43,10 +57,12 @@ select#chart-filter {
 }
 
 .dashboard-chart-card {
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: var(--bg-light);
+  @include glass.panel-strong();
   padding: 14px;
+}
+
+:host-context(.dark-mode) .dashboard-chart-card {
+  @include glass.panel-dark-strong();
 }
 
 .dashboard-chart-head {
@@ -144,9 +160,9 @@ $text-secondary: #757575;
   align-items: center;
   gap: 16px;
   padding: 20px 24px;
-  border-radius: 8px;
-  border: 1px solid var(--line, #E0E0E0);
-  background: var(--bg-light, #FFFFFF);
+  @include glass.panel($opacity: 0.7);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  &:hover { transform: translateY(-2px); }
 
   .kpi-icon {
     font-size: 32px;
@@ -185,9 +201,7 @@ $text-secondary: #757575;
 }
 
 .analytics-chart-card {
-  border-radius: 8px;
-  border: 1px solid var(--line, #E0E0E0);
-  background: var(--bg-light, #FFFFFF);
+  @include glass.panel-strong();
   padding: 16px;
 
   h6 {

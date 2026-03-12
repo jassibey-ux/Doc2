@@ -217,6 +217,9 @@
           <ng-container *ngIf="!userCallingparticipantInfo">
             <div class="action-items"
               *ngIf="activeGroup && (callstartedstatus?.participant==null || callstartedstatus?.participant.length==0)">
+              <a class="action-pin" title="Pinned Messages" (click)="togglePinnedPanel()">
+                <i class='bx bxs-pin'></i>
+              </a>
               <a class="action-export" title="Export Chat" (click)="exportChat(activeGroup.groupId)">
                 <i class='bx bxs-download'></i>
               </a>
@@ -269,6 +272,25 @@
           >
             <i class="bx bx-user-plus"></i>
           </button>
+        </div>
+        <!-- Topic Bar -->
+        <div class="topic-bar" *ngIf="activeGroup?.group">
+          <i class="bx bx-hash"></i>
+          <ng-container *ngIf="!editingTopic">
+            <span class="topic-text" (click)="startEditTopic()">
+              {{ conversationTopic || 'Set a topic...' }}
+            </span>
+            <button class="topic-edit-btn" (click)="startEditTopic()" title="Edit topic">
+              <i class="bx bx-pencil"></i>
+            </button>
+          </ng-container>
+          <ng-container *ngIf="editingTopic">
+            <input class="topic-input" [(ngModel)]="topicDraft"
+              (keydown.enter)="saveTopic()" (keydown.escape)="cancelEditTopic()"
+              placeholder="Add a topic..." maxlength="200" autofocus />
+            <button class="topic-save-btn" (click)="saveTopic()"><i class="bx bx-check"></i></button>
+            <button class="topic-cancel-btn" (click)="cancelEditTopic()"><i class="bx bx-x"></i></button>
+          </ng-container>
         </div>
         <!-- AI Summary Overlay -->
         <div class="ai-summary-panel" *ngIf="showAiSummary">
@@ -439,6 +461,26 @@
                 </span> -->
               </span>
                 </div>
+              <!-- Reactions (received) -->
+              <div class="reaction-bar" *ngIf="message.reactions?.length">
+                <button *ngFor="let emoji of getUniqueReactions(message)"
+                  class="reaction-badge" [class.reacted]="hasUserReacted(message, emoji)"
+                  (click)="toggleReaction(message, emoji)">
+                  {{ reactionEmojiMap[emoji] || emoji }} {{ getReactionCount(message, emoji) }}
+                </button>
+              </div>
+              <div class="message-actions-row">
+                <button class="msg-action-btn" (click)="toggleReactionPicker(message.messageId)" title="React">
+                  <i class="bx bx-happy"></i>
+                </button>
+                <button class="msg-action-btn" (click)="pinMessage(message)" title="Pin">
+                  <i class="bx bx-pin"></i>
+                </button>
+              </div>
+              <div class="reaction-picker" *ngIf="showReactionPicker === message.messageId">
+                <button *ngFor="let emoji of reactionEmojis" class="reaction-pick-btn"
+                  (click)="addReaction(message.messageId, emoji)">{{ emoji }}</button>
+              </div>
               </div>
             </div>
             <!-- Chat Message Section -->
@@ -550,6 +592,26 @@
                 </span>
               </span>
                   </div>
+              <!-- Reactions (sent) -->
+              <div class="reaction-bar" *ngIf="message.reactions?.length">
+                <button *ngFor="let emoji of getUniqueReactions(message)"
+                  class="reaction-badge" [class.reacted]="hasUserReacted(message, emoji)"
+                  (click)="toggleReaction(message, emoji)">
+                  {{ reactionEmojiMap[emoji] || emoji }} {{ getReactionCount(message, emoji) }}
+                </button>
+              </div>
+              <div class="message-actions-row">
+                <button class="msg-action-btn" (click)="toggleReactionPicker(message.messageId)" title="React">
+                  <i class="bx bx-happy"></i>
+                </button>
+                <button class="msg-action-btn" (click)="pinMessage(message)" title="Pin">
+                  <i class="bx bx-pin"></i>
+                </button>
+              </div>
+              <div class="reaction-picker" *ngIf="showReactionPicker === message.messageId">
+                <button *ngFor="let emoji of reactionEmojis" class="reaction-pick-btn"
+                  (click)="addReaction(message.messageId, emoji)">{{ emoji }}</button>
+              </div>
                 </div>
               </div>
 
@@ -626,8 +688,22 @@
                   <i class='bx bx-x'></i>
                 </button>
               </div>
+              <!-- Mention Autocomplete -->
+              <div class="mention-popup" *ngIf="showMentionPopup">
+                <div *ngIf="mentionLoading" class="mention-loading">
+                  <i class="bx bx-loader-alt bx-spin"></i> Searching...
+                </div>
+                <div *ngFor="let user of mentionResults" class="mention-item" (click)="insertMention(user)">
+                  <i class="bx bx-user"></i>
+                  <span class="mention-name">{{ user.fullName || user.name }}</span>
+                  <span class="mention-role">{{ user.rolename || user.role }}</span>
+                </div>
+                <div *ngIf="!mentionLoading && mentionResults.length === 0 && mentionQuery" class="mention-empty">
+                  No users found
+                </div>
+              </div>
               <input type="text" placeholder="Write a message" (keydown.enter)="is_msg_edit?updateMsg():sendMessage()"
-                [(ngModel)]="message" (input)="onInputChange($event)" (paste)="onMessageInputPaste($event)" />
+                [(ngModel)]="message" (input)="onInputChange($event); onMessageInput($event)" (paste)="onMessageInputPaste($event)" />
               <div class="input-icons">
                 <input style="display: none" type="file" id="profile-upload" #fileInput
                   accept="image/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -758,6 +834,32 @@
             </div>
           </ng-template>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pinned Messages Panel -->
+  <div class="pinned-panel" *ngIf="showPinnedPanel" [class.open]="showPinnedPanel">
+    <div class="pinned-panel-header">
+      <h3><i class="bx bxs-pin"></i> Pinned Messages</h3>
+      <button class="pinned-panel-close" (click)="showPinnedPanel = false"><i class="bx bx-x"></i></button>
+    </div>
+    <div class="pinned-panel-body">
+      <div *ngIf="pinnedLoading" class="pinned-loading">
+        <i class="bx bx-loader-alt bx-spin"></i> Loading...
+      </div>
+      <div *ngIf="!pinnedLoading && pinnedMessages.length === 0" class="pinned-empty">
+        <i class="bx bx-pin"></i>
+        <p>No pinned messages</p>
+      </div>
+      <div *ngFor="let pin of pinnedMessages" class="pinned-item">
+        <div class="pinned-item-preview">{{ pin.messagePreview }}</div>
+        <div class="pinned-item-meta">
+          Pinned {{ pin.pinnedAt | date:'short' }}
+        </div>
+        <button class="pinned-unpin-btn" (click)="unpinMessage(pin.messageId)" title="Unpin">
+          <i class="bx bx-x"></i>
+        </button>
       </div>
     </div>
   </div>

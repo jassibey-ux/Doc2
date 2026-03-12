@@ -1,0 +1,182 @@
+<div id="content">
+  <main>
+    <div class="head-title pb-3 dashboard-toolbar">
+      <div class="left">
+        <h4>Shift Handoffs</h4>
+        <span class="subtitle" *ngIf="totalRecords">{{ totalRecords }} total handoffs</span>
+      </div>
+      <div class="right">
+        <button class="btn add-btn" (click)="openCreateModal()">
+          <i class='bx bx-plus'></i> New Handoff
+        </button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>Status</label>
+        <select [(ngModel)]="statusFilter" (ngModelChange)="applyFilter()">
+          <option value="">All Statuses</option>
+          <option *ngFor="let s of statuses" [value]="s">{{ s | titlecase }}</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Unit</label>
+        <input type="text" [(ngModel)]="unitFilter" placeholder="e.g. ICU, 3-North" (keyup.enter)="applyFilter()" />
+      </div>
+      <div class="filter-group">
+        <label>From</label>
+        <input type="date" [(ngModel)]="startDate" (ngModelChange)="applyFilter()" />
+      </div>
+      <div class="filter-group">
+        <label>To</label>
+        <input type="date" [(ngModel)]="endDate" (ngModelChange)="applyFilter()" />
+      </div>
+      <button class="btn clear-btn" (click)="clearFilters()">Clear</button>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-state" *ngIf="loading">
+      <i class='bx bx-loader-alt bx-spin'></i> Loading handoffs...
+    </div>
+
+    <!-- Table -->
+    <div class="table-container" *ngIf="!loading && handoffs.length">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Shift</th>
+            <th>Unit</th>
+            <th>From</th>
+            <th>Patients</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let h of handoffs">
+            <td class="timestamp-cell">{{ h.createdAt | date:'shortDate' }}</td>
+            <td>
+              <span class="shift-badge">{{ h.shiftType }}</span>
+            </td>
+            <td>{{ h.unit || '-' }}</td>
+            <td>
+              <span class="user-name">{{ h.createdBy?.fullName || 'Unknown' }}</span>
+            </td>
+            <td>{{ h.patients?.length || 0 }} patient(s)</td>
+            <td>
+              <span class="status-badge" [ngClass]="getStatusClass(h.status)">
+                {{ h.status | titlecase }}
+              </span>
+            </td>
+            <td class="action-cell">
+              <button class="btn action-btn acknowledge-btn"
+                      *ngIf="h.status === 'submitted'"
+                      (click)="acknowledgeHandoff(h._id)">
+                <i class='bx bx-check'></i> Acknowledge
+              </button>
+              <button class="btn action-btn complete-btn"
+                      *ngIf="h.status === 'acknowledged'"
+                      (click)="completeHandoff(h._id)">
+                <i class='bx bx-check-double'></i> Complete
+              </button>
+              <span class="no-action" *ngIf="h.status === 'completed'">
+                <i class='bx bx-check-circle'></i> Done
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Empty -->
+    <div class="empty-state" *ngIf="!loading && !handoffs.length">
+      <i class='bx bxs-notepad'></i>
+      <p>No handoffs found. Create a new shift handoff to get started.</p>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" *ngIf="totalPages > 1">
+      <button class="btn page-btn" (click)="prevPage()" [disabled]="currentPage <= 1">Previous</button>
+      <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
+      <button class="btn page-btn" (click)="nextPage()" [disabled]="currentPage >= totalPages">Next</button>
+    </div>
+
+    <!-- Create Modal -->
+    <div class="modal-overlay" *ngIf="showCreateModal" (click)="closeCreateModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h5>New Shift Handoff</h5>
+          <button class="modal-close" (click)="closeCreateModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Shift Type</label>
+              <select [(ngModel)]="newHandoff.shiftType">
+                <option *ngFor="let t of shiftTypes" [value]="t">{{ t }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Unit *</label>
+              <input type="text" [(ngModel)]="newHandoff.unit" placeholder="e.g. ICU, 3-North" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>General Notes</label>
+            <textarea [(ngModel)]="newHandoff.notes" rows="3" placeholder="Overall shift notes..."></textarea>
+          </div>
+
+          <div class="patients-section">
+            <div class="section-header">
+              <h6>Patients</h6>
+              <button class="btn add-patient-btn" (click)="addPatient()">
+                <i class='bx bx-plus'></i> Add Patient
+              </button>
+            </div>
+            <div class="patient-card" *ngFor="let p of newHandoff.patients; let i = index">
+              <div class="patient-card-header">
+                <span>Patient {{ i + 1 }}</span>
+                <button class="btn remove-btn" *ngIf="newHandoff.patients.length > 1" (click)="removePatient(i)">
+                  <i class='bx bx-trash'></i>
+                </button>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Name</label>
+                  <input type="text" [(ngModel)]="p.name" placeholder="Patient name" />
+                </div>
+                <div class="form-group">
+                  <label>Room</label>
+                  <input type="text" [(ngModel)]="p.room" placeholder="Room #" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Diagnosis</label>
+                <input type="text" [(ngModel)]="p.diagnosis" placeholder="Primary diagnosis" />
+              </div>
+              <div class="form-group">
+                <label>Medications</label>
+                <input type="text" [(ngModel)]="p.medications" placeholder="Key medications" />
+              </div>
+              <div class="form-group">
+                <label>Notes</label>
+                <textarea [(ngModel)]="p.notes" rows="2" placeholder="Patient-specific notes..."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn cancel-btn" (click)="closeCreateModal()">Cancel</button>
+          <button class="btn submit-btn" (click)="submitHandoff()" [disabled]="submitting">
+            <i class='bx bx-loader-alt bx-spin' *ngIf="submitting"></i>
+            {{ submitting ? 'Creating...' : 'Create Handoff' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

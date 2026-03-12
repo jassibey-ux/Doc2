@@ -1,0 +1,145 @@
+<div id="content">
+  <main>
+    <div class="head-title pb-3 dashboard-toolbar">
+      <div class="left">
+        <h4>System Settings</h4>
+        <span class="subtitle" *ngIf="hasConfigs()">Manage runtime configuration for the platform</span>
+      </div>
+      <div class="right">
+        <button class="btn add-btn" (click)="seedConfig()" [disabled]="seeding">
+          <i class='bx bx-data'></i> {{ seeding ? 'Seeding...' : 'Seed Defaults' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Restart Banner -->
+    <div class="restart-banner" *ngIf="showRestartBanner">
+      <i class='bx bx-info-circle'></i>
+      <span>Some changes require a server restart to take effect.</span>
+      <button class="dismiss-btn" (click)="showRestartBanner = false"><i class='bx bx-x'></i></button>
+    </div>
+
+    <div class="loading-state" *ngIf="loading">
+      <i class='bx bx-loader-alt bx-spin'></i> Loading configuration...
+    </div>
+
+    <div class="empty-state" *ngIf="!loading && !hasConfigs()">
+      <i class='bx bxs-cog'></i>
+      <p>No configuration found. Click "Seed Defaults" to initialize settings.</p>
+    </div>
+
+    <div class="settings-layout" *ngIf="!loading && hasConfigs()">
+      <!-- Category Sidebar -->
+      <div class="category-nav">
+        <ng-container *ngFor="let cat of getCategoryKeys()">
+          <button
+            *ngIf="configGroups[cat]"
+            class="category-btn"
+            [class.active]="activeCategory === cat"
+            (click)="setActiveCategory(cat)"
+          >
+            <i [class]="categoryMeta[cat].icon"></i>
+            <span>{{ categoryMeta[cat].label }}</span>
+          </button>
+        </ng-container>
+      </div>
+
+      <!-- Settings Panel -->
+      <div class="settings-panel">
+        <div class="category-header">
+          <i [class]="categoryMeta[activeCategory]?.icon"></i>
+          <h5>{{ categoryMeta[activeCategory]?.label }}</h5>
+        </div>
+
+        <div class="settings-list">
+          <div
+            class="setting-item"
+            *ngFor="let item of configGroups[activeCategory]"
+            [class.modified]="isModified(item)"
+          >
+            <div class="setting-info">
+              <div class="setting-label">
+                {{ item.label }}
+                <span class="restart-badge" *ngIf="item.requiresRestart">Requires Restart</span>
+                <span class="modified-badge" *ngIf="isModified(item)">Modified</span>
+              </div>
+              <div class="setting-description">{{ item.description }}</div>
+            </div>
+
+            <div class="setting-control">
+              <!-- Number input -->
+              <div class="input-group" *ngIf="item.dataType === 'number'">
+                <input
+                  type="number"
+                  [(ngModel)]="item.editValue"
+                  (ngModelChange)="onValueChange(item)"
+                  [min]="item.validation?.min ?? null"
+                  [max]="item.validation?.max ?? null"
+                  class="setting-input"
+                />
+                <span class="input-unit" *ngIf="item.unit">{{ item.unit }}</span>
+              </div>
+
+              <!-- String input -->
+              <div class="input-group" *ngIf="item.dataType === 'string'">
+                <input
+                  type="text"
+                  [(ngModel)]="item.editValue"
+                  (ngModelChange)="onValueChange(item)"
+                  class="setting-input"
+                />
+              </div>
+
+              <!-- Boolean toggle -->
+              <div class="input-group" *ngIf="item.dataType === 'boolean'">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="item.editValue"
+                    (ngModelChange)="onValueChange(item)"
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <!-- String array -->
+              <div class="input-group" *ngIf="item.dataType === 'string_array'">
+                <input
+                  type="text"
+                  [value]="item.editValue?.join(', ')"
+                  (input)="onArrayChange(item, $event)"
+                  class="setting-input wide"
+                  placeholder="Comma-separated values"
+                />
+              </div>
+
+              <!-- Action buttons -->
+              <div class="setting-actions">
+                <button
+                  class="btn save-btn"
+                  (click)="saveItem(item)"
+                  [disabled]="!item.dirty || item.saving"
+                  title="Save"
+                >
+                  <i class='bx' [ngClass]="item.saving ? 'bx-loader-alt bx-spin' : 'bx-check'"></i>
+                </button>
+                <button
+                  class="btn reset-btn"
+                  (click)="resetItem(item)"
+                  [disabled]="!isModified(item) || item.saving"
+                  title="Reset to default"
+                >
+                  <i class='bx bx-reset'></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-meta" *ngIf="item.lastModifiedAt && isModified(item)">
+              Last changed: {{ item.lastModifiedAt | date:'medium' }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

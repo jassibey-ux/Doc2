@@ -1,0 +1,146 @@
+@use '../../../../styles/liquid-glass' as glass;
+
+.head-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  .left {
+    h4 { margin: 0; color: var(--h); }
+    .refresh-info { font-size: 12px; color: #888; display: block; margin-top: 4px; }
+    .auto-refresh-badge {
+      @include glass.badge(rgba(47, 147, 109, 0.12), var(--primary));
+      margin-left: 8px;
+      font-size: 11px;
+    }
+  }
+}
+
+.btn.add-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.loading-state, .empty-state, .error-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #888;
+  i { font-size: 32px; display: block; margin-bottom: 12px; }
+}
+
+.error-state {
+  i { color: #ef4444; }
+  p { color: #888; }
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.health-card {
+  @include glass.panel($opacity: 0.7);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+  }
+
+  &.full-width { grid-column: 1 / -1; }
+}
+
+:host-context(.dark-mode) .health-card {
+  @include glass.panel-dark($opacity: 0.45);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  i { font-size: 20px; color: var(--primary); }
+  h5 { margin: 0; flex: 1; color: var(--h); font-size: 15px; }
+}
+
+:host-context(.dark-mode) .card-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.status-pill {
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  &.healthy { background: rgba(209, 250, 229, 0.8); color: #065f46; }
+  &.unhealthy { background: rgba(254, 226, 226, 0.8); color: #991b1b; }
+}
+
+.card-body { padding: 16px 20px; }
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  &:last-child { border-bottom: none; }
+}
+
+:host-context(.dark-mode) .stat-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.stat-label { font-size: 13px; color: #888; }
+.stat-value {
+  font-size: 13px;
+  color: var(--h);
+  font-weight: 500;
+  &.highlight { color: var(--primary); font-weight: 700; font-size: 15px; }
+  &.mono { font-family: monospace; }
+  &.env-badge {
+    @include glass.badge(rgba(254, 243, 199, 0.8), #92400e);
+    text-transform: uppercase;
+  }
+}
+
+.collections-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.collection-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  transition: background 0.15s ease;
+  &:hover { background: rgba(255, 255, 255, 0.55); }
+}
+
+:host-context(.dark-mode) .collection-item {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.06);
+  &:hover { background: rgba(255, 255, 255, 0.08); }
+}
+
+.collection-name { font-size: 12px; color: #888; }
+.collection-count { font-size: 14px; font-weight: 700; color: var(--primary); }

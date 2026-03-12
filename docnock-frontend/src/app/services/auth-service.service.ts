@@ -512,6 +512,281 @@ revokeFamilyAccess(linkId: string) {
   });
 }
 
+// ─── Admin Management ──────────────────────────────────────────────────────
+
+getIntegrationHealth() {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/admin/integrations/health`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getSystemStatus() {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/admin/system/status`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getActiveSessions() {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/admin/sessions/active`, {
+    headers: this.getHeader(token),
+  });
+}
+
+revokeSession(data: { sessionId?: string; userId?: string; revokeAll?: boolean }) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/admin/sessions/revoke`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+getAuditLogs(params: Record<string, any> = {}) {
+  const token = this.getToken();
+  const qs = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+    .join('&');
+  return this.http.get(`${this.baseUrl}/admin/audit-logs${qs ? '?' + qs : ''}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getAuditLogActions() {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/admin/audit-logs/actions`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getFailedLogins(hours: number = 24) {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/admin/security/failed-logins?hours=${hours}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getSystemConfig() {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/admin/system-config`, {
+    headers: this.getHeader(token),
+  });
+}
+
+updateSystemConfig(key: string, value: any) {
+  const token = this.getToken();
+  return this.http.put(`${this.baseUrl}/admin/system-config/${key}`, { value }, {
+    headers: this.getHeader(token),
+  });
+}
+
+resetSystemConfig(key: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/admin/system-config/${key}/reset`, {}, {
+    headers: this.getHeader(token),
+  });
+}
+
+seedSystemConfig() {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/admin/system-config/seed`, {}, {
+    headers: this.getHeader(token),
+  });
+}
+
+getPinnedMessages(conversationId: string) {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/conversations/${conversationId}/pins`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getMentionableUsers(conversationId: string, query: string) {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/conversations/${conversationId}/mentionable?query=${encodeURIComponent(query)}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getMessageReactions(messageId: string) {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/messages/${messageId}/reactions`, {
+    headers: this.getHeader(token),
+  });
+}
+
+// ─── Clinical - Shift Handoffs ──────────────────────────────────────────────
+
+createHandoff(data: any) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/handoffs`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+getHandoffs(params: Record<string, any> = {}) {
+  const token = this.getToken();
+  const qs = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+    .join('&');
+  return this.http.get(`${this.baseUrl}/clinical/handoffs${qs ? '?' + qs : ''}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getHandoffById(id: string) {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/clinical/handoffs/${id}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+updateHandoff(id: string, data: any) {
+  const token = this.getToken();
+  return this.http.put(`${this.baseUrl}/clinical/handoffs/${id}`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+acknowledgeHandoff(id: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/handoffs/${id}/acknowledge`, {}, {
+    headers: this.getHeader(token),
+  });
+}
+
+completeHandoff(id: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/handoffs/${id}/complete`, {}, {
+    headers: this.getHeader(token),
+  });
+}
+
+// ─── Clinical - SBAR ────────────────────────────────────────────────────────
+
+createSbar(data: any) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/sbar`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+getSbars(params: Record<string, any> = {}) {
+  const token = this.getToken();
+  const qs = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+    .join('&');
+  return this.http.get(`${this.baseUrl}/clinical/sbar${qs ? '?' + qs : ''}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getSbarById(id: string) {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/clinical/sbar/${id}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+acknowledgeSbar(id: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/sbar/${id}/acknowledge`, {}, {
+    headers: this.getHeader(token),
+  });
+}
+
+resolveSbar(id: string, data: any) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/sbar/${id}/resolve`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+// ─── Clinical - Alerts ──────────────────────────────────────────────────────
+
+createAlert(data: any) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/alerts`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+getAlerts(params: Record<string, any> = {}) {
+  const token = this.getToken();
+  const qs = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+    .join('&');
+  return this.http.get(`${this.baseUrl}/clinical/alerts${qs ? '?' + qs : ''}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+acknowledgeAlert(id: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/alerts/${id}/acknowledge`, {}, {
+    headers: this.getHeader(token),
+  });
+}
+
+resolveAlert(id: string, data: any) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/alerts/${id}/resolve`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+escalateAlert(id: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/alerts/${id}/escalate`, {}, {
+    headers: this.getHeader(token),
+  });
+}
+
+// ─── Clinical - Consultations ───────────────────────────────────────────────
+
+createConsultation(data: any) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/consultations`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+getConsultations(params: Record<string, any> = {}) {
+  const token = this.getToken();
+  const qs = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+    .join('&');
+  return this.http.get(`${this.baseUrl}/clinical/consultations${qs ? '?' + qs : ''}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+acceptConsultation(id: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/consultations/${id}/accept`, {}, {
+    headers: this.getHeader(token),
+  });
+}
+
+completeConsultation(id: string, data: any) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/consultations/${id}/complete`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+declineConsultation(id: string, data: any) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/clinical/consultations/${id}/decline`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
 }
 
 

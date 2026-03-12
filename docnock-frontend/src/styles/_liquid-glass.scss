@@ -1,0 +1,345 @@
+// ============================================================
+// DocNock Liquid Glass Design System
+// Inspired by Apple's Liquid Glass (WWDC 2025)
+// ============================================================
+// Usage: @use 'styles/liquid-glass' as glass;
+//        @include glass.panel();
+// ============================================================
+
+// --- Design Tokens ---
+$glass-blur-sm: 8px;
+$glass-blur-md: 12px;
+$glass-blur-lg: 16px;
+$glass-blur-xl: 24px;
+
+$glass-saturation: 150%;
+$glass-saturation-dark: 120%;
+
+$glass-radius-sm: 12px;
+$glass-radius-md: 16px;
+$glass-radius-lg: 20px;
+$glass-radius-xl: 24px;
+
+// Light mode glass colors
+$glass-bg-light: rgba(255, 255, 255, 0.65);
+$glass-bg-light-strong: rgba(255, 255, 255, 0.82);
+$glass-bg-light-subtle: rgba(255, 255, 255, 0.45);
+$glass-border-light: rgba(255, 255, 255, 0.45);
+$glass-border-light-strong: rgba(255, 255, 255, 0.6);
+$glass-highlight-light: rgba(255, 255, 255, 0.25);
+
+// Dark mode glass colors
+$glass-bg-dark: rgba(15, 17, 23, 0.55);
+$glass-bg-dark-strong: rgba(15, 17, 23, 0.75);
+$glass-bg-dark-subtle: rgba(15, 17, 23, 0.35);
+$glass-border-dark: rgba(255, 255, 255, 0.08);
+$glass-border-dark-strong: rgba(255, 255, 255, 0.14);
+$glass-highlight-dark: rgba(255, 255, 255, 0.04);
+
+// Shadows
+$glass-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
+$glass-shadow-md: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+$glass-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.12), 0 4px 16px rgba(0, 0, 0, 0.06);
+$glass-shadow-dark-sm: 0 2px 8px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
+$glass-shadow-dark-md: 0 8px 32px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
+$glass-shadow-dark-lg: 0 16px 48px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.25);
+
+// --- Core Mixins ---
+
+/// Standard glass panel — cards, containers, sections
+@mixin panel($blur: $glass-blur-md, $opacity: 0.65) {
+  background: rgba(255, 255, 255, $opacity);
+  backdrop-filter: blur($blur) saturate($glass-saturation);
+  -webkit-backdrop-filter: blur($blur) saturate($glass-saturation);
+  border: 1px solid $glass-border-light;
+  border-radius: $glass-radius-md;
+  box-shadow: $glass-shadow-md;
+  transition: box-shadow 0.2s ease, background 0.22s ease, border-color 0.2s ease;
+}
+
+/// Strong glass panel — higher opacity for clinical data readability
+@mixin panel-strong($blur: $glass-blur-md) {
+  background: $glass-bg-light-strong;
+  backdrop-filter: blur($blur) saturate($glass-saturation);
+  -webkit-backdrop-filter: blur($blur) saturate($glass-saturation);
+  border: 1px solid $glass-border-light-strong;
+  border-radius: $glass-radius-md;
+  box-shadow: $glass-shadow-md;
+  transition: box-shadow 0.2s ease, background 0.22s ease, border-color 0.2s ease;
+}
+
+/// Subtle glass — decorative panels, sidebars, navbars
+@mixin panel-subtle($blur: $glass-blur-lg) {
+  background: $glass-bg-light-subtle;
+  backdrop-filter: blur($blur) saturate($glass-saturation);
+  -webkit-backdrop-filter: blur($blur) saturate($glass-saturation);
+  border: 1px solid $glass-border-light;
+  transition: background 0.22s ease, border-color 0.2s ease;
+}
+
+/// Elevated glass — modals, popovers, dropdowns (higher blur + shadow)
+@mixin elevated($blur: $glass-blur-lg) {
+  background: $glass-bg-light-strong;
+  backdrop-filter: blur($blur) saturate(180%);
+  -webkit-backdrop-filter: blur($blur) saturate(180%);
+  border: 1px solid $glass-border-light-strong;
+  border-radius: $glass-radius-lg;
+  box-shadow: $glass-shadow-lg;
+  transition: box-shadow 0.2s ease, background 0.22s ease;
+}
+
+/// Glass sidebar
+@mixin sidebar($blur: $glass-blur-lg) {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur($blur) saturate($glass-saturation);
+  -webkit-backdrop-filter: blur($blur) saturate($glass-saturation);
+  border-right: 1px solid $glass-border-light;
+  transition: background 0.22s ease, border-color 0.2s ease;
+}
+
+/// Glass navbar
+@mixin navbar($blur: $glass-blur-md) {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur($blur) saturate($glass-saturation);
+  -webkit-backdrop-filter: blur($blur) saturate($glass-saturation);
+  border-bottom: 1px solid $glass-border-light;
+  transition: background 0.22s ease, border-color 0.2s ease;
+}
+
+/// Glass button
+@mixin button() {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur($glass-blur-sm) saturate(120%);
+  -webkit-backdrop-filter: blur($glass-blur-sm) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: $glass-radius-xl;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+/// Glass input field
+@mixin input() {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur($glass-blur-sm);
+  -webkit-backdrop-filter: blur($glass-blur-sm);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: $glass-radius-xl;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+
+  &:focus {
+    border-color: var(--primary-lighter);
+    box-shadow: 0 0 0 3px rgba(47, 147, 109, 0.15);
+    background: rgba(255, 255, 255, 0.65);
+  }
+}
+
+/// Glass badge/pill
+@mixin badge($bg-color: var(--primary), $text-color: #fff) {
+  background: $bg-color;
+  color: $text-color;
+  border-radius: $glass-radius-xl;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/// Glass inner highlight — adds a subtle top edge light reflection
+@mixin highlight() {
+  position: relative;
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      $glass-highlight-light 20%,
+      rgba(255, 255, 255, 0.4) 50%,
+      $glass-highlight-light 80%,
+      transparent 100%
+    );
+    border-radius: inherit;
+    pointer-events: none;
+  }
+}
+
+/// Glass shimmer gradient — subtle light refraction effect
+@mixin shimmer() {
+  position: relative;
+  overflow: hidden;
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      transparent 40%,
+      transparent 60%,
+      rgba(255, 255, 255, 0.06) 100%
+    );
+    pointer-events: none;
+    border-radius: inherit;
+  }
+}
+
+// --- Dark Mode Variants ---
+
+/// Dark glass panel
+@mixin panel-dark($blur: $glass-blur-md, $opacity: 0.55) {
+  background: rgba(15, 17, 23, $opacity);
+  backdrop-filter: blur($blur) saturate($glass-saturation-dark);
+  -webkit-backdrop-filter: blur($blur) saturate($glass-saturation-dark);
+  border: 1px solid $glass-border-dark;
+  box-shadow: $glass-shadow-dark-md;
+}
+
+/// Dark strong glass panel
+@mixin panel-dark-strong($blur: $glass-blur-md) {
+  background: $glass-bg-dark-strong;
+  backdrop-filter: blur($blur) saturate($glass-saturation-dark);
+  -webkit-backdrop-filter: blur($blur) saturate($glass-saturation-dark);
+  border: 1px solid $glass-border-dark-strong;
+  box-shadow: $glass-shadow-dark-md;
+}
+
+/// Dark elevated glass
+@mixin elevated-dark($blur: $glass-blur-lg) {
+  background: rgba(15, 17, 23, 0.8);
+  backdrop-filter: blur($blur) saturate(130%);
+  -webkit-backdrop-filter: blur($blur) saturate(130%);
+  border: 1px solid $glass-border-dark-strong;
+  box-shadow: $glass-shadow-dark-lg;
+}
+
+/// Dark sidebar
+@mixin sidebar-dark($blur: $glass-blur-lg) {
+  background: rgba(15, 17, 23, 0.6);
+  backdrop-filter: blur($blur) saturate($glass-saturation-dark);
+  -webkit-backdrop-filter: blur($blur) saturate($glass-saturation-dark);
+  border-right: 1px solid $glass-border-dark;
+}
+
+/// Dark navbar
+@mixin navbar-dark($blur: $glass-blur-md) {
+  background: rgba(15, 17, 23, 0.65);
+  backdrop-filter: blur($blur) saturate($glass-saturation-dark);
+  -webkit-backdrop-filter: blur($blur) saturate($glass-saturation-dark);
+  border-bottom: 1px solid $glass-border-dark;
+}
+
+/// Dark glass input
+@mixin input-dark() {
+  background: rgba(26, 34, 48, 0.6);
+  backdrop-filter: blur($glass-blur-sm);
+  -webkit-backdrop-filter: blur($glass-blur-sm);
+  border: 1px solid $glass-border-dark;
+  color: var(--h);
+
+  &:focus {
+    border-color: var(--primary-lighter);
+    box-shadow: 0 0 0 3px rgba(47, 147, 109, 0.2);
+    background: rgba(26, 34, 48, 0.75);
+  }
+
+  &::placeholder {
+    color: var(--p);
+  }
+}
+
+/// Dark glass button
+@mixin button-dark() {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur($glass-blur-sm) saturate(110%);
+  -webkit-backdrop-filter: blur($glass-blur-sm) saturate(110%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--h);
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  }
+}
+
+// --- Accessibility ---
+
+/// Reduced transparency fallback (for users who prefer reduced transparency)
+@mixin a11y-fallback() {
+  @media (prefers-reduced-transparency: reduce) {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/// High contrast mode adjustments
+@mixin a11y-high-contrast() {
+  @media (prefers-contrast: more) {
+    border-width: 2px;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+  }
+}
+
+// --- Utility Classes (applied globally) ---
+// These are applied in styles.scss via @include
+
+/// Generate utility classes for use in templates
+@mixin utility-classes() {
+  .glass-panel {
+    @include panel();
+    @include a11y-fallback();
+  }
+
+  .glass-panel-strong {
+    @include panel-strong();
+    @include a11y-fallback();
+  }
+
+  .glass-elevated {
+    @include elevated();
+    @include a11y-fallback();
+  }
+
+  .glass-subtle {
+    @include panel-subtle();
+    @include a11y-fallback();
+  }
+
+  // Dark mode overrides
+  .dark-mode {
+    .glass-panel {
+      @include panel-dark();
+    }
+
+    .glass-panel-strong {
+      @include panel-dark-strong();
+    }
+
+    .glass-elevated {
+      @include elevated-dark();
+    }
+
+    .glass-subtle {
+      @include panel-dark($opacity: 0.35);
+    }
+  }
+}

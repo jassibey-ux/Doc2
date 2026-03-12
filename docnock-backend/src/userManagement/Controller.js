@@ -275,8 +275,9 @@ export const login = async (req, res) => {
       });
     }
 
-    // Check if the user exists
-    const user = await User.findOne({ mobile,isDeleted:false });
+    // Check if the user exists (mobile may be sent as string or number)
+    const mobileQuery = typeof mobile === "string" ? Number(mobile) : mobile;
+    const user = await User.findOne({ mobile: mobileQuery, isDeleted: false });
     if (!user) {
       logger.debug("login: user not found");
 

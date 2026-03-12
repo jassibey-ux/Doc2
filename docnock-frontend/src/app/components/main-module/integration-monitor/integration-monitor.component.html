@@ -1,0 +1,55 @@
+<div id="content">
+  <main>
+    <div class="head-title pb-3 dashboard-toolbar">
+      <div class="left">
+        <h4>Integration Monitor</h4>
+        <span class="refresh-info" *ngIf="lastRefresh">
+          Last refresh: {{ lastRefresh | date:'mediumTime' }}
+          <span class="auto-refresh-badge">Auto-refresh: 30s</span>
+        </span>
+      </div>
+      <div class="right">
+        <button class="btn add-btn" (click)="loadHealth()">
+          <i class='bx bx-refresh'></i> Refresh Now
+        </button>
+      </div>
+    </div>
+
+    <div class="loading-state" *ngIf="loading">
+      <i class='bx bx-loader-alt bx-spin'></i> Loading integration status...
+    </div>
+
+    <div class="integration-grid" *ngIf="!loading && integrations">
+      <div
+        *ngFor="let key of getIntegrationKeys()"
+        class="integration-card"
+        [ngClass]="getStatusClass(integrations[key]?.status)"
+      >
+        <div class="card-header">
+          <div class="card-icon">
+            <i [class]="integrationMeta[key]?.icon || 'bx bxs-plug'"></i>
+          </div>
+          <div class="card-title-area">
+            <h5>{{ integrationMeta[key]?.label || key }}</h5>
+            <span class="card-desc">{{ integrationMeta[key]?.description || '' }}</span>
+          </div>
+          <div class="status-badge" [ngClass]="getStatusClass(integrations[key]?.status)">
+            {{ getStatusLabel(integrations[key]?.status) }}
+          </div>
+        </div>
+
+        <div class="card-details">
+          <div class="detail-row" *ngFor="let detail of getDetails(key)">
+            <span class="detail-label">{{ detail.label }}</span>
+            <span class="detail-value">{{ detail.value }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="empty-state" *ngIf="!loading && !integrations">
+      <i class='bx bxs-error-circle'></i>
+      <p>Failed to load integration health data. Are you logged in as superadmin?</p>
+    </div>
+  </main>
+</div>

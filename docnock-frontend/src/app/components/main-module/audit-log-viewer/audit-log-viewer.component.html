@@ -1,0 +1,101 @@
+<div id="content">
+  <main>
+    <div class="head-title pb-3 dashboard-toolbar">
+      <div class="left">
+        <h4>Audit Logs</h4>
+        <span class="subtitle" *ngIf="totalRecords">{{ totalRecords }} total records</span>
+      </div>
+      <div class="right">
+        <button class="btn add-btn export-btn" (click)="exportCsv()" [disabled]="!logs.length">
+          <i class='bx bx-download'></i> Export CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>Action</label>
+        <select [(ngModel)]="actionFilter" (ngModelChange)="applyFilter()">
+          <option value="">All Actions</option>
+          <option *ngFor="let a of availableActions" [value]="a">{{ a }}</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Status</label>
+        <select [(ngModel)]="successFilter" (ngModelChange)="applyFilter()">
+          <option value="">All</option>
+          <option value="true">Success</option>
+          <option value="false">Failed</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>From</label>
+        <input type="date" [(ngModel)]="startDate" (ngModelChange)="applyFilter()" />
+      </div>
+      <div class="filter-group">
+        <label>To</label>
+        <input type="date" [(ngModel)]="endDate" (ngModelChange)="applyFilter()" />
+      </div>
+      <div class="filter-group">
+        <label>IP Address</label>
+        <input type="text" [(ngModel)]="ipFilter" placeholder="e.g. 192.168" (keyup.enter)="applyFilter()" />
+      </div>
+      <button class="btn clear-btn" (click)="clearFilters()">Clear</button>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-state" *ngIf="loading">
+      <i class='bx bx-loader-alt bx-spin'></i> Loading audit logs...
+    </div>
+
+    <!-- Table -->
+    <div class="table-container" *ngIf="!loading && logs.length">
+      <table class="audit-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>User</th>
+            <th>Action</th>
+            <th>Resource</th>
+            <th>IP</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let log of logs">
+            <td class="timestamp-cell">{{ log.timestamp | date:'short' }}</td>
+            <td>
+              <span class="user-name">{{ log.userId?.fullName || 'System' }}</span>
+              <span class="user-role" *ngIf="log.userRole">{{ log.userRole }}</span>
+            </td>
+            <td>
+              <span class="action-badge" [ngClass]="getActionClass(log.action)">{{ log.action }}</span>
+            </td>
+            <td>{{ log.resourceType || '-' }}</td>
+            <td class="ip-cell">{{ log.ip || '-' }}</td>
+            <td>
+              <span class="success-badge" [ngClass]="log.success ? 'success' : 'failed'">
+                {{ log.success ? 'OK' : 'FAIL' }}
+              </span>
+              <span class="failure-reason" *ngIf="log.failureReason">{{ log.failureReason }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Empty -->
+    <div class="empty-state" *ngIf="!loading && !logs.length">
+      <i class='bx bxs-file-find'></i>
+      <p>No audit logs found matching your filters.</p>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" *ngIf="totalPages > 1">
+      <button class="btn page-btn" (click)="prevPage()" [disabled]="currentPage <= 1">Previous</button>
+      <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
+      <button class="btn page-btn" (click)="nextPage()" [disabled]="currentPage >= totalPages">Next</button>
+    </div>
+  </main>
+</div>

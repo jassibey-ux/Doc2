@@ -1,0 +1,155 @@
+<div id="content">
+  <main>
+    <div class="head-title pb-3">
+      <h4>Security Monitor</h4>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="stats-row">
+      <div class="stat-card sessions-stat">
+        <i class='bx bxs-user-check'></i>
+        <div>
+          <span class="stat-number">{{ totalSessions }}</span>
+          <span class="stat-label">Active Sessions</span>
+        </div>
+      </div>
+      <div class="stat-card failed-stat">
+        <i class='bx bxs-shield-x'></i>
+        <div>
+          <span class="stat-number">{{ totalFailed }}</span>
+          <span class="stat-label">Failed Logins ({{ failedHours }}h)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Sessions -->
+    <div class="section">
+      <div class="section-header">
+        <h5><i class='bx bxs-lock-open'></i> Active Sessions</h5>
+        <button class="btn add-btn" (click)="loadSessions()">
+          <i class='bx bx-refresh'></i> Refresh
+        </button>
+      </div>
+
+      <div class="loading-state" *ngIf="sessionsLoading">
+        <i class='bx bx-loader-alt bx-spin'></i> Loading sessions...
+      </div>
+
+      <div class="sessions-list" *ngIf="!sessionsLoading">
+        <div class="session-card" *ngFor="let session of sessions">
+          <div class="session-user">
+            <i [class]="getDeviceIcon(session.userAgent)"></i>
+            <div class="session-info">
+              <span class="user-name">{{ session.user?.fullName || 'Unknown User' }}</span>
+              <span class="user-role">{{ session.user?.role || 'N/A' }}</span>
+            </div>
+          </div>
+          <div class="session-details">
+            <div class="detail">
+              <span class="detail-label">Browser</span>
+              <span class="detail-value">{{ getBrowserName(session.userAgent) }}</span>
+            </div>
+            <div class="detail">
+              <span class="detail-label">IP</span>
+              <span class="detail-value mono">{{ session.ip }}</span>
+            </div>
+            <div class="detail">
+              <span class="detail-label">Created</span>
+              <span class="detail-value">{{ getTimeAgo(session.createdAt) }}</span>
+            </div>
+            <div class="detail">
+              <span class="detail-label">Expires</span>
+              <span class="detail-value">{{ session.expiresAt | date:'short' }}</span>
+            </div>
+          </div>
+          <div class="session-actions">
+            <button class="btn revoke-btn" (click)="openRevokeModal(session)">
+              <i class='bx bx-x'></i> Revoke
+            </button>
+          </div>
+        </div>
+
+        <div class="empty-state" *ngIf="sessions.length === 0">
+          <p>No active sessions found.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Failed Logins -->
+    <div class="section">
+      <div class="section-header">
+        <h5><i class='bx bxs-shield-x'></i> Failed Login Attempts</h5>
+        <div class="time-filter">
+          <select [(ngModel)]="failedHours" (ngModelChange)="loadFailedLogins()">
+            <option [ngValue]="1">Last 1 hour</option>
+            <option [ngValue]="6">Last 6 hours</option>
+            <option [ngValue]="24">Last 24 hours</option>
+            <option [ngValue]="72">Last 3 days</option>
+            <option [ngValue]="168">Last 7 days</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="loading-state" *ngIf="failedLoading">
+        <i class='bx bx-loader-alt bx-spin'></i> Loading...
+      </div>
+
+      <div class="failed-list" *ngIf="!failedLoading">
+        <div class="table-container" *ngIf="failedLogins.length">
+          <table class="failed-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>IP Address</th>
+                <th>User Agent</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let fail of failedLogins">
+                <td class="timestamp">{{ fail.timestamp | date:'short' }}</td>
+                <td class="mono">{{ fail.ip || '-' }}</td>
+                <td class="ua-cell">{{ getBrowserName(fail.userAgent) }}</td>
+                <td class="reason-cell">{{ fail.failureReason || fail.details?.reason || '-' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="empty-state" *ngIf="failedLogins.length === 0">
+          <i class='bx bxs-check-shield'></i>
+          <p>No failed login attempts in this time period.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Revoke Confirmation Modal -->
+<div class="modal" *ngIf="showRevokeModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="revokeModalTitle" (click)="closeRevokeModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <h3 id="revokeModalTitle">Revoke Session?</h3>
+    <p>
+      This will force logout <strong>{{ revokeTarget?.user?.fullName || 'this user' }}</strong>
+      from their {{ getBrowserName(revokeTarget?.userAgent) }} session.
+    </p>
+    <div class="modal-actions">
+      <button class="btn add-btn confirm" (click)="confirmRevoke()">Yes, Revoke</button>
+      <button class="btn add-btn cancel" (click)="closeRevokeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Revoke All Confirmation Modal -->
+<div class="modal" *ngIf="showRevokeAllModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="revokeAllModalTitle" (click)="closeRevokeAllModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <h3 id="revokeAllModalTitle">Revoke All Sessions?</h3>
+    <p>
+      This will force logout this user from <strong>all devices and browsers</strong>.
+      They will need to log in again.
+    </p>
+    <div class="modal-actions">
+      <button class="btn add-btn confirm" (click)="confirmRevokeAll()">Yes, Revoke All</button>
+      <button class="btn add-btn cancel" (click)="closeRevokeAllModal()">Cancel</button>
+    </div>
+  </div>
+</div>

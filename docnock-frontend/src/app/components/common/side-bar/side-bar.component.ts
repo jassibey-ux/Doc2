@@ -15,7 +15,7 @@ export class SideBarComponent implements OnInit {
   profileName: any;
   role: any;
   dynamicpath:any= "";
-  allowedModules:any = [];
+  allowedModules: Set<string> = new Set();
 
   constructor(
     private authService: AuthServiceService,

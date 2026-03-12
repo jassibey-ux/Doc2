@@ -38,6 +38,7 @@ const auditLogSchema = mongoose.Schema({
       "DOCUMENT_UPLOADED",
       "FAX_SENT",
       "FAX_RECEIVED",
+      "CONFIG_CHANGED",
     ],
     index: true,
   },

@@ -1,0 +1,150 @@
+<div id="content">
+  <main>
+    <div class="head-title pb-3 dashboard-toolbar">
+      <div class="left">
+        <h4>System Health</h4>
+        <span class="refresh-info" *ngIf="lastRefresh">
+          Last refresh: {{ lastRefresh | date:'mediumTime' }}
+          <span class="auto-refresh-badge">Auto-refresh: 15s</span>
+        </span>
+      </div>
+      <div class="right">
+        <button class="btn add-btn" (click)="loadStatus()">
+          <i class='bx bx-refresh'></i> Refresh
+        </button>
+      </div>
+    </div>
+
+    <div class="loading-state" *ngIf="loading">
+      <i class='bx bx-loader-alt bx-spin'></i> Loading system status...
+    </div>
+
+    <div class="health-grid" *ngIf="!loading && systemData">
+      <!-- Server Info Card -->
+      <div class="health-card server-card">
+        <div class="card-header">
+          <i class='bx bxs-server'></i>
+          <h5>Server</h5>
+          <span class="status-pill healthy">Running</span>
+        </div>
+        <div class="card-body">
+          <div class="stat-row">
+            <span class="stat-label">Uptime</span>
+            <span class="stat-value highlight">{{ systemData.server?.uptime }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Node Version</span>
+            <span class="stat-value">{{ systemData.server?.nodeVersion }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Environment</span>
+            <span class="stat-value env-badge">{{ systemData.server?.env }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">PID</span>
+            <span class="stat-value mono">{{ systemData.server?.pid }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Platform</span>
+            <span class="stat-value">{{ systemData.server?.platform }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Memory Card -->
+      <div class="health-card memory-card">
+        <div class="card-header">
+          <i class='bx bxs-microchip'></i>
+          <h5>Memory</h5>
+        </div>
+        <div class="card-body">
+          <div class="stat-row">
+            <span class="stat-label">Heap Used</span>
+            <span class="stat-value highlight">{{ formatMemory(systemData.memory?.heapUsed) }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Heap Total</span>
+            <span class="stat-value">{{ formatMemory(systemData.memory?.heapTotal) }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">RSS</span>
+            <span class="stat-value">{{ formatMemory(systemData.memory?.rss) }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">External</span>
+            <span class="stat-value">{{ formatMemory(systemData.memory?.external) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Database Card -->
+      <div class="health-card db-card">
+        <div class="card-header">
+          <i class='bx bxs-data'></i>
+          <h5>Database</h5>
+          <span class="status-pill" [ngClass]="systemData.database?.status === 'connected' ? 'healthy' : 'unhealthy'">
+            {{ systemData.database?.status }}
+          </span>
+        </div>
+        <div class="card-body">
+          <div class="stat-row">
+            <span class="stat-label">Name</span>
+            <span class="stat-value">{{ systemData.database?.name }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Host</span>
+            <span class="stat-value mono">{{ systemData.database?.host }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Data Size</span>
+            <span class="stat-value">{{ systemData.database?.dataSize || 'N/A' }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Total Documents</span>
+            <span class="stat-value highlight">{{ getTotalDocuments() }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ports Card -->
+      <div class="health-card ports-card">
+        <div class="card-header">
+          <i class='bx bxs-network-chart'></i>
+          <h5>Network</h5>
+        </div>
+        <div class="card-body">
+          <div class="stat-row">
+            <span class="stat-label">API Port</span>
+            <span class="stat-value mono">{{ systemData.ports?.api }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Socket Port</span>
+            <span class="stat-value mono">{{ systemData.ports?.socket }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Collection Counts -->
+      <div class="health-card collections-card full-width">
+        <div class="card-header">
+          <i class='bx bxs-collection'></i>
+          <h5>Collection Document Counts</h5>
+        </div>
+        <div class="card-body collections-grid">
+          <div class="collection-item" *ngFor="let key of getCollectionKeys()">
+            <span class="collection-name">{{ key }}</span>
+            <span class="collection-count">{{ systemData.database.collections[key] }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-state" *ngIf="!loading && !systemData">
+      <i class='bx bxs-error-circle'></i>
+      <p>Failed to load system status. Please check your connection and try again.</p>
+      <button class="btn add-btn" style="margin: 12px auto 0; width: auto;" (click)="loadStatus()">
+        <i class='bx bx-refresh'></i> Retry
+      </button>
+    </div>
+  </main>
+</div>
