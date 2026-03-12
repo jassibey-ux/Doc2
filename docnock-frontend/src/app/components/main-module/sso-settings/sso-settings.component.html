@@ -1,0 +1,259 @@
+<div class="sso-settings">
+  <div class="page-header">
+    <h3><i class="bx bx-shield-quarter"></i> Single Sign-On Configuration</h3>
+    <p class="page-desc">Configure SSO providers for secure, centralized authentication across your organization.</p>
+  </div>
+
+  <div *ngIf="loading" class="loading-state">
+    <i class="bx bx-loader-alt bx-spin"></i>
+    <p>Loading SSO configuration...</p>
+  </div>
+
+  <div *ngIf="!loading" class="sso-content">
+    <!-- Provider Tabs -->
+    <div class="provider-tabs glass-panel">
+      <button [class.active]="activeProvider === 'saml'" (click)="setActiveProvider('saml')">
+        <i class="bx bx-key"></i> SAML 2.0
+      </button>
+      <button [class.active]="activeProvider === 'oauth'" (click)="setActiveProvider('oauth')">
+        <i class="bx bx-lock-open-alt"></i> OAuth 2.0 / OIDC
+      </button>
+      <button [class.active]="activeProvider === 'ldap'" (click)="setActiveProvider('ldap')">
+        <i class="bx bx-server"></i> LDAP / Active Directory
+      </button>
+    </div>
+
+    <!-- SAML Config -->
+    <div *ngIf="activeProvider === 'saml'" class="config-section">
+      <div class="config-card glass-panel">
+        <div class="config-header">
+          <h4>SAML 2.0 Configuration</h4>
+          <label class="toggle-switch">
+            <input type="checkbox" [(ngModel)]="samlConfig.enabled">
+            <span class="slider"></span>
+            <span class="toggle-label">{{ samlConfig.enabled ? 'Enabled' : 'Disabled' }}</span>
+          </label>
+        </div>
+
+        <div class="form-section">
+          <h5>Identity Provider (IdP) Settings</h5>
+          <div class="form-group">
+            <label>Entity ID / Issuer</label>
+            <input type="text" [(ngModel)]="samlConfig.entityId" placeholder="https://idp.example.com/metadata">
+          </div>
+          <div class="form-group">
+            <label>SSO URL (Login)</label>
+            <input type="text" [(ngModel)]="samlConfig.ssoUrl" placeholder="https://idp.example.com/sso/saml">
+          </div>
+          <div class="form-group">
+            <label>SLO URL (Logout)</label>
+            <input type="text" [(ngModel)]="samlConfig.sloUrl" placeholder="https://idp.example.com/slo/saml">
+          </div>
+          <div class="form-group">
+            <label>X.509 Certificate</label>
+            <textarea [(ngModel)]="samlConfig.certificate" placeholder="Paste your IdP's X.509 certificate here..." rows="4"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Name ID Format</label>
+              <select [(ngModel)]="samlConfig.nameIdFormat">
+                <option *ngFor="let fmt of nameIdFormats" [value]="fmt.value">{{ fmt.label }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Default Role</label>
+              <select [(ngModel)]="samlConfig.defaultRole">
+                <option *ngFor="let role of roles" [value]="role">{{ role | titlecase }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row checkboxes">
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="samlConfig.signRequests"> Sign Auth Requests
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="samlConfig.encryptAssertions"> Encrypt Assertions
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="samlConfig.autoProvision"> Auto-Provision Users
+            </label>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h5>Service Provider (SP) Info</h5>
+          <div class="info-row">
+            <label>ACS / Callback URL</label>
+            <div class="copy-field">
+              <code>{{ samlConfig.callbackUrl }}</code>
+              <button (click)="copyToClipboard(samlConfig.callbackUrl)"><i class="bx bx-copy"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h5>Attribute Mapping</h5>
+          <div class="form-group" *ngFor="let key of ['email', 'firstName', 'lastName', 'role']">
+            <label>{{ key | titlecase }}</label>
+            <input type="text" [(ngModel)]="samlConfig.attributeMapping[key]">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Allowed Email Domains (comma-separated, leave empty for all)</label>
+          <input type="text" [(ngModel)]="samlConfig.allowedDomains" placeholder="hospital.org, clinic.com">
+        </div>
+      </div>
+    </div>
+
+    <!-- OAuth Config -->
+    <div *ngIf="activeProvider === 'oauth'" class="config-section">
+      <div class="config-card glass-panel">
+        <div class="config-header">
+          <h4>OAuth 2.0 / OpenID Connect</h4>
+          <label class="toggle-switch">
+            <input type="checkbox" [(ngModel)]="oauthConfig.enabled">
+            <span class="slider"></span>
+            <span class="toggle-label">{{ oauthConfig.enabled ? 'Enabled' : 'Disabled' }}</span>
+          </label>
+        </div>
+
+        <div class="form-section">
+          <h5>Provider</h5>
+          <div class="form-group">
+            <label>Provider Preset</label>
+            <select [(ngModel)]="oauthConfig.provider" (ngModelChange)="applyOAuthPreset()">
+              <option *ngFor="let p of oauthPresets" [value]="p.value">{{ p.label }}</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Client ID</label>
+              <input type="text" [(ngModel)]="oauthConfig.clientId" placeholder="your-client-id">
+            </div>
+            <div class="form-group">
+              <label>Client Secret</label>
+              <input type="password" [(ngModel)]="oauthConfig.clientSecret" placeholder="your-client-secret">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Authorization URL</label>
+            <input type="text" [(ngModel)]="oauthConfig.authorizationUrl">
+          </div>
+          <div class="form-group">
+            <label>Token URL</label>
+            <input type="text" [(ngModel)]="oauthConfig.tokenUrl">
+          </div>
+          <div class="form-group">
+            <label>User Info URL</label>
+            <input type="text" [(ngModel)]="oauthConfig.userInfoUrl">
+          </div>
+          <div class="form-group">
+            <label>Scopes</label>
+            <input type="text" [(ngModel)]="oauthConfig.scopes">
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h5>Callback URL</h5>
+          <div class="info-row">
+            <div class="copy-field">
+              <code>{{ oauthConfig.callbackUrl }}</code>
+              <button (click)="copyToClipboard(oauthConfig.callbackUrl)"><i class="bx bx-copy"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h5>Attribute Mapping</h5>
+          <div class="form-group" *ngFor="let key of ['email', 'firstName', 'lastName', 'role']">
+            <label>{{ key | titlecase }}</label>
+            <input type="text" [(ngModel)]="oauthConfig.attributeMapping[key]">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LDAP Config -->
+    <div *ngIf="activeProvider === 'ldap'" class="config-section">
+      <div class="config-card glass-panel">
+        <div class="config-header">
+          <h4>LDAP / Active Directory</h4>
+          <label class="toggle-switch">
+            <input type="checkbox" [(ngModel)]="ldapConfig.enabled">
+            <span class="slider"></span>
+            <span class="toggle-label">{{ ldapConfig.enabled ? 'Enabled' : 'Disabled' }}</span>
+          </label>
+        </div>
+
+        <div class="form-section">
+          <h5>Connection</h5>
+          <div class="form-group">
+            <label>Server URL</label>
+            <input type="text" [(ngModel)]="ldapConfig.serverUrl" placeholder="ldaps://ad.hospital.local:636">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Bind DN</label>
+              <input type="text" [(ngModel)]="ldapConfig.bindDn" placeholder="CN=Service Account,OU=Service,DC=hospital,DC=local">
+            </div>
+            <div class="form-group">
+              <label>Bind Password</label>
+              <input type="password" [(ngModel)]="ldapConfig.bindPassword">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Search Base</label>
+            <input type="text" [(ngModel)]="ldapConfig.searchBase" placeholder="OU=Staff,DC=hospital,DC=local">
+          </div>
+          <div class="form-group">
+            <label>Search Filter</label>
+            <input type="text" [(ngModel)]="ldapConfig.searchFilter">
+          </div>
+          <label class="checkbox-label">
+            <input type="checkbox" [(ngModel)]="ldapConfig.useTls"> Use TLS/SSL
+          </label>
+        </div>
+
+        <div class="form-section">
+          <h5>Attribute Mapping</h5>
+          <div class="form-group" *ngFor="let key of ['email', 'firstName', 'lastName', 'role']">
+            <label>{{ key | titlecase }}</label>
+            <input type="text" [(ngModel)]="ldapConfig.attributeMapping[key]">
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h5>Group → Role Mapping</h5>
+          <div *ngFor="let mapping of ldapConfig.groupMapping; let i = index" class="mapping-row">
+            <input type="text" [(ngModel)]="mapping.adGroup" placeholder="CN=Group,OU=...">
+            <span class="arrow">→</span>
+            <select [(ngModel)]="mapping.role">
+              <option *ngFor="let role of roles" [value]="role">{{ role | titlecase }}</option>
+            </select>
+            <button class="remove-btn" (click)="removeGroupMapping(i)"><i class="bx bx-trash"></i></button>
+          </div>
+          <button class="add-mapping-btn" (click)="addGroupMapping()"><i class="bx bx-plus"></i> Add Mapping</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Test Result -->
+    <div *ngIf="testResult" class="test-result glass-panel" [class.success]="testResult.success" [class.failure]="!testResult.success">
+      <i [class]="testResult.success ? 'bx bx-check-circle' : 'bx bx-error-circle'"></i>
+      <span>{{ testResult.message }}</span>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions-bar">
+      <button class="btn-test" (click)="testConnection()" [disabled]="testing">
+        <i [class]="testing ? 'bx bx-loader-alt bx-spin' : 'bx bx-plug'"></i>
+        {{ testing ? 'Testing...' : 'Test Connection' }}
+      </button>
+      <button class="btn-save" (click)="saveConfig()" [disabled]="saving">
+        <i [class]="saving ? 'bx bx-loader-alt bx-spin' : 'bx bx-save'"></i>
+        {{ saving ? 'Saving...' : 'Save Configuration' }}
+      </button>
+    </div>
+  </div>
+</div>

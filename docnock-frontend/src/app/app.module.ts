@@ -54,6 +54,9 @@ import { ShiftHandoffComponent } from './components/main-module/shift-handoff/sh
 import { SbarReportComponent } from './components/main-module/sbar-report/sbar-report.component';
 import { ClinicalAlertsComponent } from './components/main-module/clinical-alerts/clinical-alerts.component';
 import { ConsultationRequestComponent } from './components/main-module/consultation-request/consultation-request.component';
+import { PatientStatusBoardComponent } from './components/main-module/patient-status-board/patient-status-board.component';
+import { MultiFacilityComponent } from './components/main-module/multi-facility/multi-facility.component';
+import { SsoSettingsComponent } from './components/main-module/sso-settings/sso-settings.component';
 
 @NgModule({
   declarations: [
@@ -91,6 +94,9 @@ import { ConsultationRequestComponent } from './components/main-module/consultat
     SbarReportComponent,
     ClinicalAlertsComponent,
     ConsultationRequestComponent,
+    PatientStatusBoardComponent,
+    MultiFacilityComponent,
+    SsoSettingsComponent,
   ],
   imports: [
     BrowserModule,

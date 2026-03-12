@@ -1,0 +1,142 @@
+<div class="patient-status-board">
+  <!-- KPI Cards -->
+  <div class="kpi-row">
+    <div class="kpi-card glass-panel">
+      <div class="kpi-icon total"><i class="bx bx-group"></i></div>
+      <div class="kpi-data">
+        <span class="kpi-value">{{ totalPatients }}</span>
+        <span class="kpi-label">Total Patients</span>
+      </div>
+    </div>
+    <div class="kpi-card glass-panel">
+      <div class="kpi-icon critical"><i class="bx bx-error-circle"></i></div>
+      <div class="kpi-data">
+        <span class="kpi-value">{{ criticalCount }}</span>
+        <span class="kpi-label">Critical</span>
+      </div>
+    </div>
+    <div class="kpi-card glass-panel">
+      <div class="kpi-icon serious"><i class="bx bx-error"></i></div>
+      <div class="kpi-data">
+        <span class="kpi-value">{{ seriousCount }}</span>
+        <span class="kpi-label">Serious</span>
+      </div>
+    </div>
+    <div class="kpi-card glass-panel">
+      <div class="kpi-icon discharged"><i class="bx bx-log-out-circle"></i></div>
+      <div class="kpi-data">
+        <span class="kpi-value">{{ dischargeReadyCount }}</span>
+        <span class="kpi-label">Discharge Ready</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar glass-panel">
+    <div class="filters">
+      <div class="search-box">
+        <i class="bx bx-search"></i>
+        <input type="text" placeholder="Search patient, room, diagnosis..." [(ngModel)]="searchQuery" (ngModelChange)="onFilterChange()">
+      </div>
+      <select [(ngModel)]="unitFilter" (ngModelChange)="onFilterChange()">
+        <option value="">All Units</option>
+        <option *ngFor="let unit of units" [value]="unit">{{ unit }}</option>
+      </select>
+      <select [(ngModel)]="statusFilter" (ngModelChange)="onFilterChange()">
+        <option value="">All Statuses</option>
+        <option *ngFor="let s of statusOptions" [value]="s.value">{{ s.label }}</option>
+      </select>
+    </div>
+    <div class="toolbar-actions">
+      <span class="result-count">{{ filteredPatients.length }} patients</span>
+      <button class="view-toggle" (click)="toggleView()" [title]="viewMode === 'grid' ? 'Switch to list' : 'Switch to grid'">
+        <i [class]="viewMode === 'grid' ? 'bx bx-list-ul' : 'bx bx-grid-alt'"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="loading-state">
+    <i class="bx bx-loader-alt bx-spin"></i>
+    <p>Loading patient data...</p>
+  </div>
+
+  <!-- Grid View -->
+  <div *ngIf="!loading && viewMode === 'grid'" class="patient-grid">
+    <div *ngFor="let patient of filteredPatients" class="patient-card glass-panel" [class.critical]="patient.status === 'critical'" [class.serious]="patient.status === 'serious'">
+      <div class="card-header">
+        <div class="room-badge">{{ patient.room }}</div>
+        <span class="status-badge" [style.background]="getStatusColor(patient.status)">{{ getStatusLabel(patient.status) }}</span>
+      </div>
+      <h4 class="patient-name">{{ patient.name }}</h4>
+      <p class="diagnosis">{{ patient.diagnosis }}</p>
+      <div class="card-meta">
+        <span><i class="bx bx-user-circle"></i> {{ patient.physician }}</span>
+        <span><i class="bx bx-plus-medical"></i> {{ patient.nurse }}</span>
+      </div>
+      <div class="vitals-row">
+        <span class="vital" [class.warning]="patient.lastVitals.hr > 90"><i class="bx bx-heart"></i> {{ patient.lastVitals.hr }}</span>
+        <span class="vital"><i class="bx bx-pulse"></i> {{ patient.lastVitals.bp }}</span>
+        <span class="vital" [class.warning]="patient.lastVitals.spo2 < 95">O₂ {{ patient.lastVitals.spo2 }}%</span>
+        <span class="vital" [class.warning]="+patient.lastVitals.temp > 99">{{ patient.lastVitals.temp }}°F</span>
+      </div>
+      <div class="card-footer">
+        <div class="flags">
+          <span *ngIf="patient.fallRisk" class="flag fall">Fall Risk</span>
+          <span *ngIf="patient.isolationPrecautions" class="flag isolation">{{ patient.isolationPrecautions }}</span>
+          <span *ngIf="patient.codeStatus === 'DNR'" class="flag dnr">DNR</span>
+        </div>
+        <span class="vitals-time">Vitals {{ getTimeSince(patient.lastVitalsTime) }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- List View -->
+  <div *ngIf="!loading && viewMode === 'list'" class="patient-list glass-panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Room</th>
+          <th>Patient</th>
+          <th>Status</th>
+          <th>Unit</th>
+          <th>Diagnosis</th>
+          <th>Physician</th>
+          <th>Nurse</th>
+          <th>HR</th>
+          <th>BP</th>
+          <th>SpO₂</th>
+          <th>Temp</th>
+          <th>Flags</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let patient of filteredPatients" [class.critical-row]="patient.status === 'critical'" [class.serious-row]="patient.status === 'serious'">
+          <td class="room-cell">{{ patient.room }}</td>
+          <td class="name-cell">{{ patient.name }}</td>
+          <td><span class="status-dot" [style.background]="getStatusColor(patient.status)"></span> {{ getStatusLabel(patient.status) }}</td>
+          <td>{{ patient.unit }}</td>
+          <td>{{ patient.diagnosis }}</td>
+          <td>{{ patient.physician }}</td>
+          <td>{{ patient.nurse }}</td>
+          <td [class.warning]="patient.lastVitals.hr > 90">{{ patient.lastVitals.hr }}</td>
+          <td>{{ patient.lastVitals.bp }}</td>
+          <td [class.warning]="patient.lastVitals.spo2 < 95">{{ patient.lastVitals.spo2 }}%</td>
+          <td [class.warning]="+patient.lastVitals.temp > 99">{{ patient.lastVitals.temp }}°F</td>
+          <td class="flags-cell">
+            <span *ngIf="patient.fallRisk" class="flag fall">Fall</span>
+            <span *ngIf="patient.isolationPrecautions" class="flag isolation">{{ patient.isolationPrecautions }}</span>
+            <span *ngIf="patient.codeStatus === 'DNR'" class="flag dnr">DNR</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Empty State -->
+  <div *ngIf="!loading && filteredPatients.length === 0" class="empty-state glass-panel">
+    <i class="bx bx-search-alt"></i>
+    <h5>No patients match your filters</h5>
+    <p>Try adjusting your search or filter criteria</p>
+  </div>
+</div>

@@ -54,6 +54,39 @@
         <span class="text">Others</span>
       </a>
     </li>
+    <!-- Clinical Section -->
+    <li class="sidebar-divider"><span>Clinical</span></li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/patient-board">
+      <a>
+        <i class='bx bxs-user-detail'></i>
+        <span class="text">Patient Board</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/shift-handoff">
+      <a>
+        <i class='bx bxs-calendar-check'></i>
+        <span class="text">Shift Handoff</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/sbar">
+      <a>
+        <i class='bx bxs-report'></i>
+        <span class="text">SBAR Reports</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/clinical-alerts">
+      <a>
+        <i class='bx bxs-bell-ring'></i>
+        <span class="text">Clinical Alerts</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/consultations">
+      <a>
+        <i class='bx bxs-conversation'></i>
+        <span class="text">Consultations</span>
+      </a>
+    </li>
+
     <!-- Admin Section (superadmin only) -->
     <li class="sidebar-divider" *ngIf="dynamicpath === 'superadmin'"><span>Admin</span></li>
     <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/integrations" *ngIf="dynamicpath === 'superadmin'">
@@ -84,6 +117,21 @@
       <a>
         <i class='bx bxs-wrench'></i>
         <span class="text">System Settings</span>
+      </a>
+    </li>
+
+    <!-- Enterprise Section (superadmin only) -->
+    <li class="sidebar-divider" *ngIf="dynamicpath === 'superadmin'"><span>Enterprise</span></li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/facilities" *ngIf="dynamicpath === 'superadmin'">
+      <a>
+        <i class='bx bxs-buildings'></i>
+        <span class="text">Multi-Facility</span>
+      </a>
+    </li>
+    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/sso-settings" *ngIf="dynamicpath === 'superadmin'">
+      <a>
+        <i class='bx bxs-shield-quarter'></i>
+        <span class="text">SSO / SAML</span>
       </a>
     </li>
 

@@ -1,0 +1,346 @@
+@use 'styles/liquid-glass' as glass;
+
+:host {
+  display: block;
+  padding: 24px;
+}
+
+.multi-facility-dashboard {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.kpi-card {
+  @include glass.panel();
+  @include glass.highlight();
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  .kpi-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+
+    &.facilities { background: rgba(52, 152, 219, 0.15); color: #3498db; }
+    &.patients { background: rgba(47, 147, 109, 0.15); color: #2f936d; }
+    &.staff { background: rgba(155, 89, 182, 0.15); color: #9b59b6; }
+    &.occupancy { background: rgba(230, 168, 23, 0.15); color: #e6a817; }
+    &.alerts { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
+  }
+
+  .kpi-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--h);
+    line-height: 1;
+  }
+
+  .kpi-label {
+    font-size: 12px;
+    color: var(--p);
+    margin-top: 3px;
+  }
+
+  .kpi-data {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.facilities-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 20px;
+}
+
+.facility-card {
+  @include glass.panel();
+  padding: 20px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  }
+
+  &.selected {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(47, 147, 109, 0.2);
+  }
+
+  &.attention {
+    border-left: 3px solid #e74c3c;
+  }
+
+  .facility-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+
+    h4 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--h);
+      margin: 0 0 4px;
+    }
+
+    .facility-meta {
+      font-size: 12px;
+      color: var(--p);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .facility-status {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+
+      &.operational {
+        background: rgba(47, 147, 109, 0.12);
+        color: #2f936d;
+      }
+
+      &.attention {
+        background: rgba(231, 76, 60, 0.12);
+        color: #e74c3c;
+      }
+    }
+  }
+
+  .occupancy-section {
+    margin-bottom: 14px;
+
+    .occupancy-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--p);
+      margin-bottom: 6px;
+    }
+
+    .occupancy-pct {
+      font-weight: 700;
+    }
+
+    .occupancy-bar {
+      height: 6px;
+      background: rgba(128, 128, 128, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .occupancy-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .occupancy-detail {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--p);
+      margin-top: 6px;
+    }
+  }
+
+  .quick-stats {
+    display: flex;
+    gap: 20px;
+    padding: 10px 0;
+    border-top: 1px solid rgba(128, 128, 128, 0.08);
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+
+      .stat-value {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--h);
+
+        &.critical {
+          color: #e74c3c;
+        }
+      }
+
+      .stat-label {
+        font-size: 11px;
+        color: var(--p);
+      }
+    }
+  }
+
+  .facility-detail {
+    padding-top: 14px;
+    border-top: 1px solid rgba(128, 128, 128, 0.08);
+    animation: slideDown 0.2s ease;
+
+    h5 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--h);
+      margin: 14px 0 10px;
+
+      &:first-child {
+        margin-top: 0;
+      }
+    }
+  }
+
+  .dept-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+
+  .dept-item {
+    background: rgba(128, 128, 128, 0.04);
+    padding: 10px;
+    border-radius: 10px;
+
+    .dept-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .dept-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--h);
+    }
+
+    .dept-ratio {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--p);
+    }
+
+    .dept-bar {
+      height: 4px;
+      background: rgba(128, 128, 128, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+
+    .dept-fill {
+      height: 100%;
+      border-radius: 2px;
+    }
+
+    .dept-nurses {
+      font-size: 11px;
+      color: var(--p);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+  }
+
+  .activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .activity-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(128, 128, 128, 0.04);
+
+    &.critical i { color: #e74c3c; }
+    &.warning i { color: #e6a817; }
+    &.info i { color: #3498db; }
+
+    .activity-msg {
+      flex: 1;
+      color: var(--h);
+    }
+
+    .activity-time {
+      font-size: 11px;
+      color: var(--p);
+      white-space: nowrap;
+    }
+  }
+}
+
+.loading-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--p);
+
+  i { font-size: 32px; margin-bottom: 12px; }
+  p { margin: 0; }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 600px; }
+}
+
+// Dark mode
+:host-context(.dark-mode) {
+  .kpi-card {
+    @include glass.panel-dark();
+  }
+
+  .facility-card {
+    @include glass.panel-dark();
+
+    &:hover {
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .dept-item {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .activity-item {
+      background: rgba(255, 255, 255, 0.04);
+    }
+  }
+}
+
+// Responsive
+@media (max-width: 992px) {
+  .kpi-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .facilities-grid {
+    grid-template-columns: 1fr;
+  }
+}

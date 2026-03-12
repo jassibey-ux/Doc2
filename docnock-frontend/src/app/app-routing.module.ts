@@ -30,6 +30,9 @@ import { ShiftHandoffComponent } from './components/main-module/shift-handoff/sh
 import { SbarReportComponent } from './components/main-module/sbar-report/sbar-report.component';
 import { ClinicalAlertsComponent } from './components/main-module/clinical-alerts/clinical-alerts.component';
 import { ConsultationRequestComponent } from './components/main-module/consultation-request/consultation-request.component';
+import { PatientStatusBoardComponent } from './components/main-module/patient-status-board/patient-status-board.component';
+import { MultiFacilityComponent } from './components/main-module/multi-facility/multi-facility.component';
+import { SsoSettingsComponent } from './components/main-module/sso-settings/sso-settings.component';
 
 const routes: Routes = [
   { path: 'login', component: LoginComponent, canActivate: [AuthGuardLogin] },
@@ -66,6 +69,9 @@ const routes: Routes = [
       { path: 'sbar', component: SbarReportComponent },
       { path: 'clinical-alerts', component: ClinicalAlertsComponent },
       { path: 'consultations', component: ConsultationRequestComponent },
+      { path: 'patient-board', component: PatientStatusBoardComponent },
+      { path: 'facilities', component: MultiFacilityComponent },
+      { path: 'sso-settings', component: SsoSettingsComponent },
     ],
     canActivate: [AuthGuard],
   },

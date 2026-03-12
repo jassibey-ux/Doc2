@@ -1,0 +1,120 @@
+<div class="multi-facility-dashboard">
+  <!-- Aggregate KPIs -->
+  <div class="kpi-row">
+    <div class="kpi-card glass-panel">
+      <div class="kpi-icon facilities"><i class="bx bx-buildings"></i></div>
+      <div class="kpi-data">
+        <span class="kpi-value">{{ totalFacilities }}</span>
+        <span class="kpi-label">Facilities</span>
+      </div>
+    </div>
+    <div class="kpi-card glass-panel">
+      <div class="kpi-icon patients"><i class="bx bx-group"></i></div>
+      <div class="kpi-data">
+        <span class="kpi-value">{{ totalPatients }}</span>
+        <span class="kpi-label">Total Patients</span>
+      </div>
+    </div>
+    <div class="kpi-card glass-panel">
+      <div class="kpi-icon staff"><i class="bx bx-user-check"></i></div>
+      <div class="kpi-data">
+        <span class="kpi-value">{{ totalStaff }}</span>
+        <span class="kpi-label">Active Staff</span>
+      </div>
+    </div>
+    <div class="kpi-card glass-panel">
+      <div class="kpi-icon occupancy"><i class="bx bx-bed"></i></div>
+      <div class="kpi-data">
+        <span class="kpi-value">{{ avgOccupancy }}%</span>
+        <span class="kpi-label">Avg. Occupancy</span>
+      </div>
+    </div>
+    <div class="kpi-card glass-panel">
+      <div class="kpi-icon alerts"><i class="bx bx-bell"></i></div>
+      <div class="kpi-data">
+        <span class="kpi-value">{{ totalAlerts }}</span>
+        <span class="kpi-label">Active Alerts</span>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="loading" class="loading-state">
+    <i class="bx bx-loader-alt bx-spin"></i>
+    <p>Loading facility data...</p>
+  </div>
+
+  <div *ngIf="!loading" class="facilities-grid">
+    <div *ngFor="let facility of facilities" class="facility-card glass-panel"
+         [class.selected]="selectedFacility?.id === facility.id"
+         [class.attention]="facility.status === 'attention'"
+         (click)="selectFacility(facility)">
+
+      <div class="facility-header">
+        <div>
+          <h4>{{ facility.name }}</h4>
+          <span class="facility-meta"><i class="bx bx-map"></i> {{ facility.location }} &middot; {{ facility.type }}</span>
+        </div>
+        <div class="facility-status" [class]="facility.status">
+          {{ facility.status === 'attention' ? 'Needs Attention' : 'Operational' }}
+        </div>
+      </div>
+
+      <!-- Occupancy Bar -->
+      <div class="occupancy-section">
+        <div class="occupancy-header">
+          <span>Occupancy</span>
+          <span class="occupancy-pct" [style.color]="getOccupancyColor(facility.occupancy)">{{ facility.occupancy }}%</span>
+        </div>
+        <div class="occupancy-bar">
+          <div class="occupancy-fill" [style.width.%]="facility.occupancy" [style.background]="getOccupancyColor(facility.occupancy)"></div>
+        </div>
+        <div class="occupancy-detail">
+          <span>{{ facility.patients }}/{{ facility.beds }} beds</span>
+          <span>{{ facility.staff }} staff on duty</span>
+        </div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="quick-stats">
+        <div class="stat">
+          <span class="stat-value">{{ facility.activeAlerts }}</span>
+          <span class="stat-label">Alerts</span>
+        </div>
+        <div class="stat" *ngIf="facility.criticalAlerts > 0">
+          <span class="stat-value critical">{{ facility.criticalAlerts }}</span>
+          <span class="stat-label">Critical</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">{{ facility.departments.length }}</span>
+          <span class="stat-label">Departments</span>
+        </div>
+      </div>
+
+      <!-- Expanded Detail -->
+      <div *ngIf="selectedFacility?.id === facility.id" class="facility-detail">
+        <h5>Departments</h5>
+        <div class="dept-grid">
+          <div *ngFor="let dept of facility.departments" class="dept-item">
+            <div class="dept-header">
+              <span class="dept-name">{{ dept.name }}</span>
+              <span class="dept-ratio">{{ dept.occupied }}/{{ dept.beds }}</span>
+            </div>
+            <div class="dept-bar">
+              <div class="dept-fill" [style.width.%]="(dept.occupied / dept.beds) * 100" [style.background]="getOccupancyColor((dept.occupied / dept.beds) * 100)"></div>
+            </div>
+            <span class="dept-nurses"><i class="bx bx-user"></i> {{ dept.nurses }} nurses</span>
+          </div>
+        </div>
+
+        <h5>Recent Activity</h5>
+        <div class="activity-list">
+          <div *ngFor="let item of facility.recentActivity" class="activity-item" [class]="item.severity">
+            <i [class]="getSeverityIcon(item.severity)"></i>
+            <span class="activity-msg">{{ item.message }}</span>
+            <span class="activity-time">{{ item.time }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
