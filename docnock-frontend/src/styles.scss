@@ -68,23 +68,23 @@ $DockFrontend-theme: mat.define-light-theme((color: (primary: $DockFrontend-prim
 
 
 .layout app-side-bar {
-  width: 200px;
+  width: 280px;
+  flex-shrink: 0;
   transition: width 0.3s ease;
 }
 
-
 .layout .main-content {
   flex: 1;
-  margin-left: -120px;
+  min-width: 0;
   transition: margin-left 0.3s ease;
 }
 
 .layout.collapsed app-side-bar {
-  width: 80px;
+  width: 120px;
 }
 
 .layout.collapsed .main-content {
-  margin-left: -220px;
+  /* no negative margin needed — flex handles it */
 }
 
 /*DO NOT REMOEVE*/
@@ -722,14 +722,12 @@ p {
 /* CONTENT */
 #content {
   position: relative;
-  width: calc(100% - 240px);
-  left: 200px;
+  width: 100%;
   transition: .3s ease;
 }
 
 #sidebar.hide~#content {
-  width: calc(100% - 120px);
-  left: 120px;
+  width: 100%;
 }
 
 #sidebar.hide {
@@ -1982,9 +1980,11 @@ button {
 /* RESPONSIVE */
 
 @media screen and (max-width: 1300px) {
-  .layout .main-content {
-
-    margin-left: -210px;
+  .layout app-side-bar {
+    width: 190px;
+  }
+  .layout.collapsed app-side-bar {
+    width: 120px;
   }
   #sidebar {
     width: 190px;
@@ -2002,11 +2002,12 @@ button {
 
 /* Tablet screens (768px and below) */
 @media screen and (max-width: 769px) {
-  .layout .main-content {
-
-    margin-left: -200px;
+  .layout app-side-bar {
+    width: 200px;
   }
-
+  .layout.collapsed app-side-bar {
+    width: 120px;
+  }
 
   .form-2-wrapper {
     position: relative;
@@ -2036,10 +2037,7 @@ button {
   }
 
   #content {
-    width: calc(100% - 180px);
-
-
-
+    width: 100%;
   }
 
   #content nav .nav-link,
@@ -2201,20 +2199,10 @@ button {
     }
   }
 
-  .collapsed #content {
-    left: 200px;
-  }
-
   button.login-btn,
   button.register-btn {
     padding: 12px;
     font-size: 14px;
-  }
-}
-
-@media screen and (min-width: 913px) {
-  #content {
-    left: 200px;
   }
 }
 
@@ -2224,10 +2212,6 @@ button {
     width: 90%;
     padding: 20px;
     top: 5%;
-  }
-
-  .collapsed #content {
-    left: 0;
   }
 
   .collapsed {
@@ -2275,10 +2259,11 @@ button {
 /* Mobile screens (576px and below) */
 @media screen and (max-width: 577px) {
 
-  .layout {
-    .main-content {
-      margin-left: 200px;
-    }
+  .layout app-side-bar {
+    width: 0;
+  }
+  .layout.collapsed app-side-bar {
+    width: 0;
   }
 
   .table-container {
@@ -2289,20 +2274,8 @@ button {
     width: 92vw;
   }
 
-  .layout.collapsed {
-    .main-content {
-      margin-left: 0px;
-    }
-  }
-
-
   #content {
-    // .form-input {
-
-    //   min-width: max-content;
-    // }
-
-    width: calc(100% - 180px);
+    width: 100%;
     left: 0px;
 
 
@@ -2408,7 +2381,7 @@ button {
 @media screen and (max-width: 541px) {
 
   #content {
-    width: calc(100% - 208px);
+    width: 100%;
   }
 }
 
@@ -2441,7 +2414,7 @@ button {
   }
 
   #content {
-    width: calc(100% - 150px);
+    width: 100%;
 
     .listing_container {
       .search-bar {
@@ -2556,7 +2529,7 @@ button {
 @media screen and (max-width: 391px) {
 
   #content {
-    width: calc(100% - 174px);
+    width: 100%;
   }
 }
 
@@ -2564,6 +2537,6 @@ button {
 @media screen and (max-width: 376px) {
 
   #content {
-    width: calc(100% - 190px);
+    width: 100%;
   }
 }
