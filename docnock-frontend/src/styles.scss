@@ -739,7 +739,7 @@ p {
 }
 
 #sidebar.hide .side-menu li a {
-  width: calc(48px - (4px * 2));
+  width: 100%;
   transition: width .3s ease;
 }
 
