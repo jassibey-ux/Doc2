@@ -69,8 +69,10 @@ export class SideBarComponent implements OnInit {
 
   onMouseLeave() {
     if (!this.isCollapsed) {
-      this.isCollapsed = true;
-      this.isCollapsedChange.emit(true);
+      setTimeout(() => {
+        this.isCollapsed = true;
+        this.isCollapsedChange.emit(true);
+      });
     }
   }
 
