@@ -60,7 +60,7 @@
               </span>
             </td>
             <td class="patient-name">{{ s.patientName || '-' }}</td>
-            <td>{{ s.patientRoom || '-' }}</td>
+            <td>{{ s.roomBed || s.patientRoom || '-' }}</td>
             <td class="situation-cell">{{ s.situation | slice:0:60 }}{{ s.situation?.length > 60 ? '...' : '' }}</td>
             <td>
               <span class="user-name">{{ s.createdBy?.fullName || 'Unknown' }}</span>
@@ -72,7 +72,7 @@
             </td>
             <td class="action-cell">
               <button class="btn action-btn acknowledge-btn"
-                      *ngIf="s.status === 'submitted'"
+                      *ngIf="s.status === 'submitted' || s.status === 'sent'"
                       (click)="acknowledgeSbar(s._id)">
                 <i class='bx bx-check'></i> Acknowledge
               </button>

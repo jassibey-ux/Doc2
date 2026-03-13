@@ -55,14 +55,23 @@ export class SideBarComponent implements OnInit {
   }
 
 
-// sidebar.component.ts
 @Input() isCollapsed = false;
-
-
+@Output() isCollapsedChange = new EventEmitter<boolean>();
 
   toggleSidebar() {
     this.isCollapsed = !this.isCollapsed;
+    this.isCollapsedChange.emit(this.isCollapsed);
+  }
 
+  onMouseEnter() {
+    // Keep sidebar collapsed — tooltip labels appear via CSS
+  }
+
+  onMouseLeave() {
+    if (!this.isCollapsed) {
+      this.isCollapsed = true;
+      this.isCollapsedChange.emit(true);
+    }
   }
 
   getPermission() {
@@ -83,9 +92,10 @@ export class SideBarComponent implements OnInit {
         }
       },
       error: (err: any) => {
-        this.toastr.error(err.error.message);
-        this.allowedModules = new Set();
-      },
+        // Permissions API unavailable - fall back to core modules so sidebar remains usable
+        console.warn('Permissions API failed, using default modules:', err?.error?.message);
+        this.allowedModules = new Set(['C', 'D', 'SH', 'SBAR', 'CA', 'CONSULT', 'N', 'P', 'AS']);
+      },
     });
   }
 }

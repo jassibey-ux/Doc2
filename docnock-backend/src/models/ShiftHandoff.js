@@ -3,15 +3,15 @@ const { Schema, model } = mongoose;
 
 const ShiftHandoffSchema = new Schema(
   {
-    facilityId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    facilityId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     unit: { type: String, required: true },
     shiftType: {
       type: String,
-      enum: ["day-to-evening", "evening-to-night", "night-to-day"],
+      enum: ["day-to-evening", "evening-to-night", "night-to-day", "DAY", "EVENING", "NIGHT"],
       required: true,
     },
-    shiftDate: { type: Date, required: true, index: true },
-    outgoingNurse: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    shiftDate: { type: Date, default: Date.now, index: true },
+    outgoingNurse: { type: Schema.Types.ObjectId, ref: "User" },
     incomingNurse: { type: Schema.Types.ObjectId, ref: "User" },
     status: {
       type: String,

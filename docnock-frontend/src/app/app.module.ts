@@ -33,6 +33,7 @@ import { NgxGpAutocompleteModule } from "@angular-magic/ngx-gp-autocomplete";
 import { Loader } from '@googlemaps/js-api-loader';
 import { MultiSelectComponent } from './shared/multi-select/multi-select.component';
 import { NgSelectModule } from '@ng-select/ng-select';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 import { ProfileComponent } from './components/main-module/profile/profile.component';
 import { AccountSettingComponent } from './components/main-module/account-setting/account-setting.component';
 import { SetupProfileComponent } from './components/auth/setup-profile/setup-profile.component';
@@ -57,6 +58,8 @@ import { ConsultationRequestComponent } from './components/main-module/consultat
 import { PatientStatusBoardComponent } from './components/main-module/patient-status-board/patient-status-board.component';
 import { MultiFacilityComponent } from './components/main-module/multi-facility/multi-facility.component';
 import { SsoSettingsComponent } from './components/main-module/sso-settings/sso-settings.component';
+import { ClinicalHubComponent } from './components/main-module/clinical-hub/clinical-hub.component';
+import { StaffHubComponent } from './components/main-module/staff-hub/staff-hub.component';
 
 @NgModule({
   declarations: [
@@ -97,6 +100,8 @@ import { SsoSettingsComponent } from './components/main-module/sso-settings/sso-
     PatientStatusBoardComponent,
     MultiFacilityComponent,
     SsoSettingsComponent,
+    ClinicalHubComponent,
+    StaffHubComponent,
   ],
   imports: [
     BrowserModule,
@@ -130,8 +135,8 @@ import { SsoSettingsComponent } from './components/main-module/sso-settings/sso-
     MatCardModule,
     MatToolbarModule,
     NgxGpAutocompleteModule,
-    NgSelectModule
-
+    NgSelectModule,
+    DragDropModule
   ],
   providers: [{ provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true },
     {

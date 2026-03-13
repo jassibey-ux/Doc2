@@ -3,21 +3,22 @@ const { Schema, model } = mongoose;
 
 const ClinicalAlertSchema = new Schema(
   {
-    facilityId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    facilityId: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
     alertType: {
       type: String,
       enum: [
         "fall", "medication_error", "vital_change", "lab_critical",
         "elopement", "behavioral", "skin_integrity", "pain",
         "infection_control", "equipment_failure", "other",
+        "VITAL_SIGN", "LAB_RESULT", "MEDICATION", "FALL_RISK", "INFECTION_CONTROL", "OTHER",
       ],
       required: true,
       index: true,
     },
     severity: {
       type: String,
-      enum: ["info", "warning", "critical", "emergency"],
+      enum: ["info", "warning", "critical", "emergency", "INFO", "WARNING", "CRITICAL"],
       required: true,
       index: true,
     },

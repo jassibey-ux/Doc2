@@ -18,6 +18,13 @@ export const createSchedule = async (req, res) => {
       return Error(res, 400, "startTime must be before endTime");
     }
 
+    // Check for overlapping shifts for the same user
+    const conflict = await OnCallSchedule.findOne({
+      userId,
+      startTime: { $lt: end },
+      endTime: { $gt: start },
+    }).populate("userId", "fullName");
+
     const schedule = await OnCallSchedule.create({
       facilityId,
       role,
@@ -30,7 +37,11 @@ export const createSchedule = async (req, res) => {
       createdBy: req.user?._id,
     });
 
-    return Success(res, 201, "On-call schedule created", schedule);
+    const result = { schedule };
+    if (conflict) {
+      result.warning = `This user already has an overlapping shift (${new Date(conflict.startTime).toLocaleString()} – ${new Date(conflict.endTime).toLocaleString()})`;
+    }
+    return Success(res, 201, conflict ? "Schedule created (overlap warning)" : "On-call schedule created", result);
   } catch (err) {
     return Error(res, 500, "Failed to create schedule", err.message);
   }
@@ -47,10 +58,25 @@ export const updateSchedule = async (req, res) => {
       }
     }
 
+    // Check for overlapping shifts if times are being changed
+    let conflict = null;
+    if (updates.startTime && updates.endTime && updates.userId) {
+      conflict = await OnCallSchedule.findOne({
+        userId: updates.userId,
+        _id: { $ne: id },
+        startTime: { $lt: new Date(updates.endTime) },
+        endTime: { $gt: new Date(updates.startTime) },
+      });
+    }
+
     const schedule = await OnCallSchedule.findByIdAndUpdate(id, updates, { new: true });
     if (!schedule) return Error(res, 404, "Schedule not found");
 
-    return Success(res, 200, "Schedule updated", schedule);
+    const result = { schedule };
+    if (conflict) {
+      result.warning = `This user already has an overlapping shift (${new Date(conflict.startTime).toLocaleString()} – ${new Date(conflict.endTime).toLocaleString()})`;
+    }
+    return Success(res, 200, conflict ? "Schedule updated (overlap warning)" : "Schedule updated", result);
   } catch (err) {
     return Error(res, 500, "Failed to update schedule", err.message);
   }
@@ -74,9 +100,15 @@ export const getFacilitySchedule = async (req, res) => {
 
     const filter = { facilityId: id };
     if (from || to) {
-      filter.startTime = {};
-      if (from) filter.startTime.$gte = new Date(from);
-      if (to) filter.endTime = { $lte: new Date(to) };
+      // Overlap logic: shift overlaps window when startTime < to AND endTime > from
+      if (from && to) {
+        filter.startTime = { $lt: new Date(to) };
+        filter.endTime = { $gt: new Date(from) };
+      } else if (from) {
+        filter.endTime = { $gt: new Date(from) };
+      } else if (to) {
+        filter.startTime = { $lt: new Date(to) };
+      }
     }
 
     const schedules = await OnCallSchedule.find(filter)

@@ -3,14 +3,17 @@ const { Schema, model } = mongoose;
 
 const ConsultationRequestSchema = new Schema(
   {
-    facilityId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    requestedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    facilityId: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    requestedBy: { type: Schema.Types.ObjectId, ref: "User" },
     requestedRole: { type: String },
     consultantType: {
       type: String,
       enum: [
         "physician", "specialist", "psychiatrist", "dietitian",
         "pt", "ot", "st", "social_worker", "pharmacist", "other",
+        "Cardiology", "Pulmonology", "Neurology", "Nephrology",
+        "Gastroenterology", "Infectious Disease", "Endocrinology",
+        "Orthopedics", "Psychiatry", "Surgery", "Other",
       ],
       required: true,
     },

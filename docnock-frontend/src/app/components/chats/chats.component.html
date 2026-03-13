@@ -18,7 +18,7 @@
           <a href="#" class="tab-button active">Chats</a>
           <!-- <a href="#" class="tab-button">Fax</a> -->
           <div class="actions">
-            <button class="btn add-btn confirm newchatbtn" *ngIf="loginrole != 'superadmin'"  (click)="openChatModal()">
+            <button class="btn add-btn confirm newchatbtn" (click)="openChatModal()">
               New Chat
             </button>
             <!-- <a class="add-group" (click)="openChatModal()"><i class="bx bx-plus"></i></a> -->
@@ -709,6 +709,15 @@
                   accept="image/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   multiple (change)="onFileSelectedforattache($event)" />
 
+                <span class="chat-icon priority-selector" title="Message Priority">
+                  <select class="priority-select" [(ngModel)]="selectedPriority"
+                    [ngClass]="{'priority-urgent-select': selectedPriority === 'URGENT', 'priority-critical-select': selectedPriority === 'CRITICAL'}">
+                    <option value="ROUTINE">Routine</option>
+                    <option value="URGENT">Urgent</option>
+                    <option value="CRITICAL">Critical</option>
+                  </select>
+                </span>
+
                 <span class="chat-icon" title="Mark as Important" (click)="handleImportant()">
                   <svg class="important-icon" fill="currentColor" aria-hidden="true" width="1em" height="1em"
                     [ngStyle]="{'color': isImportant ? '#ef4444' : 'var(--h)','cursor':'pointer'}" viewBox="0 0 20 20"
@@ -1048,7 +1057,7 @@
 
       <div class="search-bar new-chat-search">
         <i class="fas fa-search"></i>
-        <input type="text" placeholder="Search users..." />
+        <input type="text" placeholder="Search users..." [(ngModel)]="newChatSearchQuery" (input)="onNewChatSearch()" />
       </div>
 
       <div class="tabs new-chat-tabs">

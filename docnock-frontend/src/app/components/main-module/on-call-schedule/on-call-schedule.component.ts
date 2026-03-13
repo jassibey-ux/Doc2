@@ -33,15 +33,19 @@ export class OnCallScheduleComponent implements OnInit {
   allUsers: any[] = [];
 
   selectedFacilityId = '';
+  viewMode: 'day' | 'week' | 'month' = 'week';
   weekStart: Date = this.getMonday(new Date());
   weekDays: Date[] = [];
   scheduleMatrix: Record<string, Record<string, ScheduleEntry[]>> = {};
-  // scheduleMatrix[role][dayIso] = entries[]
+
+  selectedDate: Date = new Date();
+  currentMonth: Date = new Date();
+  monthWeeks: Date[][] = [];
+  allEntries: ScheduleEntry[] = [];
 
   showAddModal = false;
   addForm: FormGroup;
   editingEntry: ScheduleEntry | null = null;
-
   onCallNow: ScheduleEntry | null = null;
 
   constructor(
@@ -64,7 +68,13 @@ export class OnCallScheduleComponent implements OnInit {
 
   ngOnInit(): void {
     this.buildWeekDays();
+    this.buildMonthGrid();
     this.loadFacilities();
+  }
+
+  setViewMode(mode: 'day' | 'week' | 'month'): void {
+    this.viewMode = mode;
+    if (this.selectedFacilityId) this.loadSchedule();
   }
 
   getMonday(date: Date): Date {
@@ -96,6 +106,113 @@ export class OnCallScheduleComponent implements OnInit {
     this.weekStart = new Date(this.weekStart);
     this.buildWeekDays();
     if (this.selectedFacilityId) this.loadSchedule();
+  }
+
+  prevDay(): void {
+    const d = new Date(this.selectedDate);
+    d.setDate(d.getDate() - 1);
+    this.selectedDate = d;
+    if (this.selectedFacilityId) this.loadSchedule();
+  }
+
+  nextDay(): void {
+    const d = new Date(this.selectedDate);
+    d.setDate(d.getDate() + 1);
+    this.selectedDate = d;
+    if (this.selectedFacilityId) this.loadSchedule();
+  }
+
+  goToToday(): void {
+    this.selectedDate = new Date();
+    this.weekStart = this.getMonday(new Date());
+    this.buildWeekDays();
+    this.currentMonth = new Date();
+    this.buildMonthGrid();
+    if (this.selectedFacilityId) this.loadSchedule();
+  }
+
+  getDayEntries(role: string): ScheduleEntry[] {
+    const dayStart = new Date(this.selectedDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(this.selectedDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    return this.allEntries.filter((e) => {
+      if (e.role !== role) return false;
+      const start = new Date(e.startTime);
+      const end = new Date(e.endTime);
+      return start <= dayEnd && end >= dayStart;
+    });
+  }
+
+  buildMonthGrid(): void {
+    const year = this.currentMonth.getFullYear();
+    const month = this.currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const start = this.getMonday(firstDay);
+    this.monthWeeks = [];
+    let current = new Date(start);
+    for (let w = 0; w < 6; w++) {
+      const week: Date[] = [];
+      for (let d = 0; d < 7; d++) {
+        week.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+      }
+      this.monthWeeks.push(week);
+      if (current.getMonth() !== month && current.getDate() > 7) break;
+    }
+  }
+
+  prevMonth(): void {
+    this.currentMonth = new Date(this.currentMonth.getFullYear(), this.currentMonth.getMonth() - 1, 1);
+    this.buildMonthGrid();
+    if (this.selectedFacilityId) this.loadSchedule();
+  }
+
+  nextMonth(): void {
+    this.currentMonth = new Date(this.currentMonth.getFullYear(), this.currentMonth.getMonth() + 1, 1);
+    this.buildMonthGrid();
+    if (this.selectedFacilityId) this.loadSchedule();
+  }
+
+  isCurrentMonth(date: Date): boolean {
+    return date.getMonth() === this.currentMonth.getMonth();
+  }
+
+  getMonthDayEntries(date: Date): ScheduleEntry[] {
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
+    return this.allEntries.filter((e) => {
+      const start = new Date(e.startTime);
+      const end = new Date(e.endTime);
+      return start <= dayEnd && end >= dayStart;
+    });
+  }
+
+  monthDayClick(date: Date): void {
+    this.selectedDate = date;
+    this.setViewMode('day');
+  }
+
+  roleColor(role: string): string {
+    switch (role) {
+      case 'physician': return '#2F936D';
+      case 'nurse': return '#3B82F6';
+      case 'charge_nurse': return '#8B5CF6';
+      case 'specialist': return '#F59E0B';
+      default: return '#6B7280';
+    }
+  }
+
+  roleInitial(role: string): string {
+    switch (role) {
+      case 'physician': return 'Dr';
+      case 'nurse': return 'RN';
+      case 'charge_nurse': return 'CN';
+      case 'specialist': return 'Sp';
+      default: return '?';
+    }
   }
 
   dayIso(date: Date): string {
@@ -133,23 +250,45 @@ export class OnCallScheduleComponent implements OnInit {
   }
 
   loadSchedule(): void {
-    const from = this.weekStart.toISOString();
-    const to = new Date(this.weekDays[6]);
-    to.setHours(23, 59, 59);
+    let from: string;
+    let to: string;
+
+    if (this.viewMode === 'day') {
+      const dayStart = new Date(this.selectedDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(this.selectedDate);
+      dayEnd.setHours(23, 59, 59, 999);
+      from = dayStart.toISOString();
+      to = dayEnd.toISOString();
+    } else if (this.viewMode === 'month') {
+      const firstWeek = this.monthWeeks[0];
+      const lastWeek = this.monthWeeks[this.monthWeeks.length - 1];
+      from = firstWeek[0].toISOString();
+      const endDate = new Date(lastWeek[6]);
+      endDate.setHours(23, 59, 59);
+      to = endDate.toISOString();
+    } else {
+      from = this.weekStart.toISOString();
+      const weekEnd = new Date(this.weekDays[6]);
+      weekEnd.setHours(23, 59, 59);
+      to = weekEnd.toISOString();
+    }
 
     this.authService
-      .getFacilitySchedule(this.selectedFacilityId, from, to.toISOString())
+      .getFacilitySchedule(this.selectedFacilityId, from, to)
       .subscribe({
         next: (res: any) => {
           const entries: ScheduleEntry[] = res?.data ?? [];
-          this.buildMatrix(entries);
+          this.allEntries = entries;
+          if (this.viewMode === 'week') {
+            this.buildMatrix(entries);
+          }
         },
         error: () => this.toastr.error('Failed to load schedule'),
       });
   }
 
   buildMatrix(entries: ScheduleEntry[]): void {
-    // Reset matrix
     this.scheduleMatrix = {};
     for (const role of this.roles) {
       this.scheduleMatrix[role] = {};
@@ -157,18 +296,14 @@ export class OnCallScheduleComponent implements OnInit {
         this.scheduleMatrix[role][this.dayIso(day)] = [];
       }
     }
-
     for (const entry of entries) {
       const entryStart = new Date(entry.startTime);
       const entryEnd = new Date(entry.endTime);
-
       for (const day of this.weekDays) {
         const dayStart = new Date(day);
         dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(day);
         dayEnd.setHours(23, 59, 59, 999);
-
-        // Entry overlaps with this day
         if (entryStart <= dayEnd && entryEnd >= dayStart) {
           if (this.scheduleMatrix[entry.role]) {
             this.scheduleMatrix[entry.role][this.dayIso(day)].push(entry);
@@ -188,9 +323,7 @@ export class OnCallScheduleComponent implements OnInit {
 
   loadOnCallNow(): void {
     this.authService.getOnCallNow(this.selectedFacilityId).subscribe({
-      next: (res: any) => {
-        this.onCallNow = res?.data ?? null;
-      },
+      next: (res: any) => { this.onCallNow = res?.data ?? null; },
       error: () => {},
     });
   }
@@ -233,18 +366,26 @@ export class OnCallScheduleComponent implements OnInit {
     this.editingEntry = null;
   }
 
+  get timeInvalid(): boolean {
+    const start = this.addForm.get('startTime')?.value;
+    const end = this.addForm.get('endTime')?.value;
+    if (!start || !end) return false;
+    return new Date(end) <= new Date(start);
+  }
+
   saveSchedule(): void {
-    if (this.addForm.invalid) return;
-
+    if (this.addForm.invalid || this.timeInvalid) return;
     const payload = this.addForm.value;
-
     const obs = this.editingEntry
       ? this.authService.updateSchedule(this.editingEntry._id!, payload)
       : this.authService.createSchedule(payload);
-
     obs.subscribe({
-      next: () => {
-        this.toastr.success(this.editingEntry ? 'Schedule updated' : 'Schedule created');
+      next: (res: any) => {
+        if (res?.data?.warning) {
+          this.toastr.warning(res.data.warning, 'Overlap Detected');
+        } else {
+          this.toastr.success(this.editingEntry ? 'Schedule updated' : 'Schedule created');
+        }
         this.closeModal();
         this.loadSchedule();
         this.loadOnCallNow();

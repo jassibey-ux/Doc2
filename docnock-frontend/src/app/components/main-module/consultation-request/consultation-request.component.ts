@@ -69,10 +69,11 @@ export class ConsultationRequestComponent implements OnInit {
     this.authService.getConsultations(params).subscribe({
       next: (res: any) => {
         if (res.success) {
-          const decrypted = res.encryptDatauserdata
-            ? this._coreService.decryptObjectData({ data: res.encryptDatauserdata })
-            : res.data;
-          this.consultations = decrypted || [];
+          const encData = res.encryptDatauserdata || res.data;
+          const decrypted = (typeof encData === 'string')
+            ? this._coreService.decryptObjectData({ data: encData })
+            : encData;
+          this.consultations = Array.isArray(decrypted) ? decrypted : [];
           this.totalRecords = res.totalRecords || 0;
           this.totalPages = res.totalPages || 0;
         }
@@ -120,7 +121,18 @@ export class ConsultationRequestComponent implements OnInit {
       return;
     }
     this.submitting = true;
-    this.authService.createConsultation(this.newConsultation).subscribe({
+
+    // Transform to match backend API
+    const payload: any = {
+      patientName: this.newConsultation.patientName,
+      roomBed: this.newConsultation.patientRoom,
+      priority: this.newConsultation.priority,
+      consultantType: this.newConsultation.specialty,
+      reason: this.newConsultation.reason,
+      clinicalHistory: this.newConsultation.clinicalHistory,
+    };
+
+    this.authService.createConsultation(payload).subscribe({
       next: (res: any) => {
         if (res.success) {
           this.toastr.success('Consultation request created');

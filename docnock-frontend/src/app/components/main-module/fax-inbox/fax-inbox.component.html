@@ -79,9 +79,32 @@
 <!-- PDF Viewer Overlay -->
 <div class="viewer-backdrop" *ngIf="selectedFax" (click)="closeFaxViewer()">
   <div class="viewer-card" (click)="$event.stopPropagation()">
-    <div class="viewer-header">
-      <h2>Fax from {{ selectedFax.faxNumber }}</h2>
-      <button class="icon-btn" (click)="closeFaxViewer()"><mat-icon>close</mat-icon></button>
+    <!-- Enhanced Toolbar -->
+    <div class="viewer-toolbar">
+      <h2 class="viewer-title">Fax from {{ selectedFax.faxNumber }}</h2>
+      <div class="viewer-meta">
+        <span>{{ selectedFax.pageCount }} page{{ selectedFax.pageCount !== 1 ? 's' : '' }}</span>
+        <span class="meta-separator">·</span>
+        <span>{{ formatDate(selectedFax.sentAt || selectedFax.createdAt) }}</span>
+        <span class="meta-separator">·</span>
+        <span class="status-chip" [ngClass]="statusClass(selectedFax.status)">
+          {{ statusLabel(selectedFax.status) }}
+        </span>
+      </div>
+      <div class="viewer-actions">
+        <button class="icon-btn" (click)="downloadPdf()" title="Download PDF" [disabled]="!selectedFax.pdfPath">
+          <mat-icon>download</mat-icon>
+        </button>
+        <button class="icon-btn" (click)="openInNewTab()" title="Open in new tab" [disabled]="!selectedFax.pdfPath">
+          <mat-icon>open_in_new</mat-icon>
+        </button>
+        <button class="icon-btn" (click)="printFax()" title="Print" [disabled]="!selectedFax.pdfPath">
+          <mat-icon>print</mat-icon>
+        </button>
+        <button class="icon-btn" (click)="closeFaxViewer()" title="Close">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
     </div>
     <iframe
       *ngIf="selectedFax.pdfPath"
@@ -108,9 +131,13 @@
           id="faxNumber"
           type="tel"
           class="text-input"
-          [(ngModel)]="sendFaxNumber"
-          placeholder="+1 (555) 123-4567"
+          [class.input-error]="faxNumberError"
+          [value]="sendFaxNumber"
+          (input)="onFaxNumberInput($event)"
+          placeholder="(555) 123-4567"
+          maxlength="16"
         />
+        <span class="error-text" *ngIf="faxNumberError">{{ faxNumberError }}</span>
       </div>
 
       <div class="field-group">
@@ -129,11 +156,44 @@
         <button class="btn-secondary" (click)="closeSendModal()">Cancel</button>
         <button
           class="btn-primary"
-          [disabled]="!sendFaxNumber || !sendFile || sending"
+          [disabled]="!faxNumberValid || !sendFile || sending"
           (click)="submitSendFax()"
         >
           {{ sending ? 'Sending...' : 'Send Fax' }}
         </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Conversation Picker Modal -->
+<div class="modal-backdrop" *ngIf="showConversationPicker" (click)="closeConversationPicker()">
+  <div class="modal-card" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Forward Fax to Chat</h2>
+      <button class="icon-btn" (click)="closeConversationPicker()"><mat-icon>close</mat-icon></button>
+    </div>
+    <div class="picker-search">
+      <input
+        type="text"
+        class="text-input"
+        [(ngModel)]="conversationSearch"
+        (input)="onConversationSearch()"
+        placeholder="Search conversations..."
+      />
+    </div>
+    <div class="picker-list">
+      <div *ngIf="conversationLoading" class="picker-loading">Loading conversations...</div>
+      <div *ngIf="!conversationLoading && conversations.length === 0" class="picker-empty">
+        No conversations found
+      </div>
+      <div
+        class="picker-item"
+        *ngFor="let conv of conversations"
+        (click)="selectConversation(conv)"
+      >
+        <mat-icon>group</mat-icon>
+        <span>{{ conv.groupName || conv.name || 'Unnamed conversation' }}</span>
       </div>
     </div>
   </div>

@@ -41,7 +41,7 @@ export class SbarReportComponent implements OnInit {
   // Resolve form
   resolveNotes = '';
 
-  statuses = ['submitted', 'acknowledged', 'resolved'];
+  statuses = ['sent', 'submitted', 'acknowledged', 'resolved'];
   priorities = ['ROUTINE', 'URGENT', 'CRITICAL'];
 
   constructor(
@@ -66,10 +66,11 @@ export class SbarReportComponent implements OnInit {
     this.authService.getSbars(params).subscribe({
       next: (res: any) => {
         if (res.success) {
-          const decrypted = res.encryptDatauserdata
-            ? this._coreService.decryptObjectData({ data: res.encryptDatauserdata })
-            : res.data;
-          this.sbars = decrypted || [];
+          const encData = res.encryptDatauserdata || res.data;
+          const decrypted = (typeof encData === 'string')
+            ? this._coreService.decryptObjectData({ data: encData })
+            : encData;
+          this.sbars = Array.isArray(decrypted) ? decrypted : [];
           this.totalRecords = res.totalRecords || 0;
           this.totalPages = res.totalPages || 0;
         }
@@ -118,7 +119,21 @@ export class SbarReportComponent implements OnInit {
       return;
     }
     this.submitting = true;
-    this.authService.createSbar(this.newSbar).subscribe({
+
+    // Transform to match backend API
+    const payload: any = {
+      patientName: this.newSbar.patientName,
+      roomBed: this.newSbar.patientRoom,
+      priority: this.newSbar.priority,
+      situation: this.newSbar.situation,
+      background: this.newSbar.background,
+      assessment: this.newSbar.assessment,
+      recommendation: this.newSbar.recommendation,
+      recipientRole: 'physician',
+      recipientUser: this.newSbar.recipientId || undefined,
+    };
+
+    this.authService.createSbar(payload).subscribe({
       next: (res: any) => {
         if (res.success) {
           this.toastr.success('SBAR report created');

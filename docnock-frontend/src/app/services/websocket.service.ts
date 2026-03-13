@@ -230,7 +230,8 @@ registerUser() {
     timestamp: any,
     attachment: any,
     isImportant:any,
-    messageId:any
+    messageId:any,
+    priority: string = 'ROUTINE'
   ) {
     this.socket.emit('sendMessage', {
       groupId: groupId,
@@ -239,7 +240,8 @@ registerUser() {
       timestamp: timestamp,
       attachment: attachment,
       isImportant,
-      messageId
+      messageId,
+      priority
     });
   }
 

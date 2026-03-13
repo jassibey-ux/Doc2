@@ -3,10 +3,10 @@ const { Schema, model } = mongoose;
 
 const SbarReportSchema = new Schema(
   {
-    facilityId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    facilityId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", index: true },
     messageId: { type: Schema.Types.ObjectId, ref: "Message" },
-    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
     recipientRole: {
       type: String,
       enum: ["physician", "nurse", "charge_nurse", "specialist"],

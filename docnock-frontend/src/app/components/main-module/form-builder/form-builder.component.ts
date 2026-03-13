@@ -1,4 +1,5 @@
 import { Component, OnInit } from '@angular/core';
+import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { AuthServiceService } from 'src/app/services/auth-service.service';
 import { ToastrService } from 'ngx-toastr';
 
@@ -59,6 +60,14 @@ export class FormBuilderComponent implements OnInit {
   showSubmissions = false;
   selectedTemplateId = '';
   submissions: any[] = [];
+
+  // Conversation picker (for send form)
+  showConversationPicker = false;
+  conversations: any[] = [];
+  conversationSearch = '';
+  conversationLoading = false;
+  pendingSendTemplateId: string | null = null;
+  private searchTimeout: any;
 
   constructor(
     private authService: AuthServiceService,
@@ -125,6 +134,15 @@ export class FormBuilderComponent implements OnInit {
     const temp = this.builderFields[index];
     this.builderFields[index] = this.builderFields[target];
     this.builderFields[target] = temp;
+  }
+
+  // CDK drag-and-drop
+  drop(event: CdkDragDrop<FormField[]>): void {
+    moveItemInArray(this.builderFields, event.previousIndex, event.currentIndex);
+  }
+
+  trackByField(index: number, field: FormField): string {
+    return field.id;
   }
 
   addOption(field: FormField) {
@@ -204,5 +222,55 @@ export class FormBuilderComponent implements OnInit {
   closeSubmissions() {
     this.showSubmissions = false;
     this.submissions = [];
+  }
+
+  // ─── Send Form to Conversation ──────────────────────────────────────────────
+
+  openSendForm(templateId: string): void {
+    this.pendingSendTemplateId = templateId;
+    this.showConversationPicker = true;
+    this.conversationSearch = '';
+    this.loadConversations();
+  }
+
+  loadConversations(): void {
+    this.conversationLoading = true;
+    this.authService.getConversationList(this.conversationSearch).subscribe({
+      next: (res: any) => {
+        this.conversations = res?.data?.data ?? res?.data ?? res ?? [];
+        if (!Array.isArray(this.conversations)) this.conversations = [];
+        this.conversationLoading = false;
+      },
+      error: () => {
+        this.conversations = [];
+        this.conversationLoading = false;
+      },
+    });
+  }
+
+  onConversationSearch(): void {
+    clearTimeout(this.searchTimeout);
+    this.searchTimeout = setTimeout(() => this.loadConversations(), 300);
+  }
+
+  selectConversation(conv: any): void {
+    if (!this.pendingSendTemplateId) return;
+    this.showConversationPicker = false;
+
+    const convId = conv.groupId || conv._id;
+    const convName = conv.groupName || conv.name || 'conversation';
+
+    this.authService.sendForm(this.pendingSendTemplateId, convId).subscribe({
+      next: () => {
+        this.toastr.success('Form sent to ' + convName);
+        this.pendingSendTemplateId = null;
+      },
+      error: () => this.toastr.error('Failed to send form'),
+    });
+  }
+
+  closeConversationPicker(): void {
+    this.showConversationPicker = false;
+    this.pendingSendTemplateId = null;
   }
 }

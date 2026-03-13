@@ -33,6 +33,8 @@ import { ConsultationRequestComponent } from './components/main-module/consultat
 import { PatientStatusBoardComponent } from './components/main-module/patient-status-board/patient-status-board.component';
 import { MultiFacilityComponent } from './components/main-module/multi-facility/multi-facility.component';
 import { SsoSettingsComponent } from './components/main-module/sso-settings/sso-settings.component';
+import { ClinicalHubComponent } from './components/main-module/clinical-hub/clinical-hub.component';
+import { StaffHubComponent } from './components/main-module/staff-hub/staff-hub.component';
 
 const routes: Routes = [
   { path: 'login', component: LoginComponent, canActivate: [AuthGuardLogin] },
@@ -65,6 +67,8 @@ const routes: Routes = [
       { path: 'system-health', component: SystemHealthComponent },
       { path: 'security', component: SecurityMonitorComponent },
       { path: 'system-settings', component: SystemSettingsComponent },
+      { path: 'staff', component: StaffHubComponent },
+      { path: 'clinical', component: ClinicalHubComponent },
       { path: 'shift-handoff', component: ShiftHandoffComponent },
       { path: 'sbar', component: SbarReportComponent },
       { path: 'clinical-alerts', component: ClinicalAlertsComponent },

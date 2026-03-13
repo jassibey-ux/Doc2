@@ -84,10 +84,11 @@ export class ClinicalAlertsComponent implements OnInit, OnDestroy {
     this.authService.getAlerts(params).subscribe({
       next: (res: any) => {
         if (res.success) {
-          const decrypted = res.encryptDatauserdata
-            ? this._coreService.decryptObjectData({ data: res.encryptDatauserdata })
-            : res.data;
-          this.alerts = decrypted || [];
+          const encData = res.encryptDatauserdata || res.data;
+          const decrypted = (typeof encData === 'string')
+            ? this._coreService.decryptObjectData({ data: encData })
+            : encData;
+          this.alerts = Array.isArray(decrypted) ? decrypted : [];
           this.totalRecords = res.totalRecords || 0;
           this.totalPages = res.totalPages || 0;
           this.updateKpis();
@@ -143,7 +144,18 @@ export class ClinicalAlertsComponent implements OnInit, OnDestroy {
       return;
     }
     this.submitting = true;
-    this.authService.createAlert(this.newAlert).subscribe({
+
+    // Transform to match backend API
+    const payload: any = {
+      alertType: this.newAlert.alertType,
+      severity: this.newAlert.severity,
+      patientName: this.newAlert.patientName,
+      roomBed: this.newAlert.patientRoom,
+      title: this.newAlert.title,
+      description: this.newAlert.description,
+    };
+
+    this.authService.createAlert(payload).subscribe({
       next: (res: any) => {
         if (res.success) {
           this.toastr.success('Alert created');

@@ -1,0 +1,25 @@
+<div class="clinical-hub">
+  <div class="hub-header">
+    <h2>Staff</h2>
+    <p class="hub-subtitle">Manage physicians and nursing staff</p>
+  </div>
+
+  <div class="hub-grid">
+    <div
+      *ngFor="let feature of features"
+      class="hub-card"
+      [routerLink]="'/' + dynamicpath + '/' + feature.route"
+    >
+      <div class="card-icon" [style.background]="feature.color + '18'" [style.color]="feature.color">
+        <i [class]="feature.icon"></i>
+      </div>
+      <div class="card-content">
+        <h3>{{ feature.name }}</h3>
+        <p>{{ feature.description }}</p>
+      </div>
+      <div class="card-arrow">
+        <i class="bx bx-chevron-right"></i>
+      </div>
+    </div>
+  </div>
+</div>

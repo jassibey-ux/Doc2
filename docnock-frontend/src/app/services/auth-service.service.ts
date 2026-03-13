@@ -313,9 +313,9 @@ listUsers(params: Record<string, any> = {}) {
 
 // ─── Fax ─────────────────────────────────────────────────────────────────────
 
-getFaxInbox(page = 1, limit = 20) {
+getFaxInbox(page = 1, limit = 20, direction = 'inbound') {
   const token = this.getToken();
-  return this.http.get(`${this.baseUrl}/fax/inbox?page=${page}&limit=${limit}`, {
+  return this.http.get(`${this.baseUrl}/fax/inbox?page=${page}&limit=${limit}&direction=${direction}`, {
     headers: this.getHeader(token),
   });
 }
@@ -342,6 +342,17 @@ forwardFaxToChat(faxId: string, conversationId: string) {
   return this.http.post(`${this.baseUrl}/fax/forward-to-chat`, { faxId, conversationId }, {
     headers: this.getHeader(token),
   });
+}
+
+// ─── Conversations ──────────────────────────────────────────────────────────
+
+getConversationList(search = '', limit = 20, page = 1) {
+  const token = this.getToken();
+  const userId = localStorage.getItem('user_id') || '';
+  return this.http.get(
+    `${this.baseUrl}/group-list?limit=${limit}&page=${page}&userId=${userId}&name=${search}`,
+    { headers: this.getHeader(token) }
+  );
 }
 
 // ─── PCC / EHR Integration ──────────────────────────────────────────────────

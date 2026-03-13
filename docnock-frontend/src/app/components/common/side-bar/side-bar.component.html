@@ -1,40 +1,34 @@
-<section id="sidebar" [ngClass]="isCollapsed?'hide':''">
+<section id="sidebar" [ngClass]="isCollapsed?'hide':''" (mouseenter)="onMouseEnter()" (mouseleave)="onMouseLeave()">
   <div class="brand" >
     <!-- <div  class="sidebar_toggle"><i (click)="toggleSidebar()" class='bx bx-menu'></i></div> -->
     <img src="../../../assets/images/dash-logo.png" alt="">
   </div>
   <ul class="side-menu top">
-    <li class="incoBx" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" routerLink="/{{dynamicpath}}/dashboard">
+    <li class="incoBx" data-label="Dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" routerLink="/{{dynamicpath}}/dashboard">
       <a >
         <i class='bx bxs-dashboard'></i>
         <span class="text">Dashboard</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/facilitycenter/list" *ngIf="allowedModules.has('F')">
+    <li class="incoBx" data-label="Facility Center" routerLinkActive="active" routerLink="/{{dynamicpath}}/facilitycenter/list" *ngIf="allowedModules.has('F')">
       <a>
         <i class='bx bxs-shopping-bag-alt'></i>
         <span class="text">Facility Center</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/physician/list" *ngIf="allowedModules.has('P')">
-      <a>
-        <i class='bx bxs-message-dots'></i>
-        <span class="text">Physicians</span>
-      </a>
-    </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/nurse/list" *ngIf="allowedModules.has('N')">
+    <li class="incoBx" data-label="Staff" routerLinkActive="active" routerLink="/{{dynamicpath}}/staff">
       <a>
         <i class='bx bxs-group'></i>
-        <span class="text">Nurses</span>
+        <span class="text">Staff</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/chats" *ngIf="allowedModules.has('C')">
+    <li class="incoBx" data-label="Chats" routerLinkActive="active" routerLink="/{{dynamicpath}}/chats" *ngIf="allowedModules.has('C')">
       <a>
         <i class='bx bxs-group'></i>
         <span class="text">Chats</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/main/role-permission" *ngIf="allowedModules.has('R')">
+    <li class="incoBx" data-label="Role and Permission" routerLinkActive="active" routerLink="/main/role-permission" *ngIf="allowedModules.has('R')">
       <!-- [routerLink]="['/role-permission']" -->
       <a >
           <i class='bx bxs-group'></i>
@@ -42,78 +36,71 @@
       </a>
   </li>
 
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/subadmin/list" *ngIf="allowedModules.has('S')">
+    <li class="incoBx" data-label="Sub Admin" routerLinkActive="active" routerLink="/{{dynamicpath}}/subadmin/list" *ngIf="allowedModules.has('S')">
       <a>
         <i class='bx bxs-group'></i>
         <span class="text">Sub Admin</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/other/list" *ngIf="allowedModules.has('O')">
+    <li class="incoBx" data-label="Others" routerLinkActive="active" routerLink="/{{dynamicpath}}/other/list" *ngIf="allowedModules.has('O')">
       <a>
         <i class='bx bxs-group'></i>
         <span class="text">Others</span>
       </a>
     </li>
-    <!-- Clinical Section -->
-    <li class="sidebar-divider"><span>Clinical</span></li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/patient-board">
+    <!-- Clinical Hub -->
+    <li class="incoBx" data-label="Clinical" routerLinkActive="active" routerLink="/{{dynamicpath}}/clinical">
       <a>
-        <i class='bx bxs-user-detail'></i>
-        <span class="text">Patient Board</span>
+        <i class='bx bxs-first-aid'></i>
+        <span class="text">Clinical</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/shift-handoff">
+    <li class="incoBx" data-label="Fax" routerLinkActive="active" routerLink="/{{dynamicpath}}/fax-inbox">
       <a>
-        <i class='bx bxs-calendar-check'></i>
-        <span class="text">Shift Handoff</span>
+        <i class='bx bxs-printer'></i>
+        <span class="text">Fax</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/sbar">
+    <li class="incoBx" data-label="On-Call" routerLinkActive="active" routerLink="/{{dynamicpath}}/on-call-schedule">
       <a>
-        <i class='bx bxs-report'></i>
-        <span class="text">SBAR Reports</span>
+        <i class='bx bxs-calendar'></i>
+        <span class="text">On-Call</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/clinical-alerts">
+    <li class="incoBx" data-label="Forms" routerLinkActive="active" routerLink="/{{dynamicpath}}/form-builder">
       <a>
-        <i class='bx bxs-bell-ring'></i>
-        <span class="text">Clinical Alerts</span>
-      </a>
-    </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/consultations">
-      <a>
-        <i class='bx bxs-conversation'></i>
-        <span class="text">Consultations</span>
+        <i class='bx bxs-file-plus'></i>
+        <span class="text">Forms</span>
       </a>
     </li>
 
     <!-- Admin Section (superadmin only) -->
     <li class="sidebar-divider" *ngIf="dynamicpath === 'superadmin'"><span>Admin</span></li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/integrations" *ngIf="dynamicpath === 'superadmin'">
+    <li class="incoBx" data-label="Integrations" routerLinkActive="active" routerLink="/{{dynamicpath}}/integrations" *ngIf="dynamicpath === 'superadmin'">
       <a>
         <i class='bx bxs-plug-connected'></i>
         <span class="text">Integrations</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/audit-logs" *ngIf="dynamicpath === 'superadmin'">
+    <li class="incoBx" data-label="Audit Logs" routerLinkActive="active" routerLink="/{{dynamicpath}}/audit-logs" *ngIf="dynamicpath === 'superadmin'">
       <a>
         <i class='bx bxs-file-find'></i>
         <span class="text">Audit Logs</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/system-health" *ngIf="dynamicpath === 'superadmin'">
+    <li class="incoBx" data-label="System Health" routerLinkActive="active" routerLink="/{{dynamicpath}}/system-health" *ngIf="dynamicpath === 'superadmin'">
       <a>
         <i class='bx bxs-heart-circle'></i>
         <span class="text">System Health</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/security" *ngIf="dynamicpath === 'superadmin'">
+    <li class="incoBx" data-label="Security" routerLinkActive="active" routerLink="/{{dynamicpath}}/security" *ngIf="dynamicpath === 'superadmin'">
       <a>
         <i class='bx bxs-shield-alt-2'></i>
         <span class="text">Security</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/system-settings" *ngIf="dynamicpath === 'superadmin'">
+    <li class="incoBx" data-label="System Settings" routerLinkActive="active" routerLink="/{{dynamicpath}}/system-settings" *ngIf="dynamicpath === 'superadmin'">
       <a>
         <i class='bx bxs-wrench'></i>
         <span class="text">System Settings</span>
@@ -122,37 +109,33 @@
 
     <!-- Enterprise Section (superadmin only) -->
     <li class="sidebar-divider" *ngIf="dynamicpath === 'superadmin'"><span>Enterprise</span></li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/facilities" *ngIf="dynamicpath === 'superadmin'">
+    <li class="incoBx" data-label="Multi-Facility" routerLinkActive="active" routerLink="/{{dynamicpath}}/facilities" *ngIf="dynamicpath === 'superadmin'">
       <a>
         <i class='bx bxs-buildings'></i>
         <span class="text">Multi-Facility</span>
       </a>
     </li>
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/sso-settings" *ngIf="dynamicpath === 'superadmin'">
+    <li class="incoBx" data-label="SSO / SAML" routerLinkActive="active" routerLink="/{{dynamicpath}}/sso-settings" *ngIf="dynamicpath === 'superadmin'">
       <a>
         <i class='bx bxs-shield-quarter'></i>
         <span class="text">SSO / SAML</span>
       </a>
     </li>
 
-    <li class="incoBx" routerLinkActive="active" routerLink="/{{dynamicpath}}/setting">
+    <li class="incoBx" data-label="Account Setting" routerLinkActive="active" routerLink="/{{dynamicpath}}/setting">
       <a>
         <i class='bx bxs-cog'></i>
         <span class="text">Account Setting</span>
       </a>
     </li>
     <!-- logout button positioned at bottom like menu items -->
-    <li class="incoBx logout" (click)="openLogoutModal()">
+    <li class="incoBx logout" data-label="Logout" (click)="openLogoutModal()">
       <a>
         <i class='bx bx-log-out'></i>
         <span class="text">Logout</span>
       </a>
     </li>
-  </ul>  
-
-  
-
-
+  </ul>
 </section>
 
 

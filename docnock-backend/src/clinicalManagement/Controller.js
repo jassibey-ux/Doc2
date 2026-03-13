@@ -14,22 +14,22 @@ export const createHandoff = async (req, res) => {
       patients, generalNotes, equipmentIssues, staffingNotes,
     } = req.body;
 
-    if (!facilityId || !unit || !shiftType || !shiftDate || !outgoingNurse) {
-      return Error(res, 400, "facilityId, unit, shiftType, shiftDate, and outgoingNurse are required");
+    if (!unit || !shiftType) {
+      return Error(res, 400, "unit and shiftType are required");
     }
 
     const handoff = await ShiftHandoff.create({
-      facilityId,
+      facilityId: facilityId || undefined,
       unit,
       shiftType,
-      shiftDate: new Date(shiftDate),
-      outgoingNurse,
+      shiftDate: shiftDate ? new Date(shiftDate) : new Date(),
+      outgoingNurse: outgoingNurse || req.user?._id,
       incomingNurse,
       patients,
       generalNotes,
       equipmentIssues,
       staffingNotes,
-      status: "draft",
+      status: "submitted",
     });
 
     return Success(res, 201, "Shift handoff created", handoff);
@@ -149,8 +149,8 @@ export const createSbar = async (req, res) => {
       priority, patientName, roomBed, situation, background, assessment, recommendation,
     } = req.body;
 
-    if (!facilityId || !recipientRole || !patientName || !situation || !background || !assessment || !recommendation) {
-      return Error(res, 400, "facilityId, recipientRole, patientName, situation, background, assessment, and recommendation are required");
+    if (!recipientRole || !patientName || !situation || !background || !assessment || !recommendation) {
+      return Error(res, 400, "recipientRole, patientName, situation, background, assessment, and recommendation are required");
     }
 
     const sbar = await SbarReport.create({
@@ -270,8 +270,8 @@ export const createAlert = async (req, res) => {
       title, description, assignedTo, relatedConversationId,
     } = req.body;
 
-    if (!facilityId || !alertType || !severity || !title || !description) {
-      return Error(res, 400, "facilityId, alertType, severity, title, and description are required");
+    if (!alertType || !severity || !title || !description) {
+      return Error(res, 400, "alertType, severity, title, and description are required");
     }
 
     const alert = await ClinicalAlert.create({
@@ -399,8 +399,8 @@ export const createConsultation = async (req, res) => {
       relatedConversationId,
     } = req.body;
 
-    if (!facilityId || !consultantType || !patientName || !reason) {
-      return Error(res, 400, "facilityId, consultantType, patientName, and reason are required");
+    if (!consultantType || !patientName || !reason) {
+      return Error(res, 400, "consultantType, patientName, and reason are required");
     }
 
     const consultation = await ConsultationRequest.create({

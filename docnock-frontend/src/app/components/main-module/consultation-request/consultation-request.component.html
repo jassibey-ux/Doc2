@@ -61,9 +61,9 @@
             </td>
             <td>
               <span class="patient-name">{{ c.patientName || '-' }}</span>
-              <span class="patient-room" *ngIf="c.patientRoom">Rm {{ c.patientRoom }}</span>
+              <span class="patient-room" *ngIf="c.roomBed || c.patientRoom">Rm {{ c.roomBed || c.patientRoom }}</span>
             </td>
-            <td>{{ c.specialty || '-' }}</td>
+            <td>{{ c.consultantType || c.specialty || '-' }}</td>
             <td class="reason-cell">{{ c.reason | slice:0:50 }}{{ c.reason?.length > 50 ? '...' : '' }}</td>
             <td>
               <span class="user-name">{{ c.createdBy?.fullName || c.requestedBy || 'Unknown' }}</span>

@@ -34,8 +34,19 @@ export class FaxInboxComponent implements OnInit {
   showSendModal = false;
 
   sendFaxNumber = '';
+  sendFaxNumberRaw = '';
+  faxNumberError = '';
+  faxNumberValid = false;
   sendFile: File | null = null;
   sending = false;
+
+  // Conversation picker
+  showConversationPicker = false;
+  conversations: any[] = [];
+  conversationSearch = '';
+  conversationLoading = false;
+  pendingForwardFax: FaxRecord | null = null;
+  private searchTimeout: any;
 
   constructor(
     private authService: AuthServiceService,
@@ -48,7 +59,7 @@ export class FaxInboxComponent implements OnInit {
 
   loadFaxes(): void {
     this.loading = true;
-    this.authService.getFaxInbox(this.page).subscribe({
+    this.authService.getFaxInbox(this.page, 20, this.activeTab).subscribe({
       next: (res: any) => {
         const data = res?.data;
         this.faxes = data?.data ?? [];
@@ -102,14 +113,90 @@ export class FaxInboxComponent implements OnInit {
     this.selectedFax = null;
   }
 
+  // ─── PDF Viewer Toolbar ─────────────────────────────────────────────────────
+
+  downloadPdf(): void {
+    if (!this.selectedFax?.pdfPath) return;
+    const link = document.createElement('a');
+    link.href = this.selectedFax.pdfPath;
+    link.download = `fax-${this.selectedFax.faxNumber || 'document'}.pdf`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  openInNewTab(): void {
+    if (!this.selectedFax?.pdfPath) return;
+    window.open(this.selectedFax.pdfPath, '_blank');
+  }
+
+  printFax(): void {
+    if (!this.selectedFax?.pdfPath) return;
+    const printWindow = window.open(this.selectedFax.pdfPath, '_blank');
+    if (printWindow) {
+      printWindow.addEventListener('load', () => {
+        printWindow.print();
+      });
+    }
+  }
+
+  // ─── Send Fax Modal ─────────────────────────────────────────────────────────
+
   openSendModal(): void {
     this.showSendModal = true;
     this.sendFaxNumber = '';
+    this.sendFaxNumberRaw = '';
+    this.faxNumberError = '';
+    this.faxNumberValid = false;
     this.sendFile = null;
   }
 
   closeSendModal(): void {
     this.showSendModal = false;
+  }
+
+  onFaxNumberInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    let raw = input.value.replace(/\D/g, '');
+
+    // Strip leading country code '1'
+    if (raw.length > 10 && raw.startsWith('1')) {
+      raw = raw.substring(1);
+    }
+
+    // Cap at 10 digits
+    if (raw.length > 10) {
+      raw = raw.substring(0, 10);
+    }
+
+    this.sendFaxNumberRaw = raw;
+
+    // Auto-format display
+    if (raw.length <= 3) {
+      this.sendFaxNumber = raw;
+    } else if (raw.length <= 6) {
+      this.sendFaxNumber = `(${raw.substring(0, 3)}) ${raw.substring(3)}`;
+    } else {
+      this.sendFaxNumber = `(${raw.substring(0, 3)}) ${raw.substring(3, 6)}-${raw.substring(6)}`;
+    }
+
+    // Set value back to input to reflect formatting
+    input.value = this.sendFaxNumber;
+
+    // Validation
+    this.faxNumberValid = raw.length === 10;
+    if (raw.length === 0) {
+      this.faxNumberError = '';
+    } else if (raw.length < 10) {
+      this.faxNumberError = 'Phone number must be 10 digits';
+    } else {
+      this.faxNumberError = '';
+    }
+  }
+
+  getCleanNumber(): string {
+    return '+1' + this.sendFaxNumberRaw;
   }
 
   onFileSelect(event: Event): void {
@@ -120,10 +207,10 @@ export class FaxInboxComponent implements OnInit {
   }
 
   submitSendFax(): void {
-    if (!this.sendFaxNumber || !this.sendFile) return;
+    if (!this.faxNumberValid || !this.sendFile) return;
     this.sending = true;
 
-    this.authService.sendFax(this.sendFaxNumber, this.sendFile).subscribe({
+    this.authService.sendFax(this.getCleanNumber(), this.sendFile).subscribe({
       next: () => {
         this.toastr.success('Fax sent successfully');
         this.closeSendModal();
@@ -137,19 +224,58 @@ export class FaxInboxComponent implements OnInit {
     });
   }
 
-  forwardToChat(fax: FaxRecord): void {
-    // Prompt user for conversation selection — simplified for now
-    const conversationId = prompt('Enter conversation ID to forward this fax to:');
-    if (!conversationId) return;
+  // ─── Forward to Chat (Conversation Picker) ─────────────────────────────────
 
-    this.authService.forwardFaxToChat(fax._id, conversationId).subscribe({
+  forwardToChat(fax: FaxRecord): void {
+    this.pendingForwardFax = fax;
+    this.showConversationPicker = true;
+    this.conversationSearch = '';
+    this.loadConversations();
+  }
+
+  loadConversations(): void {
+    this.conversationLoading = true;
+    this.authService.getConversationList(this.conversationSearch).subscribe({
+      next: (res: any) => {
+        this.conversations = res?.data?.data ?? res?.data ?? res ?? [];
+        if (!Array.isArray(this.conversations)) this.conversations = [];
+        this.conversationLoading = false;
+      },
+      error: () => {
+        this.conversations = [];
+        this.conversationLoading = false;
+      },
+    });
+  }
+
+  onConversationSearch(): void {
+    clearTimeout(this.searchTimeout);
+    this.searchTimeout = setTimeout(() => this.loadConversations(), 300);
+  }
+
+  selectConversation(conv: any): void {
+    if (!this.pendingForwardFax) return;
+    this.showConversationPicker = false;
+
+    const convId = conv.groupId || conv._id;
+    const convName = conv.groupName || conv.name || 'conversation';
+
+    this.authService.forwardFaxToChat(this.pendingForwardFax._id, convId).subscribe({
       next: () => {
-        this.toastr.success('Fax forwarded to chat');
-        fax.status = 'forwarded';
+        this.toastr.success('Fax forwarded to ' + convName);
+        if (this.pendingForwardFax) this.pendingForwardFax.status = 'forwarded';
+        this.pendingForwardFax = null;
       },
       error: () => this.toastr.error('Failed to forward fax'),
     });
   }
+
+  closeConversationPicker(): void {
+    this.showConversationPicker = false;
+    this.pendingForwardFax = null;
+  }
+
+  // ─── Helpers ────────────────────────────────────────────────────────────────
 
   statusLabel(status: string): string {
     const labels: Record<string, string> = {

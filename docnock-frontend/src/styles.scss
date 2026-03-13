@@ -533,7 +533,7 @@ p {
 
 
   &.hide {
-    width: 60px;
+    width: 120px;
   }
 
   .user-info {
@@ -688,15 +688,31 @@ p {
   }
 
   &.hide .side-menu li a {
-    width: calc(48px - (4px * 2));
+    width: 100%;
     transition: width .3s ease;
-    text-transform: uppercase;
-    justify-content: center;          /* center icon when collapsed */
+    justify-content: center;
+    text-align: center;
+
+    .text {
+      display: none;
+    }
   }
 
-  /* hide text when sidebar is collapsed */
-  &.hide .side-menu li a .text {
-    display: none;
+  &.hide .side-menu li:hover a {
+    .bx {
+      display: none;
+    }
+
+    .text {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+    }
   }
 }
 
@@ -712,12 +728,12 @@ p {
 }
 
 #sidebar.hide~#content {
-  width: calc(100% - 60px);
-  left: 60px;
+  width: calc(100% - 120px);
+  left: 120px;
 }
 
 #sidebar.hide {
-  width: 60px;
+  width: 120px;
 
   ul {
     padding: 0;
@@ -1532,7 +1548,7 @@ button {
   position: absolute;
   top: 16%;
   right: 6%;
-  width: 100px;
+  width: 120px;
   height: 100px;
   opacity: 1;
   border-radius: 50%;
@@ -1559,7 +1575,7 @@ button {
 .card[data-count="2"] .circle:nth-child(4) {
   top: 16%;
   right: 9%;
-  width: 100px;
+  width: 120px;
   height: 100px;
 }
 
@@ -1585,7 +1601,7 @@ button {
 .card[data-count="1"] .circle:nth-child(4) {
   top: 16%;
   right: 11%;
-  width: 100px;
+  width: 120px;
   height: 100px;
 }
 
@@ -2222,7 +2238,7 @@ button {
   }
 
   .logo-main img {
-    width: 100px;
+    width: 120px;
   }
 
   .footer-text {
@@ -2509,7 +2525,7 @@ button {
   }
 
   .logo-main img {
-    width: 100px;
+    width: 120px;
   }
 
   .footer-text {

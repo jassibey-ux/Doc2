@@ -3254,6 +3254,62 @@ section {
   border-left: none !important;
 }
 
+// ─── Priority Selector in Composer ──────────────────────────────────────────
+
+.priority-selector {
+  display: inline-flex;
+  align-items: center;
+}
+
+.priority-select {
+  appearance: auto;
+  border: 1px solid var(--line, #e0e0e0);
+  border-radius: 6px;
+  padding: 2px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--bg-light, #fff);
+  color: var(--h, #333);
+  cursor: pointer;
+  height: 26px;
+  outline: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+
+  &:focus {
+    border-color: var(--primary, #2F936D);
+  }
+
+  &.priority-urgent-select {
+    border-color: #D5600A;
+    color: #D5600A;
+    background: #FFF8F0;
+  }
+
+  &.priority-critical-select {
+    border-color: #D5281B;
+    color: #D5281B;
+    background: #FFF5F5;
+  }
+}
+
+.dark-mode .priority-select {
+  background: rgba(30, 35, 50, 0.6);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--h, #e0e0e0);
+
+  &.priority-urgent-select {
+    border-color: #f59e0b;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+  }
+
+  &.priority-critical-select {
+    border-color: #ef4444;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+  }
+}
+
 // ─── AI Catch Me Up ────────────────────────────────────────────────────────
 
 .catch-me-up-btn {

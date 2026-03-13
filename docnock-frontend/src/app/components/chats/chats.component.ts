@@ -115,6 +115,8 @@ export class ChatsComponent {
   selectedChatTab: string = 'users'; // New property for Users/Groups tab
   roleTab: any = [];
   userList: any = [];
+  newChatSearchQuery: string = '';
+  selectedPriority: string = 'ROUTINE';
   groupList: any = [];
   grouppicture: any = '';
   activeGroup: any = '';
@@ -972,7 +974,12 @@ export class ChatsComponent {
     console.log("selecteduserfunciton", this.selecteduser);
   }
   openChatModal() {
+    this.newChatSearchQuery = '';
     this.showAddChatModal = true;
+  }
+
+  onNewChatSearch() {
+    this.getList(this.selectedTab, 10, 1, this.newChatSearchQuery);
   }
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -1648,6 +1655,7 @@ export class ChatsComponent {
   sendMessage() {
     console.log('check imagee else');
 
+    const messagePriority = this.selectedPriority;
     const messageImportant = this.isImportant;
     const outboundMessageText = this.buildOutgoingMessageText(this.message);
     const parsedOutgoing = this.parseReplyFromMessage(outboundMessageText);
@@ -1680,13 +1688,15 @@ export class ChatsComponent {
         conversationId: this.activeGroup.groupId,
         isDeleted: false,
         isImportant: messageImportant,
+        priority: messagePriority,
         messageId: messageId,
         status: 'SENT',
         replyMeta: replyMetaForMessage
       });
-      
+
       this.message = '';
       this.isImportant = false;
+      this.selectedPriority = 'ROUTINE';
       this.replyingTo = null;
       const tempImages = [...this.selectedimage];
       setTimeout(() => {
@@ -1718,7 +1728,8 @@ export class ChatsComponent {
           timestamp,
           uploadedImages,
           messageImportant,
-          messageId
+          messageId,
+          messagePriority
         );
       }).catch((error: any) => {
         console.error('Upload error:', error);
@@ -1883,9 +1894,9 @@ export class ChatsComponent {
     const timestamp = Date.now();
     const uid = Math.floor(Math.random() * 10000);
     const messageId = uid + timestamp;
-    
+    const msgPriority = this.selectedPriority;
 
-    
+
     this.messageList.push({
       message: displayMessageText,
       timestamp: timestamp,
@@ -1894,6 +1905,7 @@ export class ChatsComponent {
       conversationId: this.activeGroup.groupId,
       isDeleted: false,
       isImportant: this.isImportant,
+      priority: msgPriority,
       messageId: messageId,
       status: 'SENT',
       replyMeta: replyMeta
@@ -1904,10 +1916,12 @@ export class ChatsComponent {
       timestamp,
       attachments,
       this.isImportant,
-      messageId
+      messageId,
+      msgPriority
     );
     this.message = '';
-    this.isImportant = false
+    this.isImportant = false;
+    this.selectedPriority = 'ROUTINE'
     this.replyingTo = null;
     this.releaseSelectedImageUrls();
     setTimeout(() => {
@@ -1934,6 +1948,7 @@ export class ChatsComponent {
         senderID: res.senderID,
         group_name: res?.senderDetails?.fullName,
         isImportant: res.isImportant,
+        priority: res.priority || 'ROUTINE',
         messageId: res.messageId
       });
       if (this.activeGroup.groupId == res.groupId) {
@@ -3458,15 +3473,25 @@ export class ChatsComponent {
   searchMentions(query: string) {
     if (!this.activeGroup?.groupId) return;
     this.mentionLoading = true;
-    this.authService.getMentionableUsers(this.activeGroup.groupId, query).subscribe({
-      next: (res: any) => {
-        this.mentionResults = res.users || [];
-        this.mentionLoading = false;
-      },
-      error: () => {
-        this.mentionLoading = false;
-      }
-    });
+
+    // Use local group member data for instant, offline-capable mentions
+    const members = this.activeGroup.actualgroupmemberid || this.activeGroup.userIds || [];
+    const lowerQuery = (query || '').toLowerCase();
+    this.mentionResults = members
+      .filter((u: any) => {
+        const name = (u.fullName || u.name || '').toLowerCase();
+        const id = typeof u === 'string' ? u : (u._id || '');
+        // Exclude current user from mention list
+        if (id === this.loginId) return false;
+        return !lowerQuery || name.includes(lowerQuery);
+      })
+      .map((u: any) => ({
+        _id: u._id || u,
+        fullName: u.fullName || u.name || 'Unknown',
+        role: u.role || u.rolename || '',
+        profilePicture: u.profilePicture || null
+      }));
+    this.mentionLoading = false;
   }
 
   insertMention(user: any) {

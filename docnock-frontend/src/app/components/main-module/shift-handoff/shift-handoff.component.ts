@@ -61,10 +61,11 @@ export class ShiftHandoffComponent implements OnInit {
     this.authService.getHandoffs(params).subscribe({
       next: (res: any) => {
         if (res.success) {
-          const decrypted = res.encryptDatauserdata
-            ? this._coreService.decryptObjectData({ data: res.encryptDatauserdata })
-            : res.data;
-          this.handoffs = decrypted || [];
+          const encData = res.encryptDatauserdata || res.data;
+          const decrypted = (typeof encData === 'string')
+            ? this._coreService.decryptObjectData({ data: encData })
+            : encData;
+          this.handoffs = Array.isArray(decrypted) ? decrypted : [];
           this.totalRecords = res.totalRecords || 0;
           this.totalPages = res.totalPages || 0;
         }
@@ -125,7 +126,23 @@ export class ShiftHandoffComponent implements OnInit {
       return;
     }
     this.submitting = true;
-    this.authService.createHandoff(this.newHandoff).subscribe({
+
+    // Transform data to match backend API expectations
+    const payload: any = {
+      unit: this.newHandoff.unit,
+      shiftType: this.newHandoff.shiftType,
+      shiftDate: new Date().toISOString(),
+      generalNotes: this.newHandoff.notes,
+      patients: this.newHandoff.patients.map((p: any) => ({
+        patientName: p.name,
+        roomBed: p.room,
+        diagnosis: p.diagnosis,
+        medications: p.medications ? p.medications.split(',').map((m: string) => ({ name: m.trim() })) : [],
+        nursingNotes: p.notes,
+      })),
+    };
+
+    this.authService.createHandoff(payload).subscribe({
       next: (res: any) => {
         if (res.success) {
           this.toastr.success('Handoff created successfully');

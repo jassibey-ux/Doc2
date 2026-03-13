@@ -31,6 +31,9 @@
         <button class="btn-ghost" (click)="viewSubmissions(t._id!)" title="Submissions">
           <i class="bx bx-list-ul"></i>
         </button>
+        <button class="btn-ghost" (click)="openSendForm(t._id!)" title="Send Form">
+          <i class="bx bx-send"></i>
+        </button>
         <button class="btn-ghost btn-danger" (click)="deleteTemplate(t._id!)" title="Deactivate">
           <i class="bx bx-trash"></i>
         </button>
@@ -66,45 +69,47 @@
           </button>
         </div>
 
-        <div class="field-item" *ngFor="let field of builderFields; let i = index; trackBy: trackByIndex">
-          <div class="field-drag-handle">
-            <button class="btn-icon" (click)="moveField(i, 'up')" [disabled]="i === 0">
-              <i class="bx bx-chevron-up"></i>
-            </button>
-            <span class="field-number">{{ i + 1 }}</span>
-            <button class="btn-icon" (click)="moveField(i, 'down')" [disabled]="i === builderFields.length - 1">
-              <i class="bx bx-chevron-down"></i>
-            </button>
-          </div>
-
-          <div class="field-config">
-            <div class="field-row">
-              <input type="text" [(ngModel)]="field.label" placeholder="Field label" class="form-input field-label-input" />
-              <select [(ngModel)]="field.type" class="form-input field-type-select">
-                <option *ngFor="let ft of fieldTypes" [value]="ft.value">{{ ft.label }}</option>
-              </select>
-              <label class="checkbox-label">
-                <input type="checkbox" [(ngModel)]="field.required" /> Required
-              </label>
-            </div>
-
-            <!-- Options for select/multiselect -->
-            <div class="options-area" *ngIf="field.type === 'select' || field.type === 'multiselect'">
-              <div class="option-row" *ngFor="let opt of field.options; let j = index; trackBy: trackByIndex">
-                <input type="text" [(ngModel)]="field.options[j]" placeholder="Option value" class="form-input option-input" />
-                <button class="btn-icon btn-danger" (click)="removeOption(field, j)">
-                  <i class="bx bx-x"></i>
-                </button>
-              </div>
-              <button class="btn-ghost" (click)="addOption(field)">
-                <i class="bx bx-plus"></i> Add Option
+        <div cdkDropList (cdkDropListDropped)="drop($event)" class="fields-list">
+          <div class="field-item" cdkDrag *ngFor="let field of builderFields; let i = index; trackBy: trackByField">
+            <div class="field-drag-handle" cdkDragHandle>
+              <button class="btn-icon" (click)="moveField(i, 'up')" [disabled]="i === 0">
+                <i class="bx bx-chevron-up"></i>
+              </button>
+              <i class="bx bx-grid-vertical drag-grip"></i>
+              <button class="btn-icon" (click)="moveField(i, 'down')" [disabled]="i === builderFields.length - 1">
+                <i class="bx bx-chevron-down"></i>
               </button>
             </div>
-          </div>
 
-          <button class="btn-icon btn-danger" (click)="removeField(i)" title="Remove field">
-            <i class="bx bx-trash"></i>
-          </button>
+            <div class="field-config">
+              <div class="field-row">
+                <input type="text" [(ngModel)]="field.label" placeholder="Field label" class="form-input field-label-input" />
+                <select [(ngModel)]="field.type" class="form-input field-type-select">
+                  <option *ngFor="let ft of fieldTypes" [value]="ft.value">{{ ft.label }}</option>
+                </select>
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="field.required" /> Required
+                </label>
+              </div>
+
+              <!-- Options for select/multiselect -->
+              <div class="options-area" *ngIf="field.type === 'select' || field.type === 'multiselect'">
+                <div class="option-row" *ngFor="let opt of field.options; let j = index; trackBy: trackByIndex">
+                  <input type="text" [(ngModel)]="field.options[j]" placeholder="Option value" class="form-input option-input" />
+                  <button class="btn-icon btn-danger" (click)="removeOption(field, j)">
+                    <i class="bx bx-x"></i>
+                  </button>
+                </div>
+                <button class="btn-ghost" (click)="addOption(field)">
+                  <i class="bx bx-plus"></i> Add Option
+                </button>
+              </div>
+            </div>
+
+            <button class="btn-icon btn-danger" (click)="removeField(i)" title="Remove field">
+              <i class="bx bx-trash"></i>
+            </button>
+          </div>
         </div>
 
         <div *ngIf="builderFields.length === 0" class="no-fields">
@@ -143,6 +148,39 @@
             <i class="bx bx-download"></i> PDF
           </a>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Conversation Picker Modal (Send Form) -->
+<div class="modal-backdrop" *ngIf="showConversationPicker" (click)="closeConversationPicker()">
+  <div class="modal-card" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Send Form to Conversation</h3>
+      <button class="btn-ghost" (click)="closeConversationPicker()"><i class="bx bx-x"></i></button>
+    </div>
+    <div class="picker-search">
+      <input
+        type="text"
+        class="form-input"
+        [(ngModel)]="conversationSearch"
+        (input)="onConversationSearch()"
+        placeholder="Search conversations..."
+      />
+    </div>
+    <div class="picker-list">
+      <div *ngIf="conversationLoading" class="picker-loading">Loading conversations...</div>
+      <div *ngIf="!conversationLoading && conversations.length === 0" class="picker-empty">
+        No conversations found
+      </div>
+      <div
+        class="picker-item"
+        *ngFor="let conv of conversations"
+        (click)="selectConversation(conv)"
+      >
+        <i class="bx bx-group"></i>
+        <span>{{ conv.groupName || conv.name || 'Unnamed conversation' }}</span>
       </div>
     </div>
   </div>
