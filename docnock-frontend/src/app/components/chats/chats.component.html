@@ -217,6 +217,9 @@
           <ng-container *ngIf="!userCallingparticipantInfo">
             <div class="action-items"
               *ngIf="activeGroup && (callstartedstatus?.participant==null || callstartedstatus?.participant.length==0)">
+              <a class="action-patient" title="Patient Context (PCC)" (click)="showPatientContext = true">
+                <i class='bx bx-body'></i>
+              </a>
               <a class="action-pin" title="Pinned Messages" (click)="togglePinnedPanel()">
                 <i class='bx bxs-pin'></i>
               </a>
@@ -1328,3 +1331,10 @@
     </div>
   </div>
 </div>
+
+<!-- Patient Context Panel (PCC) -->
+<app-patient-context-panel
+  [conversationId]="activeGroup?.groupId"
+  [visible]="showPatientContext"
+  (close)="showPatientContext = false"
+></app-patient-context-panel>

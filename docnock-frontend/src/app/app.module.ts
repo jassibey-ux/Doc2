@@ -60,6 +60,7 @@ import { MultiFacilityComponent } from './components/main-module/multi-facility/
 import { SsoSettingsComponent } from './components/main-module/sso-settings/sso-settings.component';
 import { ClinicalHubComponent } from './components/main-module/clinical-hub/clinical-hub.component';
 import { StaffHubComponent } from './components/main-module/staff-hub/staff-hub.component';
+import { PatientContextPanelComponent } from './components/main-module/patient-context-panel/patient-context-panel.component';
 
 @NgModule({
   declarations: [
@@ -102,6 +103,7 @@ import { StaffHubComponent } from './components/main-module/staff-hub/staff-hub.
     SsoSettingsComponent,
     ClinicalHubComponent,
     StaffHubComponent,
+    PatientContextPanelComponent,
   ],
   imports: [
     BrowserModule,

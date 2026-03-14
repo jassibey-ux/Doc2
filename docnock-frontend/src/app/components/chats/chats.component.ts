@@ -82,6 +82,7 @@ export class ChatsComponent {
   assignedDates = new Set();
   searchgroupname: any = ''
   userCallingparticipantInfo:boolean = false;
+  showPatientContext = false;
 
   constructor(
     private route: ActivatedRoute,

@@ -1,0 +1,138 @@
+<div class="pcc-panel-backdrop" *ngIf="visible" (click)="closePanel()"></div>
+<div class="pcc-panel" [class.open]="visible">
+  <!-- Header -->
+  <div class="pcc-header">
+    <h4>Patient Context</h4>
+    <button class="pcc-close" (click)="closePanel()"><i class="bx bx-x"></i></button>
+  </div>
+
+  <div class="pcc-body" *ngIf="!showSearch">
+    <!-- Loading -->
+    <div class="pcc-loader" *ngIf="loading">
+      <i class="bx bx-loader-alt bx-spin"></i>
+      <span>Loading patient data...</span>
+    </div>
+
+    <!-- No patient linked -->
+    <div class="pcc-empty" *ngIf="!loading && !patientLink">
+      <i class="bx bx-link-alt pcc-empty-icon"></i>
+      <h5>No Patient Linked</h5>
+      <p>Link a PointClickCare patient to see their clinical context in this conversation.</p>
+      <button class="pcc-btn-primary" (click)="openSearch()">
+        <i class="bx bx-search"></i> Link a Patient
+      </button>
+    </div>
+
+    <!-- Patient linked -->
+    <div class="pcc-content" *ngIf="!loading && patientLink">
+      <!-- Patient card -->
+      <div class="pcc-patient-card">
+        <div class="pcc-patient-info">
+          <div class="pcc-patient-avatar">
+            {{ (patientLink.patientName || 'U')[0] }}
+          </div>
+          <div>
+            <h5>{{ patientLink.patientName || 'Unknown Patient' }}</h5>
+            <span class="pcc-patient-id">PCC ID: {{ patientLink.pccPatientId }}</span>
+          </div>
+        </div>
+        <div class="pcc-patient-actions">
+          <button class="pcc-btn-outline" (click)="openSearch()">
+            <i class="bx bx-refresh"></i> Change
+          </button>
+          <button class="pcc-btn-danger-text" (click)="unlinkPatient()">Unlink</button>
+        </div>
+      </div>
+
+      <!-- Summary unavailable -->
+      <div class="pcc-no-summary" *ngIf="!summary">
+        <p>Clinical summary unavailable from PointClickCare.</p>
+        <button class="pcc-btn-outline" (click)="loadPatientContext()">
+          <i class="bx bx-refresh"></i> Retry
+        </button>
+      </div>
+
+      <!-- Demographics -->
+      <div class="pcc-section" *ngIf="summary?.demographics">
+        <h6><i class="bx bx-user"></i> Demographics</h6>
+        <div class="pcc-field" *ngIf="summary?.demographics?.birthDate">
+          <span class="pcc-label">DOB</span>
+          <span class="pcc-value">{{ summary?.demographics?.birthDate }}</span>
+        </div>
+        <div class="pcc-field" *ngIf="summary?.demographics?.gender">
+          <span class="pcc-label">Gender</span>
+          <span class="pcc-value">{{ summary?.demographics?.gender }}</span>
+        </div>
+        <div class="pcc-field" *ngIf="summary?.demographics?.roomBed">
+          <span class="pcc-label">Room/Bed</span>
+          <span class="pcc-value">{{ summary?.demographics?.roomBed }}</span>
+        </div>
+        <div class="pcc-field" *ngIf="summary?.demographics?.admissionDate">
+          <span class="pcc-label">Admitted</span>
+          <span class="pcc-value">{{ summary?.demographics?.admissionDate }}</span>
+        </div>
+      </div>
+
+      <!-- Medications -->
+      <div class="pcc-section" *ngIf="summary?.medications?.length">
+        <h6><i class="bx bx-capsule"></i> Active Medications</h6>
+        <div class="pcc-med" *ngFor="let med of (summary?.medications || []).slice(0, 5)">
+          <span class="pcc-med-name">{{ med.drugName || med.description }}</span>
+          <span class="pcc-med-dose" *ngIf="med.dosage">{{ med.dosage }}</span>
+        </div>
+        <span class="pcc-more" *ngIf="(summary?.medications?.length || 0) > 5">
+          +{{ (summary?.medications?.length || 0) - 5 }} more
+        </span>
+      </div>
+
+      <!-- Vitals -->
+      <div class="pcc-section" *ngIf="summary?.vitals?.length">
+        <h6><i class="bx bx-heart"></i> Recent Vitals</h6>
+        <div class="pcc-vital" *ngFor="let vital of (summary?.vitals || []).slice(0, 4)">
+          <span class="pcc-vital-type">{{ vital.type }}</span>
+          <span class="pcc-vital-value">{{ vital.value }} {{ vital.unit }}</span>
+          <span class="pcc-vital-date">{{ formatDate(vital.recordedAt) }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search overlay -->
+  <div class="pcc-search" *ngIf="showSearch">
+    <div class="pcc-search-header">
+      <h5>Search Patients</h5>
+      <button class="pcc-btn-text" (click)="closeSearch()">Cancel</button>
+    </div>
+    <div class="pcc-search-bar">
+      <input
+        type="text"
+        [(ngModel)]="searchQuery"
+        placeholder="Patient name..."
+        (keydown.enter)="searchPatients()"
+        autofocus
+      />
+      <button class="pcc-btn-primary" (click)="searchPatients()" [disabled]="searchLoading">
+        <i class="bx" [ngClass]="searchLoading ? 'bx-loader-alt bx-spin' : 'bx-search'"></i>
+      </button>
+    </div>
+    <div class="pcc-search-results">
+      <div
+        class="pcc-search-item"
+        *ngFor="let patient of searchResults"
+        (click)="linkPatient(patient)"
+      >
+        <div class="pcc-search-item-avatar">{{ (patient.name || patient.fullName || '?')[0] }}</div>
+        <div>
+          <span class="pcc-search-item-name">{{ patient.name || patient.fullName }}</span>
+          <span class="pcc-search-item-meta">
+            <ng-container *ngIf="patient.birthDate">DOB: {{ patient.birthDate }}</ng-container>
+            <ng-container *ngIf="patient.patientId"> · ID: {{ patient.patientId }}</ng-container>
+          </span>
+        </div>
+      </div>
+      <div class="pcc-search-empty" *ngIf="searchResults.length === 0 && searchQuery.trim() && !searchLoading">
+        No patients found for "{{ searchQuery }}"
+      </div>
+    </div>
+  </div>
+</div>
