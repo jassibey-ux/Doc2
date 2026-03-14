@@ -219,23 +219,20 @@ exports = module.exports = function (io) {
   // Use Redis adapter for scaling
   io.adapter(createAdapter(pub, sub));
 
-  // Socket.IO authentication middleware
+  // Socket.IO authentication middleware — ENFORCED
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth?.token || socket.handshake.query?.token;
       if (!token) {
-        // Allow unauthenticated connections for backwards compatibility during migration
-        // TODO: After all clients are updated, change this to: return next(new Error("Authentication required"));
-        return next();
+        return next(new Error("Authentication required"));
       }
       const decoded = jwt.verify(token, config.JWT_SECRET);
       socket.userId = decoded.userId;
       socket.userRole = decoded.role;
       next();
     } catch (err) {
-      // Allow connection but log the failure — during migration period
-      console.warn("Socket auth failed:", err.message);
-      next();
+      console.warn("Socket auth rejected:", err.message);
+      return next(new Error("Invalid or expired token"));
     }
   });
 

@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import bodyParser from "body-parser";
 import routes from "./src/AllRoutes";
 import { ensureAuthorized } from "./src/middleware/authMiddleware";
@@ -32,6 +33,24 @@ const io = require("socket.io")(SOCKETPORT, {
 });
 
 const app = express();
+
+// Security headers (XSS, clickjacking, MIME-sniffing, etc.)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: ["'self'", "wss:", "ws:"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Allow cross-origin resources (Agora, etc.)
+}));
+
 app.use(bodyParser.json({ limit: "50MB" }));
 app.use(bodyParser.json());
 app.use(
@@ -83,6 +102,16 @@ app.get("/health", (req, res) => {
 
 app.use("/api/v1", ensureAuthorized, routes(express));
 
+// Global error handler — catch unhandled Express errors
+app.use((err, req, res, _next) => {
+  const status = err.status || 500;
+  const message = env === "production" ? "Internal server error" : err.message;
+  if (status >= 500) {
+    console.error("Unhandled error:", err.stack || err);
+  }
+  res.status(status).json({ success: false, message });
+});
+
 const server = http.createServer(app);
 
 server.listen(port, () => {
@@ -90,4 +119,15 @@ server.listen(port, () => {
 });
 app.set("io", io);
 require('./Socket')(io);
+
+// Catch unhandled promise rejections
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+  process.exit(1);
+});
+
 export default app;

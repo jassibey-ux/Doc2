@@ -12,6 +12,7 @@ import {
   seedSystemConfig,
 } from "./Controller";
 import rateLimit from "express-rate-limit";
+import { requireRole, ROLES } from "../middleware/rbacMiddleware";
 
 // Rate limiter for admin endpoints — 100 requests per 15 min window
 const adminRateLimiter = rateLimit({
@@ -44,28 +45,32 @@ const validateConfigKey = (req, res, next) => {
 };
 
 export default (router) => {
+  // All admin routes require superadmin or sub_admin role
+  const adminOnly = requireRole(...ROLES.ADMIN);
+
   // Integration health monitor
-  router.get("/admin/integrations/health", adminRateLimiter, getIntegrationHealth);
+  router.get("/admin/integrations/health", adminRateLimiter, adminOnly, getIntegrationHealth);
 
   // System status
-  router.get("/admin/system/status", adminRateLimiter, getSystemStatus);
+  router.get("/admin/system/status", adminRateLimiter, adminOnly, getSystemStatus);
 
   // Session management
-  router.get("/admin/sessions/active", adminRateLimiter, getActiveSessions);
-  router.post("/admin/sessions/revoke", adminWriteRateLimiter, revokeSession);
+  router.get("/admin/sessions/active", adminRateLimiter, adminOnly, getActiveSessions);
+  router.post("/admin/sessions/revoke", adminWriteRateLimiter, adminOnly, revokeSession);
 
   // Audit logs
-  router.get("/admin/audit-logs", adminRateLimiter, getAuditLogs);
-  router.get("/admin/audit-logs/actions", adminRateLimiter, getAuditLogActions);
+  router.get("/admin/audit-logs", adminRateLimiter, adminOnly, getAuditLogs);
+  router.get("/admin/audit-logs/actions", adminRateLimiter, adminOnly, getAuditLogActions);
 
   // Security
-  router.get("/admin/security/failed-logins", adminRateLimiter, getFailedLogins);
+  router.get("/admin/security/failed-logins", adminRateLimiter, adminOnly, getFailedLogins);
 
-  // System configuration — validate key format to prevent path traversal
-  router.get("/admin/system-config", adminRateLimiter, getSystemConfig);
-  router.put("/admin/system-config/:key", adminWriteRateLimiter, validateConfigKey, updateSystemConfig);
-  router.post("/admin/system-config/seed", adminWriteRateLimiter, seedSystemConfig);
-  router.post("/admin/system-config/:key/reset", adminWriteRateLimiter, validateConfigKey, resetSystemConfig);
+  // System configuration — superadmin only for config changes
+  const superadminOnly = requireRole(...ROLES.SUPERADMIN_ONLY);
+  router.get("/admin/system-config", adminRateLimiter, adminOnly, getSystemConfig);
+  router.put("/admin/system-config/:key", adminWriteRateLimiter, superadminOnly, validateConfigKey, updateSystemConfig);
+  router.post("/admin/system-config/seed", adminWriteRateLimiter, superadminOnly, seedSystemConfig);
+  router.post("/admin/system-config/:key/reset", adminWriteRateLimiter, superadminOnly, validateConfigKey, resetSystemConfig);
 
   return router;
 };

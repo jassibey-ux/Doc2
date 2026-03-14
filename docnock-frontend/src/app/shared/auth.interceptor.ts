@@ -7,16 +7,20 @@ import {
   HttpErrorResponse
 } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { catchError, finalize } from 'rxjs/operators';
+import { catchError, finalize, timeout } from 'rxjs/operators';
 import { AuthServiceService } from '../services/auth-service.service';
+import { Router } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
 import { GlobalLoaderService } from '../services/global-loader.service';
 
 @Injectable()
 export class AuthInterceptor implements HttpInterceptor {
 
+  private readonly REQUEST_TIMEOUT = 30000; // 30 seconds
+
   constructor(
     private authService: AuthServiceService,
+    private router: Router,
     private toastr: ToastrService,
     private globalLoader: GlobalLoaderService
   ) {}
@@ -38,16 +42,51 @@ export class AuthInterceptor implements HttpInterceptor {
     }
 
     return next.handle(requestToSend).pipe(
-      catchError((error: HttpErrorResponse) => {
+      timeout(this.REQUEST_TIMEOUT),
+      catchError((error: HttpErrorResponse | any) => {
 
-        // 🔴 401 delete account case (global handling)
-        if (
-          error.status === 401 &&
-          error.error?.message === 'delete_account'
-        ) {
+        // Timeout error
+        if (error?.name === 'TimeoutError') {
+          this.toastr.error('Request timed out. Please try again.');
+          return throwError(() => error);
+        }
+
+        // Network error (no internet, server unreachable)
+        if (error.status === 0) {
+          this.toastr.error('Unable to connect to server. Check your connection.');
+          return throwError(() => error);
+        }
+
+        // 401 Unauthorized — session expired or deleted account
+        if (error.status === 401) {
+          if (error.error?.message === 'delete_account') {
+            this.toastr.error('Your account has been deleted. You have been logged out.');
+          } else if (error.error?.message === 'status_inactive') {
+            this.toastr.error('Your account has been deactivated.');
+          } else {
+            this.toastr.warning('Session expired. Please log in again.');
+          }
           this.authService.logout();
-          const message = 'Your account has been deleted. You have been logged out.';
-          this.toastr.error(message);
+          this.router.navigate(['/login'], { replaceUrl: true });
+          return throwError(() => error);
+        }
+
+        // 403 Forbidden — insufficient permissions
+        if (error.status === 403) {
+          this.toastr.error('You do not have permission to perform this action.');
+          return throwError(() => error);
+        }
+
+        // 429 Too Many Requests
+        if (error.status === 429) {
+          this.toastr.warning('Too many requests. Please wait and try again.');
+          return throwError(() => error);
+        }
+
+        // 500+ Server errors
+        if (error.status >= 500) {
+          this.toastr.error('Server error. Please try again later.');
+          return throwError(() => error);
         }
 
         return throwError(() => error);
