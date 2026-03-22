@@ -35,6 +35,9 @@ import { MultiFacilityComponent } from './components/main-module/multi-facility/
 import { SsoSettingsComponent } from './components/main-module/sso-settings/sso-settings.component';
 import { ClinicalHubComponent } from './components/main-module/clinical-hub/clinical-hub.component';
 import { StaffHubComponent } from './components/main-module/staff-hub/staff-hub.component';
+import { FamilyPortalAdminComponent } from './components/main-module/family-portal-admin/family-portal-admin.component';
+import { AiAssistantComponent } from './components/main-module/ai-assistant/ai-assistant.component';
+import { AiTemplatesComponent } from './components/main-module/ai-templates/ai-templates.component';
 
 const routes: Routes = [
   { path: 'login', component: LoginComponent, canActivate: [AuthGuardLogin] },
@@ -76,6 +79,9 @@ const routes: Routes = [
       { path: 'patient-board', component: PatientStatusBoardComponent },
       { path: 'facilities', component: MultiFacilityComponent },
       { path: 'sso-settings', component: SsoSettingsComponent },
+      { path: 'family-portal', component: FamilyPortalAdminComponent },
+      { path: 'ai-assistant', component: AiAssistantComponent },
+      { path: 'ai-templates', component: AiTemplatesComponent },
     ],
     canActivate: [AuthGuard],
   },

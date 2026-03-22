@@ -11,7 +11,7 @@ const patientFamilyLinkSchema = mongoose.Schema(
     familyUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      default: null,
       index: true,
     },
     invitedBy: {
@@ -21,8 +21,18 @@ const patientFamilyLinkSchema = mongoose.Schema(
     },
     relationshipType: {
       type: String,
-      enum: ["spouse", "parent", "child", "sibling", "guardian", "other"],
+      enum: ["spouse", "parent", "child", "sibling", "guardian", "power_of_attorney", "other"],
       default: "other",
+    },
+    pocUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    familyChatConversationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Conversation",
+      default: null,
     },
     familyEmail: {
       type: String,

@@ -1,0 +1,295 @@
+$primary: #005EB8;
+$primary-light: #E3F0FF;
+$text-primary: #212121;
+$text-secondary: #757575;
+$border: #E8E8E8;
+$bg: #F5F5F5;
+$success: #007F3B;
+
+.health-container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+// ─── Loading & Empty ─────────────────────────────────────────────────────────
+.health-loading, .health-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 32px;
+  text-align: center;
+  color: $text-secondary;
+
+  i { font-size: 56px; color: #D0D0D0; margin-bottom: 16px; }
+  h3 { font-size: 18px; font-weight: 600; color: $text-primary; margin: 0 0 8px; }
+  p { font-size: 14px; max-width: 300px; line-height: 1.5; }
+}
+
+// ─── Health Content ──────────────────────────────────────────────────────────
+.health-header-card {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 16px 20px;
+  border: 1px solid $border;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.patient-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  > i {
+    font-size: 44px;
+    color: $primary;
+  }
+
+  h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: $text-primary;
+    margin: 0;
+  }
+}
+
+.health-subtitle {
+  font-size: 13px;
+  color: $text-secondary;
+}
+
+.refresh-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid $border;
+  border-radius: 50%;
+  background: #FFFFFF;
+  color: $primary;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  transition: transform 0.3s ease;
+
+  &:hover { transform: rotate(180deg); }
+}
+
+// Error Banner
+.health-error-banner {
+  background: #FFF3E0;
+  border: 1px solid #FFE0B2;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #E65100;
+
+  i { font-size: 18px; }
+}
+
+// Last Updated
+.last-updated {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: $text-secondary;
+  padding: 0 4px;
+  margin-bottom: 16px;
+
+  i { font-size: 14px; }
+}
+
+// ─── Sections ────────────────────────────────────────────────────────────────
+.health-section {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid $border;
+  margin-bottom: 12px;
+
+  h4 {
+    font-size: 16px;
+    font-weight: 600;
+    color: $text-primary;
+    margin: 0 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    i { color: $primary; font-size: 20px; }
+  }
+}
+
+// ─── Vitals Grid ─────────────────────────────────────────────────────────────
+.vitals-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.vital-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: $bg;
+  border-radius: 10px;
+}
+
+.vital-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: $primary-light;
+  color: $primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.vital-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vital-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: $text-secondary;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.vital-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.vital-unit {
+  font-size: 12px;
+  font-weight: 400;
+  color: $text-secondary;
+}
+
+.vital-date {
+  font-size: 10px;
+  color: $text-secondary;
+}
+
+// ─── Medications List ────────────────────────────────────────────────────────
+.medications-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.med-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: $bg;
+  border-radius: 10px;
+}
+
+.med-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #E8F5E9;
+  color: $success;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.med-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.med-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.med-dosage {
+  font-size: 13px;
+  color: $text-secondary;
+}
+
+.med-frequency {
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.med-status {
+  font-size: 11px;
+  font-weight: 500;
+  color: $success;
+  background: #E8F5E9;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.no-data {
+  font-size: 14px;
+  color: $text-secondary;
+  text-align: center;
+  padding: 20px;
+}
+
+// ─── Disclaimer ──────────────────────────────────────────────────────────────
+.health-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  background: $primary-light;
+  border-radius: 8px;
+  margin-top: 4px;
+
+  i {
+    font-size: 16px;
+    color: $primary;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+
+  p {
+    font-size: 12px;
+    color: $text-secondary;
+    margin: 0;
+    line-height: 1.5;
+  }
+}
+
+// ─── Responsive ──────────────────────────────────────────────────────────────
+@media (max-width: 480px) {
+  .vitals-grid {
+    grid-template-columns: 1fr;
+  }
+}

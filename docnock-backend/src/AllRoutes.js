@@ -25,6 +25,8 @@ export default function (express) {
   require("./clinicalManagement/Route").default(router);
   /* Admin Management */
   require("./adminManagement/Route").default(router);
+  /* Facility Management */
+  require("./facilityManagement/Route").default(router);
 
   return router;
 }

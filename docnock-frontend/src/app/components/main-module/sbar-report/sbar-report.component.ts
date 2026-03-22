@@ -1,14 +1,16 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ToastrService } from 'ngx-toastr';
+import { Subscription } from 'rxjs';
 import { AuthServiceService } from 'src/app/services/auth-service.service';
 import { CoreService } from 'src/app/shared/core.service';
+import { FacilityContextService } from 'src/app/services/facility-context.service';
 
 @Component({
   selector: 'app-sbar-report',
   templateUrl: './sbar-report.component.html',
   styleUrls: ['./sbar-report.component.scss'],
 })
-export class SbarReportComponent implements OnInit {
+export class SbarReportComponent implements OnInit, OnDestroy {
   sbars: any[] = [];
   loading = true;
   totalRecords = 0;
@@ -44,14 +46,24 @@ export class SbarReportComponent implements OnInit {
   statuses = ['sent', 'submitted', 'acknowledged', 'resolved'];
   priorities = ['ROUTINE', 'URGENT', 'CRITICAL'];
 
+  private facilitySub!: Subscription;
+
   constructor(
     private authService: AuthServiceService,
     private toastr: ToastrService,
-    private _coreService: CoreService
+    private _coreService: CoreService,
+    private facilityContext: FacilityContextService
   ) {}
 
   ngOnInit(): void {
-    this.loadSbars();
+    this.facilitySub = this.facilityContext.activeFacility$.subscribe(() => {
+      this.currentPage = 1;
+      this.loadSbars();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.facilitySub?.unsubscribe();
   }
 
   loadSbars() {
@@ -62,6 +74,8 @@ export class SbarReportComponent implements OnInit {
     };
     if (this.statusFilter) params['status'] = this.statusFilter;
     if (this.priorityFilter) params['priority'] = this.priorityFilter;
+    const facilityId = this.facilityContext.currentFacilityId;
+    if (facilityId) params['facilityId'] = facilityId;
 
     this.authService.getSbars(params).subscribe({
       next: (res: any) => {

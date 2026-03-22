@@ -1,0 +1,91 @@
+<div class="ai-assistant">
+  <div class="page-header">
+    <div class="header-info">
+      <h2><i class="bx bxs-bot"></i> AI Document Assistant</h2>
+      <p class="subtitle">Paste or upload clinical documents and ask AI questions about them.</p>
+    </div>
+    <button class="btn-clear" (click)="clearAll()" *ngIf="documentText || history.length">
+      <i class="bx bx-reset"></i> Clear All
+    </button>
+  </div>
+
+  <div class="assistant-layout">
+    <!-- Document Panel -->
+    <div class="document-panel">
+      <div class="panel-header">
+        <h3>Document</h3>
+        <div class="panel-actions">
+          <span class="char-count" *ngIf="documentText">{{ charCount | number }} chars</span>
+          <label class="upload-btn">
+            <i class="bx bx-upload"></i> Upload .txt
+            <input type="file" accept=".txt,.csv,.log,.md" (change)="onFileSelected($event)" hidden />
+          </label>
+        </div>
+      </div>
+      <div class="file-badge" *ngIf="fileName">
+        <i class="bx bx-file"></i> {{ fileName }}
+        <button (click)="fileName = ''; documentText = ''"><i class="bx bx-x"></i></button>
+      </div>
+      <textarea
+        class="document-textarea"
+        [(ngModel)]="documentText"
+        placeholder="Paste clinical document text here (chart notes, lab results, treatment plans, etc.)..."
+        rows="16"
+      ></textarea>
+    </div>
+
+    <!-- Query Panel -->
+    <div class="query-panel">
+      <div class="panel-header">
+        <h3>Ask a Question</h3>
+      </div>
+      <div class="query-input-row">
+        <input
+          type="text"
+          class="question-input"
+          [(ngModel)]="question"
+          placeholder="e.g. What medications is the patient on?"
+          (keyup.enter)="askQuestion()"
+          [disabled]="loading"
+          maxlength="500"
+        />
+        <button class="btn-ask" (click)="askQuestion()" [disabled]="loading || !documentText.trim() || !question.trim()">
+          <i class="bx" [ngClass]="loading ? 'bx-loader-alt bx-spin' : 'bx-send'"></i>
+          <span *ngIf="!loading">Ask AI</span>
+          <span *ngIf="loading">Thinking...</span>
+        </button>
+      </div>
+
+      <!-- Current Answer -->
+      <div class="answer-panel" *ngIf="answer">
+        <div class="answer-header">
+          <i class="bx bxs-bot"></i>
+          <span>AI Response</span>
+        </div>
+        <div class="answer-content">{{ answer }}</div>
+      </div>
+
+      <!-- Empty State -->
+      <div class="empty-state" *ngIf="!answer && !loading && history.length === 0">
+        <i class="bx bx-bulb"></i>
+        <p>Paste a document on the left, then ask any question about it.</p>
+        <div class="example-questions">
+          <span class="example" (click)="question = 'Summarize the key findings'">Summarize the key findings</span>
+          <span class="example" (click)="question = 'What are the action items?'">What are the action items?</span>
+          <span class="example" (click)="question = 'List all medications mentioned'">List all medications mentioned</span>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div class="history-section" *ngIf="history.length > 1">
+        <h4>Previous Questions</h4>
+        <div class="history-list">
+          <div class="history-item" *ngFor="let item of history; let i = index" [class.hidden]="i === 0">
+            <div class="history-q"><i class="bx bx-user"></i> {{ item.question }}</div>
+            <div class="history-a"><i class="bx bxs-bot"></i> {{ item.answer }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

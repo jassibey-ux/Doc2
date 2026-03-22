@@ -1,0 +1,297 @@
+<div class="family-admin-container">
+  <div class="page-header">
+    <h2>Family Portal Management</h2>
+    <p>Manage family member access, invitations, and engagement for your facility.</p>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon blue"><i class="bx bx-group"></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ totalFamilies }}</span>
+        <span class="stat-label">Total Families</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon green"><i class="bx bx-check-circle"></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ activeLinks }}</span>
+        <span class="stat-label">Active Links</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon orange"><i class="bx bx-time"></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ pendingInvites }}</span>
+        <span class="stat-label">Pending Invites</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon red"><i class="bx bx-x-circle"></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ revokedLinks }}</span>
+        <span class="stat-label">Revoked</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <div class="search-box">
+        <i class="bx bx-search"></i>
+        <input
+          type="text"
+          placeholder="Search by name or email..."
+          (input)="onSearch($event)"
+        />
+      </div>
+
+      <select class="filter-select" [(ngModel)]="statusFilter" (change)="onFilterChange()">
+        <option value="">All Statuses</option>
+        <option value="active">Active</option>
+        <option value="pending">Pending</option>
+        <option value="revoked">Revoked</option>
+      </select>
+
+      <select class="filter-select" [(ngModel)]="relationshipFilter" (change)="onFilterChange()">
+        <option value="">All Relationships</option>
+        <option *ngFor="let rel of relationshipOptions" [value]="rel.value">{{ rel.label }}</option>
+      </select>
+    </div>
+
+    <button class="btn-invite" (click)="openInviteModal()">
+      <i class="bx bx-plus"></i> Invite Family Member
+    </button>
+  </div>
+
+  <!-- Table -->
+  <div class="table-container">
+    <div class="loading-overlay" *ngIf="loading">
+      <i class="bx bx-loader-alt bx-spin"></i>
+    </div>
+
+    <table mat-table [dataSource]="dataSource" class="family-table">
+      <!-- Patient Column -->
+      <ng-container matColumnDef="patient">
+        <th mat-header-cell *matHeaderCellDef>Patient</th>
+        <td mat-cell *matCellDef="let link">
+          <span class="patient-name">{{ getPatientName(link) }}</span>
+        </td>
+      </ng-container>
+
+      <!-- Family Member Column -->
+      <ng-container matColumnDef="familyMember">
+        <th mat-header-cell *matHeaderCellDef>Family Member</th>
+        <td mat-cell *matCellDef="let link">
+          <div class="family-member-cell">
+            <div class="member-avatar">{{ getInitial(getFamilyName(link)) }}</div>
+            <div class="member-details">
+              <span class="member-name">{{ getFamilyName(link) }}</span>
+              <span class="member-email">{{ getFamilyEmail(link) }}</span>
+            </div>
+          </div>
+        </td>
+      </ng-container>
+
+      <!-- Relationship Column -->
+      <ng-container matColumnDef="relationship">
+        <th mat-header-cell *matHeaderCellDef>Relationship</th>
+        <td mat-cell *matCellDef="let link">
+          {{ getRelationshipLabel(link.relationshipType) }}
+        </td>
+      </ng-container>
+
+      <!-- Access Level Column -->
+      <ng-container matColumnDef="accessLevel">
+        <th mat-header-cell *matHeaderCellDef>Access</th>
+        <td mat-cell *matCellDef="let link">
+          <span class="access-badge" [attr.data-level]="link.accessLevel">
+            {{ link.accessLevel === 'two_way' ? 'Two-Way' : 'Read Only' }}
+          </span>
+        </td>
+      </ng-container>
+
+      <!-- Status Column -->
+      <ng-container matColumnDef="status">
+        <th mat-header-cell *matHeaderCellDef>Status</th>
+        <td mat-cell *matCellDef="let link">
+          <span class="status-badge" [ngClass]="getStatusClass(link)">
+            {{ getStatusLabel(link) }}
+          </span>
+        </td>
+      </ng-container>
+
+      <!-- Actions Column -->
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef>Actions</th>
+        <td mat-cell *matCellDef="let link">
+          <div class="action-buttons">
+            <button class="action-btn" (click)="openEditModal(link)" title="Edit">
+              <i class="bx bx-edit"></i>
+            </button>
+            <button
+              class="action-btn"
+              *ngIf="!link.magicLinkUsed && link.isActive"
+              (click)="resendInvite(link)"
+              title="Resend Invite"
+            >
+              <i class="bx bx-send"></i>
+            </button>
+            <button
+              class="action-btn danger"
+              *ngIf="link.isActive"
+              (click)="openRevokeConfirm(link)"
+              title="Revoke Access"
+            >
+              <i class="bx bx-block"></i>
+            </button>
+          </div>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+
+    <!-- Empty State -->
+    <div class="table-empty" *ngIf="!loading && dataSource.data.length === 0">
+      <i class="bx bx-user-plus"></i>
+      <p>No family links found. Invite a family member to get started.</p>
+    </div>
+
+    <mat-paginator
+      *ngIf="totalItems > pageSize"
+      [length]="totalItems"
+      [pageSize]="pageSize"
+      [pageSizeOptions]="[10, 20, 50]"
+      (page)="onPageChange($event)"
+      showFirstLastButtons
+    ></mat-paginator>
+  </div>
+</div>
+
+<!-- Invite Modal -->
+<div class="modal-overlay" *ngIf="showInviteModal" (click)="closeInviteModal()">
+  <div class="modal-card" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3><i class="bx bx-user-plus"></i> Invite Family Member</h3>
+      <button class="modal-close" (click)="closeInviteModal()"><i class="bx bx-x"></i></button>
+    </div>
+
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Patient Conversation ID</label>
+        <input type="text" [(ngModel)]="inviteForm.conversationId" placeholder="Conversation ID for patient" />
+      </div>
+
+      <div class="form-group">
+        <label>Family Member Name</label>
+        <input type="text" [(ngModel)]="inviteForm.familyName" placeholder="Full name" />
+      </div>
+
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" [(ngModel)]="inviteForm.familyEmail" placeholder="family@example.com" />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group half">
+          <label>Relationship</label>
+          <select [(ngModel)]="inviteForm.relationshipType">
+            <option *ngFor="let rel of relationshipOptions" [value]="rel.value">{{ rel.label }}</option>
+          </select>
+        </div>
+        <div class="form-group half">
+          <label>Access Level</label>
+          <select [(ngModel)]="inviteForm.accessLevel">
+            <option value="read_only">Read Only</option>
+            <option value="two_way">Two-Way</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-error" *ngIf="inviteError">
+        <i class="bx bx-error-circle"></i> {{ inviteError }}
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closeInviteModal()">Cancel</button>
+      <button class="btn-primary" (click)="submitInvite()" [disabled]="inviteSending">
+        <i class="bx bx-loader-alt bx-spin" *ngIf="inviteSending"></i>
+        {{ inviteSending ? 'Sending...' : 'Send Invitation' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" *ngIf="showEditModal" (click)="closeEditModal()">
+  <div class="modal-card" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3><i class="bx bx-edit"></i> Edit Family Link</h3>
+      <button class="modal-close" (click)="closeEditModal()"><i class="bx bx-x"></i></button>
+    </div>
+
+    <div class="modal-body">
+      <div class="edit-info">
+        <span class="edit-label">Family Member:</span>
+        <span>{{ getFamilyName(selectedLink) }}</span>
+      </div>
+      <div class="edit-info">
+        <span class="edit-label">Patient:</span>
+        <span>{{ getPatientName(selectedLink) }}</span>
+      </div>
+
+      <div class="form-group">
+        <label>Relationship</label>
+        <select [(ngModel)]="editForm.relationshipType">
+          <option *ngFor="let rel of relationshipOptions" [value]="rel.value">{{ rel.label }}</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Access Level</label>
+        <select [(ngModel)]="editForm.accessLevel">
+          <option value="read_only">Read Only</option>
+          <option value="two_way">Two-Way</option>
+        </select>
+      </div>
+
+      <div class="form-error" *ngIf="editError">
+        <i class="bx bx-error-circle"></i> {{ editError }}
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closeEditModal()">Cancel</button>
+      <button class="btn-primary" (click)="submitEdit()" [disabled]="editSending">
+        {{ editSending ? 'Saving...' : 'Save Changes' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Revoke Confirmation -->
+<div class="modal-overlay" *ngIf="showRevokeConfirm" (click)="closeRevokeConfirm()">
+  <div class="modal-card modal-sm" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3><i class="bx bx-error-circle danger-icon"></i> Revoke Access</h3>
+    </div>
+
+    <div class="modal-body">
+      <p class="revoke-warning">
+        Are you sure you want to revoke access for
+        <strong>{{ getFamilyName(selectedLink) }}</strong>?
+        They will no longer be able to view updates, chat, or request video visits.
+      </p>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closeRevokeConfirm()">Cancel</button>
+      <button class="btn-danger" (click)="confirmRevoke()">Revoke Access</button>
+    </div>
+  </div>
+</div>

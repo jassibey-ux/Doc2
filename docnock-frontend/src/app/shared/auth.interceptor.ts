@@ -33,9 +33,18 @@ export class AuthInterceptor implements HttpInterceptor {
     const skipLoaderHeader = request.headers.get('X-Skip-Loader') === 'true';
     const shouldSkipLoader = isCallTokenRequest || skipLoaderHeader;
 
-    const requestToSend = request.headers.has('X-Skip-Loader')
-      ? request.clone({ headers: request.headers.delete('X-Skip-Loader') })
-      : request;
+    // Attach active facility context header for tenant-scoped requests
+    const activeFacilityId = localStorage.getItem('active_facility_id');
+    let clonedRequest = request;
+    if (activeFacilityId) {
+      clonedRequest = request.clone({
+        setHeaders: { 'X-Facility-Id': activeFacilityId },
+      });
+    }
+
+    const requestToSend = clonedRequest.headers.has('X-Skip-Loader')
+      ? clonedRequest.clone({ headers: clonedRequest.headers.delete('X-Skip-Loader') })
+      : clonedRequest;
 
     if (!shouldSkipLoader) {
       this.globalLoader.show();
@@ -59,6 +68,12 @@ export class AuthInterceptor implements HttpInterceptor {
 
         // 401 Unauthorized — session expired or deleted account
         if (error.status === 401) {
+          // Family portal routes handle auth independently — don't redirect to staff login
+          const currentUrl = this.router.url || '';
+          if (currentUrl.startsWith('/family/')) {
+            return throwError(() => error);
+          }
+
           if (error.error?.message === 'delete_account') {
             this.toastr.error('Your account has been deleted. You have been logged out.');
           } else if (error.error?.message === 'status_inactive') {

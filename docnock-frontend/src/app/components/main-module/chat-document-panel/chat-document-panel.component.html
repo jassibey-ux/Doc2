@@ -1,0 +1,123 @@
+<div class="cdp-panel-backdrop" *ngIf="visible" (click)="closePanel()"></div>
+<div class="cdp-panel" [class.open]="visible">
+  <!-- Header -->
+  <div class="cdp-header">
+    <h4><i class="bx bx-file"></i> Documents</h4>
+    <button class="cdp-close" (click)="closePanel()"><i class="bx bx-x"></i></button>
+  </div>
+
+  <div class="cdp-body">
+    <!-- Upload button -->
+    <div class="cdp-upload-area">
+      <input
+        type="file"
+        #docFileInput
+        (change)="onFileSelected($event)"
+        accept=".txt,.csv,.pdf,.doc,.docx"
+        style="display: none"
+      />
+      <button
+        class="cdp-btn-primary cdp-btn-full"
+        (click)="docFileInput.click()"
+        [disabled]="uploading"
+      >
+        <i class="bx" [ngClass]="uploading ? 'bx-loader-alt bx-spin' : 'bx-plus'"></i>
+        {{ uploading ? 'Uploading...' : 'Add New Document' }}
+      </button>
+      <span class="cdp-upload-hint">Supports .txt, .csv, .pdf, .doc, .docx (max 5 MB)</span>
+    </div>
+
+    <!-- Search -->
+    <div class="cdp-search-bar" *ngIf="documents.length > 0 || searchQuery">
+      <div class="cdp-search-input-wrap">
+        <i class="bx bx-search"></i>
+        <input
+          type="text"
+          [(ngModel)]="searchQuery"
+          placeholder="Search documents..."
+          (keydown.enter)="searchDocuments()"
+        />
+        <button class="cdp-search-clear" *ngIf="searchQuery" (click)="clearSearch()">
+          <i class="bx bx-x"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="cdp-loader" *ngIf="loading">
+      <i class="bx bx-loader-alt bx-spin"></i>
+      <span>Loading documents...</span>
+    </div>
+
+    <!-- Empty state -->
+    <div class="cdp-empty" *ngIf="!loading && documents.length === 0 && !searchQuery">
+      <i class="bx bx-folder-open cdp-empty-icon"></i>
+      <h5>No Documents Yet</h5>
+      <p>Upload documents to use as context for AI-powered Q&A in this conversation.</p>
+    </div>
+
+    <!-- No search results -->
+    <div class="cdp-empty" *ngIf="!loading && documents.length === 0 && searchQuery">
+      <p>No documents match "{{ searchQuery }}"</p>
+    </div>
+
+    <!-- Document list -->
+    <div class="cdp-doc-list" *ngIf="!loading && documents.length > 0">
+      <h6 class="cdp-section-title">
+        <i class="bx bx-folder"></i> My Documents
+        <span class="cdp-badge" *ngIf="selectedCount > 0">{{ selectedCount }} selected</span>
+      </h6>
+      <div
+        class="cdp-doc-item"
+        *ngFor="let doc of documents"
+        [class.selected]="doc.selected"
+        (click)="toggleSelect(doc)"
+      >
+        <div class="cdp-doc-check">
+          <input type="checkbox" [checked]="doc.selected" (click)="$event.stopPropagation()" (change)="toggleSelect(doc)" />
+        </div>
+        <div class="cdp-doc-icon">
+          <i class="bx" [ngClass]="getFileIcon(doc.fileType)"></i>
+        </div>
+        <div class="cdp-doc-info">
+          <span class="cdp-doc-name">{{ doc.fileName }}</span>
+          <span class="cdp-doc-meta">{{ formatSize(doc.fileSize) }} &middot; {{ formatDate(doc.createdAt) }}</span>
+        </div>
+        <button class="cdp-doc-delete" (click)="deleteDocument(doc, $event)" title="Remove document">
+          <i class="bx bx-trash"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- AI Query Section -->
+    <div class="cdp-query-section" *ngIf="documents.length > 0">
+      <h6 class="cdp-section-title"><i class="bx bx-brain"></i> Ask About Documents</h6>
+      <div class="cdp-query-input-wrap">
+        <textarea
+          [(ngModel)]="question"
+          placeholder="Ask a question about selected documents..."
+          rows="2"
+          (keydown.enter)="$event.preventDefault(); askQuestion()"
+        ></textarea>
+        <button
+          class="cdp-btn-primary"
+          (click)="askQuestion()"
+          [disabled]="querying || !question.trim() || selectedCount === 0"
+        >
+          <i class="bx" [ngClass]="querying ? 'bx-loader-alt bx-spin' : 'bx-send'"></i>
+        </button>
+      </div>
+      <span class="cdp-query-hint" *ngIf="selectedCount === 0 && question.trim()">
+        Select at least one document above
+      </span>
+
+      <!-- AI Answer -->
+      <div class="cdp-answer" *ngIf="aiAnswer">
+        <div class="cdp-answer-header">
+          <i class="bx bx-bulb"></i> AI Response
+        </div>
+        <div class="cdp-answer-body">{{ aiAnswer }}</div>
+      </div>
+    </div>
+  </div>
+</div>

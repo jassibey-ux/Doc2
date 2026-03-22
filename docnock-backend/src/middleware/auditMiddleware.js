@@ -31,6 +31,11 @@ const ROUTE_AUDIT_MAP = {
 
   // AI
   "POST /ai/summarize-conversation": { action: "PHI_ACCESS", resourceType: "Conversation" },
+
+  // Facility Management
+  "POST /admin/facilities": { action: "FACILITY_CREATED", resourceType: "Facility" },
+  "PUT /admin/facilities": { action: "FACILITY_UPDATED", resourceType: "Facility" },
+  "DELETE /admin/facilities": { action: "FACILITY_DELETED", resourceType: "Facility" },
 };
 
 /**

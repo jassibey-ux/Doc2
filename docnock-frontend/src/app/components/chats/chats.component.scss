@@ -3429,6 +3429,28 @@ section {
   }
 }
 
+.doc-panel-toggle-btn {
+  background: none;
+  border: 1px solid #4F46E5;
+  color: #4F46E5;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 8px;
+  transition: background-color 0.2s;
+
+  i { font-size: 18px; }
+
+  &:hover, &.active {
+    background: #4F46E5;
+    color: #fff;
+  }
+}
+
 .pcc-patient-panel {
   position: absolute;
   top: 0;

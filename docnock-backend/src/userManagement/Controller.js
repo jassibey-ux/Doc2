@@ -23,6 +23,7 @@ import { createAuditEntry } from "../middleware/auditMiddleware";
 import speakeasy from "speakeasy";
 import QRCode from "qrcode";
 import { encryptPHI, safeDecryptPHI } from "../utils/phiEncryption";
+import FacilityMembership from "../models/FacilityMembership";
 
 const config = require("../../config/Config").get(process.env.NODE_ENV);
 const { JWT_SECRET, email, branchkey, frontend_url } = config;
@@ -49,6 +50,22 @@ async function addLoginRecord(req, userId) {
     logger.error({ err: error }, "Error adding login record");
   }
 }
+
+// Helper: get primary facilityId for JWT claim (non-blocking, returns null if none)
+async function getPrimaryFacilityId(userId) {
+  try {
+    const membership = await FacilityMembership.findOne({
+      userId,
+      status: "active",
+      isPrimary: true,
+    }).select("facilityId").lean();
+    return membership ? membership.facilityId : null;
+  } catch (err) {
+    logger.warn({ err }, "Could not resolve primary facility for JWT");
+    return null;
+  }
+}
+
 export const addUser = async (req, res) => {
   try {
     // Extract user data from the form-data request
@@ -456,8 +473,11 @@ export const login = async (req, res) => {
 
     var loginsessionid = await addLoginRecord(req, user._id);
 
-    // Generate access token (short-lived)
-    const token = jwt.sign({ userId: user._id, role: user.role }, JWT_SECRET, {
+    // Generate access token (short-lived) — include primary facilityId if available
+    const primaryFacilityId = await getPrimaryFacilityId(user._id);
+    const tokenPayload = { userId: user._id, role: user.role };
+    if (primaryFacilityId) tokenPayload.facilityId = primaryFacilityId;
+    const token = jwt.sign(tokenPayload, JWT_SECRET, {
       expiresIn: JWT_EXPIRY,
     });
 
@@ -1317,8 +1337,11 @@ export const verifyOTP = async (req, res) => {
 
        var loginsessionid = await addLoginRecord(req, user._id);
 
-    // Generate JWT token
-    const token = jwt.sign({ userId: user._id, role: user.role }, JWT_SECRET, {
+    // Generate JWT token — include primary facilityId if available
+    const otpPrimaryFacilityId = await getPrimaryFacilityId(user._id);
+    const otpTokenPayload = { userId: user._id, role: user.role };
+    if (otpPrimaryFacilityId) otpTokenPayload.facilityId = otpPrimaryFacilityId;
+    const token = jwt.sign(otpTokenPayload, JWT_SECRET, {
       expiresIn: "1d",
     });
 
@@ -2095,9 +2118,12 @@ export const refreshAccessToken = async (req, res) => {
       return res.status(401).json({ success: false, message: "User account unavailable" });
     }
 
-    // Issue new access token
+    // Issue new access token — include primary facilityId if available
+    const refreshPrimaryFacilityId = await getPrimaryFacilityId(user._id);
+    const refreshPayload = { userId: user._id, role: user.role };
+    if (refreshPrimaryFacilityId) refreshPayload.facilityId = refreshPrimaryFacilityId;
     const newAccessToken = jwt.sign(
-      { userId: user._id, role: user.role },
+      refreshPayload,
       JWT_SECRET,
       { expiresIn: JWT_EXPIRY }
     );
@@ -2392,7 +2418,11 @@ export const verifyMfa = async (req, res) => {
     // MFA verified — issue full tokens
     var loginsessionid = await addLoginRecord(req, user._id);
 
-    const token = jwt.sign({ userId: user._id, role: user.role }, JWT_SECRET, {
+    // Include primary facilityId in JWT if available
+    const mfaPrimaryFacilityId = await getPrimaryFacilityId(user._id);
+    const mfaPayload = { userId: user._id, role: user.role };
+    if (mfaPrimaryFacilityId) mfaPayload.facilityId = mfaPrimaryFacilityId;
+    const token = jwt.sign(mfaPayload, JWT_SECRET, {
       expiresIn: JWT_EXPIRY,
     });
 

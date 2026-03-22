@@ -1,0 +1,97 @@
+<div class="modal-backdrop" (click)="onClose()"></div>
+<div class="modal-panel">
+  <div class="modal-header">
+    <h4>{{ isEditMode ? 'Edit Facility' : 'Create Facility' }}</h4>
+    <button class="btn-close-modal" (click)="onClose()"><i class="bx bx-x"></i></button>
+  </div>
+
+  <div class="modal-body">
+    <!-- Name & Type -->
+    <div class="form-row">
+      <div class="form-group flex-2">
+        <label>Facility Name *</label>
+        <input type="text" [(ngModel)]="form.name" placeholder="e.g. Central Hospital" />
+      </div>
+      <div class="form-group flex-1">
+        <label>Type</label>
+        <select [(ngModel)]="form.type">
+          <option *ngFor="let t of facilityTypes" [value]="t.value">{{ t.label }}</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Status & License -->
+    <div class="form-row">
+      <div class="form-group">
+        <label>Status</label>
+        <select [(ngModel)]="form.status">
+          <option *ngFor="let s of statusOptions" [value]="s.value">{{ s.label }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>License Number</label>
+        <input type="text" [(ngModel)]="form.licenseNumber" placeholder="Optional" />
+      </div>
+    </div>
+
+    <!-- Contact -->
+    <div class="form-row">
+      <div class="form-group">
+        <label>Phone</label>
+        <input type="text" [(ngModel)]="form.phone" placeholder="(555) 000-0000" />
+      </div>
+      <div class="form-group">
+        <label>Fax</label>
+        <input type="text" [(ngModel)]="form.fax" placeholder="Optional" />
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" [(ngModel)]="form.email" placeholder="facility@example.com" />
+      </div>
+    </div>
+
+    <!-- Address -->
+    <h5 class="section-label">Address</h5>
+    <div class="form-row">
+      <div class="form-group flex-2">
+        <label>Street</label>
+        <input type="text" [(ngModel)]="form.address.street" placeholder="123 Main St" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>City</label>
+        <input type="text" [(ngModel)]="form.address.city" placeholder="San Francisco" />
+      </div>
+      <div class="form-group">
+        <label>State</label>
+        <input type="text" [(ngModel)]="form.address.state" placeholder="CA" />
+      </div>
+      <div class="form-group">
+        <label>ZIP</label>
+        <input type="text" [(ngModel)]="form.address.zip" placeholder="94102" />
+      </div>
+    </div>
+
+    <!-- Capacity -->
+    <h5 class="section-label">Capacity</h5>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Total Beds</label>
+        <input type="number" [(ngModel)]="form.capacity.totalBeds" min="0" />
+      </div>
+      <div class="form-group">
+        <label>ICU Beds</label>
+        <input type="number" [(ngModel)]="form.capacity.icuBeds" min="0" />
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-footer">
+    <button class="btn-cancel" (click)="onClose()">Cancel</button>
+    <button class="btn-save" (click)="onSubmit()" [disabled]="saving">
+      <i class="bx" [ngClass]="saving ? 'bx-loader-alt bx-spin' : 'bx-check'"></i>
+      {{ saving ? 'Saving...' : (isEditMode ? 'Update' : 'Create') }}
+    </button>
+  </div>
+</div>

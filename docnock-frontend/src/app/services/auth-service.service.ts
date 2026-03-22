@@ -483,6 +483,80 @@ summarizeConversation(conversationId: string, lastN: number = 50) {
   });
 }
 
+documentQuery(documentText: string, question: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/ai/document-query`, { documentText, question }, {
+    headers: this.getHeader(token),
+  });
+}
+
+summarizeHandoff(handoffId: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/ai/summarize-handoff`, { handoffId }, {
+    headers: this.getHeader(token),
+  });
+}
+
+generateFamilyUpdate(conversationId: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/ai/generate-family-update`, { conversationId }, {
+    headers: this.getHeader(token),
+  });
+}
+
+getAiTemplates(category?: string) {
+  const token = this.getToken();
+  const params = category ? `?category=${category}` : '';
+  return this.http.get(`${this.baseUrl}/ai/templates${params}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+createAiTemplate(data: any) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/ai/templates`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+runAiTemplate(templateId: string, variables: any) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/ai/templates/${templateId}/run`, { variables }, {
+    headers: this.getHeader(token),
+  });
+}
+
+// ─── Chat Document Panel ──────────────────────────────────────────────────
+uploadChatDocument(data: { conversationId: string; fileName: string; fileType: string; extractedText: string }) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/ai/chat-documents`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+listChatDocuments(conversationId: string, search?: string) {
+  const token = this.getToken();
+  let url = `${this.baseUrl}/ai/chat-documents?conversationId=${conversationId}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+  return this.http.get(url, {
+    headers: this.getHeader(token),
+  });
+}
+
+deleteChatDocument(documentId: string) {
+  const token = this.getToken();
+  return this.http.delete(`${this.baseUrl}/ai/chat-documents/${documentId}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+queryChatDocuments(data: { conversationId: string; documentIds: string[]; question: string }) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/ai/chat-documents/query`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
 // ─── Family Communication Portal ──────────────────────────────────────────
 inviteFamily(data: { conversationId: string; familyEmail: string; familyName?: string; relationshipType?: string; accessLevel?: string }) {
   const token = this.getToken();
@@ -519,6 +593,94 @@ listFamilyLinks(conversationId: string) {
 revokeFamilyAccess(linkId: string) {
   const token = this.getToken();
   return this.http.delete(`${this.baseUrl}/family/links/${linkId}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+// ─── Family Portal MVP ────────────────────────────────────────────────────
+
+getFamilyFeed(page: number = 1, limit: number = 20) {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/family/feed?page=${page}&limit=${limit}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+createFeedPost(data: { type: string; title: string; body: string; images?: any[]; visibility?: string }) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/family/feed`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+deleteFeedPost(postId: string) {
+  const token = this.getToken();
+  return this.http.delete(`${this.baseUrl}/family/feed/${postId}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getFamilyChat() {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/family/chat`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getFamilyChatMessages(page: number = 1, limit: number = 50) {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/family/chat/messages?page=${page}&limit=${limit}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getFamilyHealth() {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/family/health`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getFamilyVideoToken() {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/family/video/token`, {
+    headers: this.getHeader(token),
+  });
+}
+
+// ─── Admin Family Portal Management ──────────────────────────────────────
+
+getAdminFamilyStats() {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/family/admin/stats`, {
+    headers: this.getHeader(token),
+  });
+}
+
+getAdminFamilyLinks(params: { page?: number; limit?: number; search?: string; status?: string; relationship?: string }) {
+  const token = this.getToken();
+  const queryParts: string[] = [];
+  if (params.page) queryParts.push(`page=${params.page}`);
+  if (params.limit) queryParts.push(`limit=${params.limit}`);
+  if (params.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
+  if (params.status) queryParts.push(`status=${params.status}`);
+  if (params.relationship) queryParts.push(`relationship=${params.relationship}`);
+  const query = queryParts.length ? `?${queryParts.join('&')}` : '';
+  return this.http.get(`${this.baseUrl}/family/admin/links${query}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+updateAdminFamilyLink(linkId: string, data: { pocUserId?: string; accessLevel?: string; relationshipType?: string }) {
+  const token = this.getToken();
+  return this.http.put(`${this.baseUrl}/family/admin/links/${linkId}`, data, {
+    headers: this.getHeader(token),
+  });
+}
+
+resendFamilyInvite(linkId: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/family/admin/links/${linkId}/resend`, {}, {
     headers: this.getHeader(token),
   });
 }
@@ -796,6 +958,78 @@ declineConsultation(id: string, data: any) {
   return this.http.post(`${this.baseUrl}/clinical/consultations/${id}/decline`, data, {
     headers: this.getHeader(token),
   });
+}
+
+// ─── Facility Management ──────────────────────────────────────────────────
+
+listFacilities(params?: { search?: string; status?: string; type?: string; page?: number; limit?: number }) {
+  const token = this.getToken();
+  let url = `${this.baseUrl}/admin/facilities?`;
+  if (params?.search) url += `search=${encodeURIComponent(params.search)}&`;
+  if (params?.status) url += `status=${params.status}&`;
+  if (params?.type) url += `type=${params.type}&`;
+  if (params?.page) url += `page=${params.page}&`;
+  if (params?.limit) url += `limit=${params.limit}&`;
+  return this.http.get(url.replace(/&$/, ''), { headers: this.getHeader(token) });
+}
+
+getFacilityById(id: string) {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/admin/facilities/${id}`, { headers: this.getHeader(token) });
+}
+
+createFacility(data: any) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/admin/facilities`, data, { headers: this.getHeader(token) });
+}
+
+updateFacility(id: string, data: any) {
+  const token = this.getToken();
+  return this.http.put(`${this.baseUrl}/admin/facilities/${id}`, data, { headers: this.getHeader(token) });
+}
+
+deleteFacility(id: string) {
+  const token = this.getToken();
+  return this.http.delete(`${this.baseUrl}/admin/facilities/${id}`, { headers: this.getHeader(token) });
+}
+
+getFacilityStats(id: string) {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/admin/facilities/${id}/stats`, { headers: this.getHeader(token) });
+}
+
+getMyFacilities() {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/facilities/mine`, { headers: this.getHeader(token) });
+}
+
+switchFacility(facilityId: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/facilities/switch`, { facilityId }, { headers: this.getHeader(token) });
+}
+
+listFacilityStaff(facilityId: string, params?: { search?: string; role?: string; page?: number }) {
+  const token = this.getToken();
+  let url = `${this.baseUrl}/admin/facilities/${facilityId}/staff?`;
+  if (params?.search) url += `search=${encodeURIComponent(params.search)}&`;
+  if (params?.role) url += `role=${params.role}&`;
+  if (params?.page) url += `page=${params.page}&`;
+  return this.http.get(url.replace(/&$/, ''), { headers: this.getHeader(token) });
+}
+
+inviteStaffToFacility(facilityId: string, data: { userId: string; role: string; isPrimary?: boolean }) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/admin/facilities/${facilityId}/staff`, data, { headers: this.getHeader(token) });
+}
+
+updateStaffMembership(facilityId: string, userId: string, data: any) {
+  const token = this.getToken();
+  return this.http.put(`${this.baseUrl}/admin/facilities/${facilityId}/staff/${userId}`, data, { headers: this.getHeader(token) });
+}
+
+removeStaffFromFacility(facilityId: string, userId: string) {
+  const token = this.getToken();
+  return this.http.delete(`${this.baseUrl}/admin/facilities/${facilityId}/staff/${userId}`, { headers: this.getHeader(token) });
 }
 
 }

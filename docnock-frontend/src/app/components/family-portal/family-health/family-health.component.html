@@ -1,0 +1,90 @@
+<div class="health-container">
+  <!-- Loading -->
+  <div class="health-loading" *ngIf="loading">
+    <i class="bx bx-loader-alt bx-spin"></i>
+    <p>Loading health information...</p>
+  </div>
+
+  <!-- Not Linked State -->
+  <div class="health-empty" *ngIf="!loading && !linked">
+    <i class="bx bx-link-external"></i>
+    <h3>Health Data Not Available</h3>
+    <p>Patient health records have not been linked yet. The care team will set this up for you.</p>
+  </div>
+
+  <!-- Health Data -->
+  <div class="health-content" *ngIf="!loading && linked">
+    <!-- Patient Header -->
+    <div class="health-header-card">
+      <div class="patient-info">
+        <i class="bx bx-user-circle"></i>
+        <div>
+          <h3>{{ patientName }}</h3>
+          <span class="health-subtitle">Health Overview</span>
+        </div>
+      </div>
+      <button class="refresh-btn" (click)="refresh()" title="Refresh data">
+        <i class="bx bx-refresh"></i>
+      </button>
+    </div>
+
+    <!-- Error Banner -->
+    <div class="health-error-banner" *ngIf="errorMessage">
+      <i class="bx bx-info-circle"></i>
+      <span>{{ errorMessage }}</span>
+    </div>
+
+    <!-- Last Updated -->
+    <div class="last-updated" *ngIf="lastUpdated">
+      <i class="bx bx-time-five"></i>
+      Last updated: {{ formatDate(lastUpdated) }} at {{ formatTime(lastUpdated) }}
+    </div>
+
+    <!-- Vitals Section -->
+    <div class="health-section">
+      <h4><i class="bx bx-pulse"></i> Vitals</h4>
+      <div class="vitals-grid" *ngIf="vitals.length > 0; else noVitals">
+        <div class="vital-card" *ngFor="let vital of vitals">
+          <div class="vital-icon">
+            <i class="bx" [ngClass]="getVitalIcon(vital.type)"></i>
+          </div>
+          <div class="vital-info">
+            <span class="vital-label">{{ getVitalLabel(vital.type) }}</span>
+            <span class="vital-value">{{ vital.value }} <span class="vital-unit" *ngIf="vital.unit">{{ vital.unit }}</span></span>
+            <span class="vital-date" *ngIf="vital.recordedAt">{{ formatDate(vital.recordedAt) }}</span>
+          </div>
+        </div>
+      </div>
+      <ng-template #noVitals>
+        <p class="no-data">No vitals data available.</p>
+      </ng-template>
+    </div>
+
+    <!-- Medications Section -->
+    <div class="health-section">
+      <h4><i class="bx bx-capsule"></i> Medications</h4>
+      <div class="medications-list" *ngIf="medications.length > 0; else noMeds">
+        <div class="med-card" *ngFor="let med of medications">
+          <div class="med-icon">
+            <i class="bx bx-capsule"></i>
+          </div>
+          <div class="med-info">
+            <span class="med-name">{{ med.drugName || med.description || 'Medication' }}</span>
+            <span class="med-dosage" *ngIf="med.dosage">{{ med.dosage }}</span>
+            <span class="med-frequency" *ngIf="med.frequency">{{ med.frequency }}</span>
+          </div>
+          <span class="med-status" *ngIf="med.status">{{ med.status }}</span>
+        </div>
+      </div>
+      <ng-template #noMeds>
+        <p class="no-data">No medications data available.</p>
+      </ng-template>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="health-disclaimer">
+      <i class="bx bx-info-circle"></i>
+      <p>This information is provided for reference only. For medical questions, please contact the care team directly.</p>
+    </div>
+  </div>
+</div>

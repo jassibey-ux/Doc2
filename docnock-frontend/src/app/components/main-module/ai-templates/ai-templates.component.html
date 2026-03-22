@@ -1,0 +1,159 @@
+<div class="ai-templates">
+  <div class="page-header">
+    <div class="header-info">
+      <h2><i class="bx bxs-bookmarks"></i> AI Templates</h2>
+      <p class="subtitle">Pre-built AI workflows for common clinical tasks. Select a template and fill in the details.</p>
+    </div>
+    <button class="btn-create" (click)="openCreateModal()">
+      <i class="bx bx-plus"></i> Create Template
+    </button>
+  </div>
+
+  <!-- Category Filter -->
+  <div class="category-filter">
+    <button
+      *ngFor="let cat of categories"
+      class="cat-btn"
+      [class.active]="activeCategory === cat.value"
+      (click)="filterByCategory(cat.value)">
+      <i class="bx" [ngClass]="cat.icon"></i>
+      {{ cat.label }}
+    </button>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading-state" *ngIf="loading">
+    <i class="bx bx-loader-alt bx-spin"></i>
+    <p>Loading templates...</p>
+  </div>
+
+  <!-- Templates Grid + Selected Panel -->
+  <div class="templates-layout" *ngIf="!loading">
+    <!-- Grid -->
+    <div class="templates-grid">
+      <div
+        class="template-card"
+        *ngFor="let tmpl of templates"
+        [class.selected]="selectedTemplate?._id === tmpl._id"
+        (click)="selectTemplate(tmpl)">
+        <div class="card-icon" [style.background]="getCategoryColor(tmpl.category) + '14'" [style.color]="getCategoryColor(tmpl.category)">
+          <i class="bx" [ngClass]="tmpl.icon || 'bx-file'"></i>
+        </div>
+        <div class="card-body">
+          <h4>{{ tmpl.name }}</h4>
+          <p>{{ tmpl.description }}</p>
+          <span class="category-badge" [style.color]="getCategoryColor(tmpl.category)" [style.background]="getCategoryColor(tmpl.category) + '14'">
+            {{ tmpl.category | titlecase }}
+          </span>
+        </div>
+        <div class="card-arrow"><i class="bx bx-chevron-right"></i></div>
+      </div>
+
+      <!-- Empty -->
+      <div class="empty-state" *ngIf="templates.length === 0">
+        <i class="bx bx-bookmarks"></i>
+        <p>No templates found. Create one to get started!</p>
+      </div>
+    </div>
+
+    <!-- Selected Template Panel -->
+    <div class="template-panel" *ngIf="selectedTemplate">
+      <div class="panel-header">
+        <div>
+          <h3>{{ selectedTemplate.name }}</h3>
+          <p>{{ selectedTemplate.description }}</p>
+        </div>
+        <button class="btn-close" (click)="closeTemplate()"><i class="bx bx-x"></i></button>
+      </div>
+
+      <!-- Variable Inputs -->
+      <div class="variable-inputs">
+        <div class="var-field" *ngFor="let v of selectedTemplate.variables">
+          <label>{{ v.label }}</label>
+          <textarea
+            *ngIf="v.type === 'textarea'"
+            class="form-input"
+            [(ngModel)]="variables[v.key]"
+            [placeholder]="v.placeholder || ''"
+            rows="5"
+          ></textarea>
+          <input
+            *ngIf="v.type !== 'textarea'"
+            type="text"
+            class="form-input"
+            [(ngModel)]="variables[v.key]"
+            [placeholder]="v.placeholder || ''"
+          />
+        </div>
+      </div>
+
+      <!-- Run Button -->
+      <button class="btn-run" (click)="runTemplate()" [disabled]="running">
+        <i class="bx" [ngClass]="running ? 'bx-loader-alt bx-spin' : 'bx-play'"></i>
+        <span *ngIf="!running">Run Template</span>
+        <span *ngIf="running">Processing...</span>
+      </button>
+
+      <!-- Result -->
+      <div class="result-panel" *ngIf="result">
+        <div class="result-header">
+          <span><i class="bx bxs-bot"></i> Result</span>
+          <button class="btn-copy" (click)="copyResult()"><i class="bx bx-copy"></i> Copy</button>
+        </div>
+        <div class="result-content">{{ result }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create Template Modal -->
+<div class="modal-overlay" *ngIf="showCreateModal" (click)="showCreateModal = false">
+  <div class="modal-card" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Create AI Template</h3>
+      <button (click)="showCreateModal = false"><i class="bx bx-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field">
+        <label>Name</label>
+        <input type="text" class="form-input" [(ngModel)]="newTemplate.name" placeholder="e.g. Lab Result Summary" />
+      </div>
+      <div class="form-field">
+        <label>Description</label>
+        <input type="text" class="form-input" [(ngModel)]="newTemplate.description" placeholder="What does this template do?" />
+      </div>
+      <div class="form-field">
+        <label>Category</label>
+        <select class="form-input" [(ngModel)]="newTemplate.category">
+          <option value="clinical">Clinical</option>
+          <option value="family">Family</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>System Prompt</label>
+        <textarea class="form-input" [(ngModel)]="newTemplate.systemPrompt" placeholder="Instructions for the AI..." rows="3"></textarea>
+      </div>
+      <div class="form-field">
+        <label>User Prompt Template <span class="hint">Use double curly braces for variable placeholders</span></label>
+        <textarea class="form-input" [(ngModel)]="newTemplate.userPromptTemplate" placeholder="e.g. Summarize the following content..." rows="3"></textarea>
+      </div>
+      <div class="form-field">
+        <label>Variables</label>
+        <div class="var-row" *ngFor="let v of newTemplate.variables; let i = index">
+          <input type="text" class="form-input" [(ngModel)]="v.key" placeholder="key" />
+          <input type="text" class="form-input" [(ngModel)]="v.label" placeholder="Label" />
+          <button class="btn-remove-var" (click)="removeVariable(i)"><i class="bx bx-trash"></i></button>
+        </div>
+        <button class="btn-add-var" (click)="addVariable()"><i class="bx bx-plus"></i> Add Variable</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" (click)="showCreateModal = false">Cancel</button>
+      <button class="btn-save" (click)="createTemplate()" [disabled]="creating">
+        <i class="bx bx-loader-alt bx-spin" *ngIf="creating"></i>
+        {{ creating ? 'Creating...' : 'Create Template' }}
+      </button>
+    </div>
+  </div>
+</div>

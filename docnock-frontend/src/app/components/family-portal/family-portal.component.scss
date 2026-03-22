@@ -3,7 +3,7 @@ $primary-light: #E3F0FF;
 $text-primary: #212121;
 $text-secondary: #757575;
 $border: #E0E0E0;
-$bg: #F8F9FA;
+$bg: #F5F5F5;
 $success: #007F3B;
 $error: #D5281B;
 
@@ -13,6 +13,7 @@ $error: #D5281B;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+// ─── Loading & Error States ──────────────────────────────────────────────────
 .family-loading, .family-error {
   display: flex;
   flex-direction: column;
@@ -31,272 +32,160 @@ $error: #D5281B;
 
 .family-error i { color: $error; }
 
+// ─── Dashboard Layout ────────────────────────────────────────────────────────
+.family-dashboard {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+// ─── Header ──────────────────────────────────────────────────────────────────
 .family-header {
   background: #FFFFFF;
-  padding: 20px 24px;
+  padding: 12px 20px;
   border-bottom: 1px solid $border;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
 
-  h2 {
-    font-size: 20px;
-    font-weight: 600;
-    color: $text-primary;
-    margin: 8px 0 0;
-  }
+.header-left, .header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 120px;
+}
+
+.header-right {
+  justify-content: flex-end;
+}
+
+.header-center {
+  flex: 1;
+  text-align: center;
+}
+
+.portal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: $text-primary;
 }
 
 .family-logo {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: $primary;
-  font-size: 18px;
-  font-weight: 600;
 
-  i { font-size: 24px; }
+  img {
+    height: 36px;
+    width: auto;
+    object-fit: contain;
+  }
 }
 
-.family-body {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 24px 16px;
+.user-greeting {
+  font-size: 13px;
+  color: $text-secondary;
+  white-space: nowrap;
 }
 
-.patient-card {
-  background: #FFFFFF;
-  border-radius: 12px;
-  padding: 20px 24px;
+.btn-logout {
+  width: 36px;
+  height: 36px;
   border: 1px solid $border;
-  margin-bottom: 16px;
-}
-
-.patient-name-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-
-  > i {
-    font-size: 48px;
-    color: $primary;
-  }
-
-  h3 {
-    font-size: 20px;
-    font-weight: 600;
-    color: $text-primary;
-    margin: 0;
-  }
-}
-
-.relationship-badge {
-  display: inline-block;
-  background: $primary-light;
-  color: $primary;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 10px;
-  border-radius: 12px;
-  margin-top: 4px;
-}
-
-.family-section {
+  border-radius: 8px;
   background: #FFFFFF;
-  border-radius: 12px;
-  padding: 20px 24px;
-  border: 1px solid $border;
-  margin-bottom: 16px;
-
-  h4 {
-    font-size: 16px;
-    font-weight: 600;
-    color: $text-primary;
-    margin: 0 0 16px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-
-    i { color: $primary; font-size: 20px; }
-  }
-}
-
-.care-team-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.care-team-member {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.member-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 20px;
-  background: $primary-light;
-  color: $primary;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.member-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: $text-primary;
-}
-
-.member-role {
-  font-size: 12px;
   color: $text-secondary;
-}
-
-.updates-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.update-item {
-  padding: 12px;
-  background: $bg;
-  border-radius: 8px;
-}
-
-.update-from {
-  font-size: 12px;
-  font-weight: 600;
-  color: $primary;
-  margin-bottom: 4px;
-}
-
-.update-message {
-  font-size: 14px;
-  color: $text-primary;
-  line-height: 1.5;
-}
-
-.update-date {
-  font-size: 11px;
-  color: $text-secondary;
-  margin-top: 4px;
-}
-
-.no-data {
-  font-size: 14px;
-  color: $text-secondary;
-  text-align: center;
-  padding: 16px;
-}
-
-.btn-video-request {
-  width: 100%;
-  height: 48px;
-  border: none;
-  border-radius: 8px;
-  background: $primary;
-  color: #FFFFFF;
-  font-size: 15px;
-  font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
 
-  &:hover { background: darken($primary, 10%); }
+  i { font-size: 18px; }
 
-  i { font-size: 20px; }
-}
-
-.video-request-form {
-  h4 {
-    font-size: 15px;
-    margin-bottom: 16px;
+  &:hover {
+    background: $bg;
+    color: $error;
   }
 }
 
-.form-field {
-  margin-bottom: 12px;
+// ─── Tab Content Area ────────────────────────────────────────────────────────
+.tab-content {
+  flex: 1;
+  min-height: 0; // Allow flex item to shrink below content size
+  overflow-y: auto;
 
-  label {
+  // Spacer so content scrolls above the fixed bottom tab bar
+  &::after {
+    content: '';
     display: block;
-    font-size: 13px;
-    font-weight: 500;
-    color: $text-secondary;
-    margin-bottom: 6px;
+    height: 80px;
   }
 }
 
-.family-input {
-  width: 100%;
-  height: 44px;
-  border: 1px solid #AAAAAA;
-  border-radius: 8px;
-  padding: 0 12px;
-  font-size: 14px;
-  color: $text-primary;
-  box-sizing: border-box;
-
-  &:focus {
-    border-color: $primary;
-    border-width: 2px;
-    outline: none;
-  }
-}
-
-.family-textarea {
-  height: 80px;
-  padding: 12px;
-  resize: vertical;
-}
-
-.form-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-}
-
-.btn-cancel {
-  height: 40px;
-  padding: 0 20px;
-  border: 1px solid $border;
-  border-radius: 8px;
+// ─── Bottom Tab Bar ──────────────────────────────────────────────────────────
+.tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
   background: #FFFFFF;
-  color: $text-secondary;
-  font-size: 14px;
-  cursor: pointer;
-
-  &:hover { background: $bg; }
+  border-top: 1px solid $border;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-.btn-submit {
-  height: 40px;
-  padding: 0 20px;
+.tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   border: none;
-  border-radius: 8px;
-  background: $primary;
-  color: #FFFFFF;
-  font-size: 14px;
-  font-weight: 500;
+  background: transparent;
   cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  color: $text-secondary;
 
-  &:hover { background: darken($primary, 10%); }
+  i {
+    font-size: 22px;
+    transition: color 0.2s ease;
+  }
+
+  span {
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  &.active {
+    color: $primary;
+    background: $primary-light;
+
+    i { color: $primary; }
+    span { font-weight: 600; }
+  }
+
+  &:hover:not(.active) {
+    color: $text-primary;
+    background: rgba(0, 0, 0, 0.04);
+  }
 }
 
-.video-request-success {
-  text-align: center;
-  padding: 16px;
-  background: #E8F5E9;
-  border-radius: 8px;
-  color: $success;
-  font-size: 14px;
-  font-weight: 500;
-
-  i { margin-right: 6px; }
+// ─── Responsive ──────────────────────────────────────────────────────────────
+@media (min-width: 768px) {
+  .tab-bar {
+    max-width: 480px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
+  }
 }

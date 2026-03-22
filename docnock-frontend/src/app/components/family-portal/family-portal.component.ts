@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthServiceService } from 'src/app/services/auth-service.service';
+import { WebsocketService } from 'src/app/services/websocket.service';
 
 @Component({
   selector: 'app-family-portal',
@@ -12,18 +13,21 @@ export class FamilyPortalComponent implements OnInit {
   error: string = '';
   verified: boolean = false;
   patientData: any = null;
-  patientLoading: boolean = false;
 
-  // Video request form
-  showVideoRequest: boolean = false;
-  videoPreferredTime: string = '';
-  videoNotes: string = '';
-  videoRequestSent: boolean = false;
+  // Tab state
+  activeTab: 'feed' | 'chat' | 'health' | 'video' = 'feed';
+
+  // Data from verification
+  conversationId: string = '';
+  familyChatConversationId: string = '';
+  accessLevel: string = 'read_only';
+  userName: string = '';
 
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private authService: AuthServiceService
+    private authService: AuthServiceService,
+    private websocket: WebsocketService
   ) {}
 
   ngOnInit(): void {
@@ -31,10 +35,13 @@ export class FamilyPortalComponent implements OnInit {
     if (token) {
       this.verifyLink(token);
     } else {
-      // Already authenticated family member — load summary
+      // Already authenticated family member
       this.loading = false;
       this.verified = true;
-      this.loadPatientSummary();
+      this.conversationId = localStorage.getItem('family_conversationId') || '';
+      this.familyChatConversationId = localStorage.getItem('family_chatConversationId') || '';
+      this.userName = localStorage.getItem('family_userName') || '';
+      this.initializeSocket();
     }
   }
 
@@ -42,12 +49,24 @@ export class FamilyPortalComponent implements OnInit {
     this.authService.verifyFamilyLink(token).subscribe({
       next: (res: any) => {
         if (res.success) {
-          // Store the family token
+          // Store the family token and data
           localStorage.setItem('auth_token', res.data.token);
           localStorage.setItem('role', 'family_member');
           localStorage.setItem('userId', res.data.userId);
+          localStorage.setItem('family_conversationId', res.data.conversationId);
+          localStorage.setItem('family_chatConversationId', res.data.familyChatConversationId || '');
+          localStorage.setItem('family_userName', res.data.name || '');
+
+          this.conversationId = res.data.conversationId;
+          this.familyChatConversationId = res.data.familyChatConversationId || '';
+          this.userName = res.data.name || '';
+          this.accessLevel = res.data.accessLevel;
           this.verified = true;
-          this.loadPatientSummary();
+
+          this.initializeSocket();
+
+          // Navigate to portal view (remove token from URL)
+          this.router.navigate(['/family/portal']);
         } else {
           this.error = res.message || 'Verification failed';
         }
@@ -60,33 +79,21 @@ export class FamilyPortalComponent implements OnInit {
     });
   }
 
-  loadPatientSummary() {
-    this.patientLoading = true;
-    this.authService.getFamilyPatientSummary().subscribe({
-      next: (res: any) => {
-        if (res.success) {
-          this.patientData = res.data;
-        }
-        this.patientLoading = false;
-      },
-      error: () => {
-        this.patientLoading = false;
-      },
-    });
+  initializeSocket() {
+    this.websocket.registerUser();
   }
 
-  requestVideoVisit() {
-    this.authService.requestFamilyVideoVisit({
-      preferredTime: this.videoPreferredTime,
-      notes: this.videoNotes,
-    }).subscribe({
-      next: () => {
-        this.videoRequestSent = true;
-        this.showVideoRequest = false;
-      },
-      error: () => {
-        this.error = 'Failed to send video visit request.';
-      },
-    });
+  switchTab(tab: 'feed' | 'chat' | 'health' | 'video') {
+    this.activeTab = tab;
+  }
+
+  logout() {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('role');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('family_conversationId');
+    localStorage.removeItem('family_chatConversationId');
+    localStorage.removeItem('family_userName');
+    this.router.navigate(['/login']);
   }
 }

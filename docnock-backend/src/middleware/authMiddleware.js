@@ -41,7 +41,8 @@ export const ensureAuthorized = (req, res, next) => {
       if (err) {
         return Error(res, 401, "Unauthorized");
       }
-      var userdetailsnew = await User.findOne({_id:decoded.userId});
+      const resolvedUserId = decoded.userId || decoded.id;
+      var userdetailsnew = await User.findOne({_id:resolvedUserId});
       // logger.debug({ decoded }, "decoded token");
       if(userdetailsnew?.isDeleted)
         {

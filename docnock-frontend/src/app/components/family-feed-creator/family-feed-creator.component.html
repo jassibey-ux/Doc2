@@ -1,0 +1,130 @@
+<div class="feed-creator">
+  <h2><i class="bx bx-news"></i> Family Activity Feed</h2>
+  <p class="subtitle">Create posts that family members will see in their portal feed.</p>
+
+  <!-- Create Post Form -->
+  <div class="create-form">
+    <h3>New Post</h3>
+
+    <!-- Post Type -->
+    <div class="form-field">
+      <label>Post Type</label>
+      <div class="type-selector">
+        <button
+          *ngFor="let type of postTypes"
+          class="type-btn"
+          [class.active]="postType === type.value"
+          (click)="postType = type.value">
+          <i class="bx" [ngClass]="type.icon"></i>
+          {{ type.label }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Title -->
+    <div class="form-field">
+      <label>Title <span class="optional" *ngIf="postType !== 'event'">(optional)</span></label>
+      <input type="text" class="form-input" [(ngModel)]="postTitle" placeholder="e.g. Spring Garden Party" maxlength="200" />
+    </div>
+
+    <!-- Body -->
+    <div class="form-field">
+      <div class="label-row">
+        <label>Description</label>
+        <button class="btn-generate-ai" (click)="showAiInput = !showAiInput" [disabled]="generatingUpdate">
+          <i class="bx" [ngClass]="generatingUpdate ? 'bx-loader-alt bx-spin' : 'bx-bulb'"></i>
+          {{ generatingUpdate ? 'Generating...' : 'Generate with AI' }}
+        </button>
+      </div>
+      <div class="ai-input-row" *ngIf="showAiInput">
+        <input
+          type="text"
+          class="form-input"
+          [(ngModel)]="conversationIdForAI"
+          placeholder="Enter patient conversation ID"
+        />
+        <button class="btn-run-ai" (click)="generateWithAI()" [disabled]="generatingUpdate || !conversationIdForAI.trim()">
+          <i class="bx" [ngClass]="generatingUpdate ? 'bx-loader-alt bx-spin' : 'bx-send'"></i>
+        </button>
+      </div>
+      <textarea
+        class="form-input form-textarea"
+        [(ngModel)]="postBody"
+        placeholder="Share what's happening at the facility..."
+        rows="4"
+        maxlength="2000"
+      ></textarea>
+    </div>
+
+    <!-- Image Upload -->
+    <div class="form-field">
+      <label>Photos <span class="optional">(optional)</span></label>
+      <div class="image-upload-area">
+        <div class="image-previews" *ngIf="imagePreviewUrls.length > 0">
+          <div class="preview-item" *ngFor="let url of imagePreviewUrls; let i = index">
+            <img [src]="url" alt="Preview" />
+            <button class="remove-img" (click)="removeImage(i)">
+              <i class="bx bx-x"></i>
+            </button>
+          </div>
+        </div>
+        <label class="upload-btn" [class.disabled]="uploading">
+          <i class="bx bx-image-add" *ngIf="!uploading"></i>
+          <i class="bx bx-loader-alt bx-spin" *ngIf="uploading"></i>
+          <span *ngIf="!uploading">Add Photos</span>
+          <span *ngIf="uploading">Uploading...</span>
+          <input type="file" accept="image/*" multiple (change)="onImageSelected($event)" hidden [disabled]="uploading" />
+        </label>
+      </div>
+    </div>
+
+    <!-- Visibility -->
+    <div class="form-field">
+      <label>Visibility</label>
+      <select class="form-input form-select" [(ngModel)]="postVisibility">
+        <option value="all_families">All Families</option>
+        <option value="specific_patients">Specific Patients Only</option>
+      </select>
+    </div>
+
+    <!-- Submit -->
+    <div class="form-actions">
+      <button class="btn-reset" (click)="resetForm()">Clear</button>
+      <button class="btn-publish" (click)="submitPost()" [disabled]="submitting || !postBody.trim()">
+        <i class="bx bx-loader-alt bx-spin" *ngIf="submitting"></i>
+        <span *ngIf="!submitting">Publish Post</span>
+        <span *ngIf="submitting">Publishing...</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Recent Posts -->
+  <div class="recent-posts">
+    <h3>Recent Posts</h3>
+
+    <div class="posts-loading" *ngIf="loadingPosts">
+      <i class="bx bx-loader-alt bx-spin"></i>
+    </div>
+
+    <div class="posts-empty" *ngIf="!loadingPosts && recentPosts.length === 0">
+      <p>No posts yet. Create one above to get started!</p>
+    </div>
+
+    <div class="post-list" *ngIf="!loadingPosts && recentPosts.length > 0">
+      <div class="post-item" *ngFor="let post of recentPosts">
+        <div class="post-item-header">
+          <div class="post-type-pill" [attr.data-type]="post.type">{{ post.type | titlecase }}</div>
+          <span class="post-item-time">{{ getRelativeTime(post.createdAt) }}</span>
+          <button class="delete-btn" (click)="deletePost(post._id)" title="Delete post">
+            <i class="bx bx-trash"></i>
+          </button>
+        </div>
+        <div class="post-item-title" *ngIf="post.title">{{ post.title }}</div>
+        <div class="post-item-body">{{ post.body }}</div>
+        <div class="post-item-images" *ngIf="post.images?.length > 0">
+          <img *ngFor="let img of post.images" [src]="img.url" alt="Post image" />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

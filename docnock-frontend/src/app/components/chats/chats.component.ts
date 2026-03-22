@@ -83,6 +83,7 @@ export class ChatsComponent {
   searchgroupname: any = ''
   userCallingparticipantInfo:boolean = false;
   showPatientContext = false;
+  showDocumentPanel = false;
 
   constructor(
     private route: ActivatedRoute,

@@ -72,6 +72,12 @@
               </span>
             </td>
             <td class="action-cell">
+              <button class="btn action-btn ai-btn"
+                      (click)="summarizeHandoff(h._id)"
+                      [disabled]="summaryLoading && summaryHandoffId === h._id"
+                      title="AI Summary">
+                <i class="bx" [ngClass]="(summaryLoading && summaryHandoffId === h._id) ? 'bx-loader-alt bx-spin' : 'bx-bulb'"></i>
+              </button>
               <button class="btn action-btn acknowledge-btn"
                       *ngIf="h.status === 'submitted'"
                       (click)="acknowledgeHandoff(h._id)">
@@ -89,6 +95,15 @@
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- AI Summary Panel -->
+    <div class="ai-summary-panel" *ngIf="handoffSummary">
+      <div class="ai-summary-header">
+        <span><i class="bx bxs-bot"></i> AI Handoff Summary</span>
+        <button class="btn-dismiss" (click)="dismissSummary()"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="ai-summary-content">{{ handoffSummary }}</div>
     </div>
 
     <!-- Empty -->

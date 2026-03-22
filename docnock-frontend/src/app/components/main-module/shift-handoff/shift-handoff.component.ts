@@ -1,14 +1,16 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ToastrService } from 'ngx-toastr';
+import { Subscription } from 'rxjs';
 import { AuthServiceService } from 'src/app/services/auth-service.service';
 import { CoreService } from 'src/app/shared/core.service';
+import { FacilityContextService } from 'src/app/services/facility-context.service';
 
 @Component({
   selector: 'app-shift-handoff',
   templateUrl: './shift-handoff.component.html',
   styleUrls: ['./shift-handoff.component.scss'],
 })
-export class ShiftHandoffComponent implements OnInit {
+export class ShiftHandoffComponent implements OnInit, OnDestroy {
   handoffs: any[] = [];
   loading = true;
   totalRecords = 0;
@@ -37,14 +39,24 @@ export class ShiftHandoffComponent implements OnInit {
   statuses = ['draft', 'submitted', 'acknowledged', 'completed'];
   shiftTypes = ['DAY', 'EVENING', 'NIGHT'];
 
+  private facilitySub!: Subscription;
+
   constructor(
     private authService: AuthServiceService,
     private toastr: ToastrService,
-    private _coreService: CoreService
+    private _coreService: CoreService,
+    private facilityContext: FacilityContextService
   ) {}
 
   ngOnInit(): void {
-    this.loadHandoffs();
+    this.facilitySub = this.facilityContext.activeFacility$.subscribe(() => {
+      this.currentPage = 1;
+      this.loadHandoffs();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.facilitySub?.unsubscribe();
   }
 
   loadHandoffs() {
@@ -57,6 +69,8 @@ export class ShiftHandoffComponent implements OnInit {
     if (this.unitFilter) params['unit'] = this.unitFilter;
     if (this.startDate) params['startDate'] = this.startDate;
     if (this.endDate) params['endDate'] = this.endDate;
+    const facilityId = this.facilityContext.currentFacilityId;
+    if (facilityId) params['facilityId'] = facilityId;
 
     this.authService.getHandoffs(params).subscribe({
       next: (res: any) => {
@@ -186,6 +200,37 @@ export class ShiftHandoffComponent implements OnInit {
         this.toastr.error(err.error?.message || 'Failed to complete handoff');
       },
     });
+  }
+
+  // AI Summarization
+  handoffSummary: string = '';
+  summaryLoading: boolean = false;
+  summaryHandoffId: string = '';
+
+  summarizeHandoff(id: string) {
+    this.summaryHandoffId = id;
+    this.summaryLoading = true;
+    this.handoffSummary = '';
+
+    this.authService.summarizeHandoff(id).subscribe({
+      next: (res: any) => {
+        if (res.success) {
+          this.handoffSummary = res.summary;
+        } else {
+          this.toastr.error(res.message || 'Failed to generate summary');
+        }
+        this.summaryLoading = false;
+      },
+      error: () => {
+        this.toastr.error('Failed to generate AI summary');
+        this.summaryLoading = false;
+      },
+    });
+  }
+
+  dismissSummary() {
+    this.handoffSummary = '';
+    this.summaryHandoffId = '';
   }
 
   getStatusClass(status: string): string {

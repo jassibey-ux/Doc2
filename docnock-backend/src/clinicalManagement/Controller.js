@@ -10,13 +10,16 @@ import { encryptData } from "../utils/encryptionUtils";
 export const createHandoff = async (req, res) => {
   try {
     const {
-      facilityId, unit, shiftType, shiftDate, outgoingNurse, incomingNurse,
+      facilityId: bodyFacilityId, unit, shiftType, shiftDate, outgoingNurse, incomingNurse,
       patients, generalNotes, equipmentIssues, staffingNotes,
     } = req.body;
 
     if (!unit || !shiftType) {
       return Error(res, 400, "unit and shiftType are required");
     }
+
+    // Prefer middleware-resolved facilityId, fallback to body for backward compat
+    const facilityId = req.facilityId || bodyFacilityId;
 
     const handoff = await ShiftHandoff.create({
       facilityId: facilityId || undefined,
@@ -40,9 +43,11 @@ export const createHandoff = async (req, res) => {
 
 export const getHandoffs = async (req, res) => {
   try {
-    const { facilityId, status, from, to, unit, outgoingNurse, incomingNurse } = req.query;
+    const { facilityId: queryFacilityId, status, from, to, unit, outgoingNurse, incomingNurse } = req.query;
 
     const filter = {};
+    // Prefer middleware-resolved facilityId, fallback to query for backward compat
+    const facilityId = req.facilityId || queryFacilityId;
     if (facilityId) filter.facilityId = facilityId;
     if (status) filter.status = status;
     if (unit) filter.unit = unit;
@@ -178,7 +183,8 @@ export const createSbar = async (req, res) => {
 
 export const getSbars = async (req, res) => {
   try {
-    const { facilityId, status, priority, createdBy, recipientUser } = req.query;
+    const { facilityId: queryFacilityId, status, priority, createdBy, recipientUser } = req.query;
+    const facilityId = req.facilityId || queryFacilityId;
 
     const filter = {};
     if (facilityId) filter.facilityId = facilityId;
@@ -297,7 +303,8 @@ export const createAlert = async (req, res) => {
 
 export const getAlerts = async (req, res) => {
   try {
-    const { facilityId, status, severity, alertType, unit } = req.query;
+    const { facilityId: queryFacilityId, status, severity, alertType, unit } = req.query;
+    const facilityId = req.facilityId || queryFacilityId;
 
     const filter = {};
     if (facilityId) filter.facilityId = facilityId;
@@ -428,7 +435,8 @@ export const createConsultation = async (req, res) => {
 
 export const getConsultations = async (req, res) => {
   try {
-    const { facilityId, status, priority, consultantType, consultantUser, requestedBy } = req.query;
+    const { facilityId: queryFacilityId, status, priority, consultantType, consultantUser, requestedBy } = req.query;
+    const facilityId = req.facilityId || queryFacilityId;
 
     const filter = {};
     if (facilityId) filter.facilityId = facilityId;

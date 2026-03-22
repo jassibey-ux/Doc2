@@ -266,6 +266,17 @@
             <i class="bx bx-body"></i>
           </button>
 
+          <!-- Document Panel Toggle -->
+          <button
+            *ngIf="activeGroup"
+            class="doc-panel-toggle-btn"
+            [class.active]="showDocumentPanel"
+            (click)="showDocumentPanel = !showDocumentPanel"
+            title="Documents"
+          >
+            <i class="bx bx-file"></i>
+          </button>
+
           <!-- Invite Family -->
           <button
             *ngIf="activeGroup"
@@ -1338,3 +1349,10 @@
   [visible]="showPatientContext"
   (close)="showPatientContext = false"
 ></app-patient-context-panel>
+
+<!-- Chat Document Panel -->
+<app-chat-document-panel
+  [conversationId]="activeGroup?.groupId"
+  [visible]="showDocumentPanel"
+  (close)="showDocumentPanel = false"
+></app-chat-document-panel>

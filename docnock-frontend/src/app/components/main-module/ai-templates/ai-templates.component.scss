@@ -1,0 +1,433 @@
+$primary: #005EB8;
+$indigo: #6366F1;
+$text-primary: #1e293b;
+$text-secondary: #64748b;
+$border: #e2e8f0;
+$bg-light: #f8fafc;
+
+.ai-templates {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+
+  h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: $text-primary;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    i { color: $indigo; font-size: 26px; }
+  }
+
+  .subtitle {
+    color: $text-secondary;
+    font-size: 14px;
+    margin: 4px 0 0;
+  }
+}
+
+.btn-create {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: $indigo;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  &:hover { background: darken($indigo, 8%); }
+}
+
+.category-filter {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.cat-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid $border;
+  border-radius: 20px;
+  background: #fff;
+  font-size: 13px;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &.active {
+    background: $indigo;
+    color: #fff;
+    border-color: $indigo;
+  }
+
+  &:hover:not(.active) {
+    border-color: $indigo;
+    color: $indigo;
+  }
+}
+
+.loading-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: $text-secondary;
+  i { font-size: 32px; }
+  p { margin-top: 8px; font-size: 14px; }
+}
+
+.templates-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.templates-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.template-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid $border;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover { border-color: $indigo; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+  &.selected { border-color: $indigo; box-shadow: 0 0 0 3px rgba($indigo, 0.1); }
+
+  .card-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    i { font-size: 22px; }
+  }
+
+  .card-body {
+    flex: 1;
+    min-width: 0;
+
+    h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: $text-primary;
+      margin: 0 0 4px;
+    }
+
+    p {
+      font-size: 12px;
+      color: $text-secondary;
+      margin: 0 0 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  .card-arrow {
+    color: #cbd5e1;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+}
+
+.category-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: $text-secondary;
+  i { font-size: 48px; color: #cbd5e1; }
+  p { font-size: 14px; margin-top: 8px; }
+}
+
+// Selected template panel
+.template-panel {
+  background: #fff;
+  border: 1px solid $border;
+  border-radius: 12px;
+  padding: 20px;
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+
+    h3 { font-size: 16px; font-weight: 600; color: $text-primary; margin: 0 0 4px; }
+    p { font-size: 13px; color: $text-secondary; margin: 0; }
+  }
+
+  .btn-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: $text-secondary;
+    font-size: 22px;
+    padding: 0;
+    &:hover { color: $text-primary; }
+  }
+}
+
+.variable-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.var-field {
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: $text-primary;
+    margin-bottom: 4px;
+  }
+}
+
+.form-input {
+  width: 100%;
+  border: 1px solid $border;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: $text-primary;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: $indigo;
+    box-shadow: 0 0 0 3px rgba($indigo, 0.1);
+  }
+
+  &::placeholder { color: #94a3b8; }
+}
+
+textarea.form-input {
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.btn-run {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background: $indigo;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 16px;
+
+  &:hover:not(:disabled) { background: darken($indigo, 8%); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.result-panel {
+  background: $bg-light;
+  border: 1px solid $border;
+  border-left: 4px solid $indigo;
+  border-radius: 8px;
+  padding: 16px;
+
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+
+    span {
+      font-size: 13px;
+      font-weight: 600;
+      color: $indigo;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      i { font-size: 18px; }
+    }
+  }
+
+  .btn-copy {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: 1px solid $border;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: $text-secondary;
+    cursor: pointer;
+    &:hover { background: #fff; color: $indigo; border-color: $indigo; }
+  }
+
+  .result-content {
+    font-size: 14px;
+    line-height: 1.7;
+    color: $text-primary;
+    white-space: pre-wrap;
+  }
+}
+
+// Create modal
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 560px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid $border;
+
+  h3 { font-size: 16px; font-weight: 600; margin: 0; }
+  button { background: none; border: none; cursor: pointer; font-size: 22px; color: $text-secondary; }
+}
+
+.modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-field {
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: $text-primary;
+    margin-bottom: 4px;
+
+    .hint { color: $text-secondary; font-weight: 400; font-size: 11px; }
+  }
+}
+
+.var-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+
+  input { flex: 1; }
+
+  .btn-remove-var {
+    background: none;
+    border: 1px solid $border;
+    border-radius: 6px;
+    padding: 0 8px;
+    cursor: pointer;
+    color: #ef4444;
+    &:hover { background: #fef2f2; }
+  }
+}
+
+.btn-add-var {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 1px dashed $border;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: $text-secondary;
+  cursor: pointer;
+  &:hover { border-color: $indigo; color: $indigo; }
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid $border;
+}
+
+.btn-cancel {
+  padding: 10px 20px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  &:hover { background: $bg-light; }
+}
+
+.btn-save {
+  padding: 10px 20px;
+  background: $indigo;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  &:hover:not(:disabled) { background: darken($indigo, 8%); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}

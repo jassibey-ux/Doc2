@@ -1,7 +1,9 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ToastrService } from 'ngx-toastr';
+import { Subscription } from 'rxjs';
 import { AuthServiceService } from 'src/app/services/auth-service.service';
 import { CoreService } from 'src/app/shared/core.service';
+import { FacilityContextService } from 'src/app/services/facility-context.service';
 
 @Component({
   selector: 'app-clinical-alerts',
@@ -48,6 +50,7 @@ export class ClinicalAlertsComponent implements OnInit, OnDestroy {
 
   // Auto-refresh
   private refreshInterval: any = null;
+  private facilitySub!: Subscription;
 
   severities = ['CRITICAL', 'WARNING', 'INFO'];
   statuses = ['active', 'acknowledged', 'resolved', 'escalated'];
@@ -56,11 +59,15 @@ export class ClinicalAlertsComponent implements OnInit, OnDestroy {
   constructor(
     private authService: AuthServiceService,
     private toastr: ToastrService,
-    private _coreService: CoreService
+    private _coreService: CoreService,
+    private facilityContext: FacilityContextService
   ) {}
 
   ngOnInit(): void {
-    this.loadAlerts();
+    this.facilitySub = this.facilityContext.activeFacility$.subscribe(() => {
+      this.currentPage = 1;
+      this.loadAlerts();
+    });
     // Auto-refresh every 30 seconds
     this.refreshInterval = setInterval(() => this.loadAlerts(true), 30000);
   }
@@ -69,6 +76,7 @@ export class ClinicalAlertsComponent implements OnInit, OnDestroy {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
     }
+    this.facilitySub?.unsubscribe();
   }
 
   loadAlerts(silent = false) {
@@ -80,6 +88,8 @@ export class ClinicalAlertsComponent implements OnInit, OnDestroy {
     if (this.severityFilter) params['severity'] = this.severityFilter;
     if (this.statusFilter) params['status'] = this.statusFilter;
     if (this.alertTypeFilter) params['alertType'] = this.alertTypeFilter;
+    const facilityId = this.facilityContext.currentFacilityId;
+    if (facilityId) params['facilityId'] = facilityId;
 
     this.authService.getAlerts(params).subscribe({
       next: (res: any) => {

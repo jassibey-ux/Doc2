@@ -30,10 +30,10 @@ const userSchema = new mongoose.Schema(
     },
     uniqueId: {
       type: Number,
-      required: [true, "Unique Id is required."],
+      required: false,
       trim: true,
       index: true,
-      unique: true,
+      sparse: true,
     },
     userIds: [{ // this field is used for store senior user
       type: mongoose.Schema.Types.ObjectId,
@@ -59,9 +59,12 @@ const userSchema = new mongoose.Schema(
 },
     mobile: {
       type: Number,
-      required: [true, "Mobile number is required."],
+      required: false,
       validate: {
-        validator: (v) => /^\d{10}$/.test(v),
+        validator: function(v) {
+          if (!v && this.role === "family_member") return true;
+          return /^\d{10}$/.test(v);
+        },
         message: "Mobile number must be 10 digits.",
       },
     },
@@ -74,7 +77,7 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, "Password is required."],
+      required: false,
       minlength: [6, "Password must be at least 6 characters."],
     },
     role: {

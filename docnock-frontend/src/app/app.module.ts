@@ -57,10 +57,20 @@ import { ClinicalAlertsComponent } from './components/main-module/clinical-alert
 import { ConsultationRequestComponent } from './components/main-module/consultation-request/consultation-request.component';
 import { PatientStatusBoardComponent } from './components/main-module/patient-status-board/patient-status-board.component';
 import { MultiFacilityComponent } from './components/main-module/multi-facility/multi-facility.component';
+import { FacilityFormModalComponent } from './components/main-module/multi-facility/facility-form-modal/facility-form-modal.component';
 import { SsoSettingsComponent } from './components/main-module/sso-settings/sso-settings.component';
 import { ClinicalHubComponent } from './components/main-module/clinical-hub/clinical-hub.component';
 import { StaffHubComponent } from './components/main-module/staff-hub/staff-hub.component';
 import { PatientContextPanelComponent } from './components/main-module/patient-context-panel/patient-context-panel.component';
+import { ChatDocumentPanelComponent } from './components/main-module/chat-document-panel/chat-document-panel.component';
+import { FamilyFeedComponent } from './components/family-portal/family-feed/family-feed.component';
+import { FamilyChatComponent } from './components/family-portal/family-chat/family-chat.component';
+import { FamilyHealthComponent } from './components/family-portal/family-health/family-health.component';
+import { FamilyVideoComponent } from './components/family-portal/family-video/family-video.component';
+import { FamilyFeedCreatorComponent } from './components/family-feed-creator/family-feed-creator.component';
+import { FamilyPortalAdminComponent } from './components/main-module/family-portal-admin/family-portal-admin.component';
+import { AiAssistantComponent } from './components/main-module/ai-assistant/ai-assistant.component';
+import { AiTemplatesComponent } from './components/main-module/ai-templates/ai-templates.component';
 
 @NgModule({
   declarations: [
@@ -100,10 +110,20 @@ import { PatientContextPanelComponent } from './components/main-module/patient-c
     ConsultationRequestComponent,
     PatientStatusBoardComponent,
     MultiFacilityComponent,
+    FacilityFormModalComponent,
     SsoSettingsComponent,
     ClinicalHubComponent,
     StaffHubComponent,
     PatientContextPanelComponent,
+    ChatDocumentPanelComponent,
+    FamilyFeedComponent,
+    FamilyChatComponent,
+    FamilyHealthComponent,
+    FamilyVideoComponent,
+    FamilyFeedCreatorComponent,
+    FamilyPortalAdminComponent,
+    AiAssistantComponent,
+    AiTemplatesComponent,
   ],
   imports: [
     BrowserModule,

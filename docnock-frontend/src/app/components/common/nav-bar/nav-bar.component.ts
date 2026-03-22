@@ -7,6 +7,7 @@ import { ChatService } from 'src/app/services/chat.service';
 import { ToastrService } from 'ngx-toastr';
 import { Subscription } from 'rxjs';
 import { ThemeService } from 'src/app/services/themeservice';
+import { FacilityContextService, FacilityInfo } from 'src/app/services/facility-context.service';
 
 
 @Component({
@@ -30,6 +31,14 @@ hasMore: boolean = true;
 activeCallSession: any = null;
 private callCapsuleInterval: any;
 
+// ─── Facility Switcher ────────────────────────────────────────────────────
+facilities: FacilityInfo[] = [];
+activeFacility: FacilityInfo | null = null;
+showFacilitySwitcher = false;
+isSuperadmin = false;
+private facilitySub!: Subscription;
+private activeFacilitySub!: Subscription;
+
   constructor(
     private authService: AuthServiceService,
     private _coreService: CoreService,
@@ -37,7 +46,8 @@ private callCapsuleInterval: any;
     private router: Router,
     private chatservice: ChatService,
     private toastr:ToastrService,
-    private elementRef: ElementRef
+    private elementRef: ElementRef,
+    private facilityContext: FacilityContextService
   ) { }
   ngOnInit(): void {
     // Register user
@@ -64,6 +74,16 @@ private callCapsuleInterval: any;
         }
       }
     });
+
+    // ─── Facility context init ──────────────────────────────────────────────
+    this.isSuperadmin = this.authService.getRole() === 'superadmin';
+    this.facilityContext.init();
+    this.facilitySub = this.facilityContext.facilities$.subscribe(
+      (list) => (this.facilities = list)
+    );
+    this.activeFacilitySub = this.facilityContext.activeFacility$.subscribe(
+      (f) => (this.activeFacility = f)
+    );
 
     this.getgrouplist();
     this.refreshActiveCallSession();
@@ -95,6 +115,23 @@ private callCapsuleInterval: any;
       clearInterval(this.callCapsuleInterval);
       this.callCapsuleInterval = null;
     }
+    this.facilitySub?.unsubscribe();
+    this.activeFacilitySub?.unsubscribe();
+  }
+
+  // ─── Facility Switcher Methods ────────────────────────────────────────────
+  toggleFacilitySwitcher(): void {
+    this.showFacilitySwitcher = !this.showFacilitySwitcher;
+  }
+
+  onFacilitySwitch(facilityId: string): void {
+    this.showFacilitySwitcher = false;
+    this.facilityContext.switchFacility(facilityId);
+  }
+
+  onClearFacility(): void {
+    this.showFacilitySwitcher = false;
+    this.facilityContext.clearFacility();
   }
 
   refreshActiveCallSession() {
@@ -441,12 +478,19 @@ private callCapsuleInterval: any;
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: Event): void {
+    const clickedElement = event.target as HTMLElement;
+
     if (this.showNotification) {
-      const clickedElement = event.target as HTMLElement;
       const notificationElement = this.elementRef.nativeElement.querySelector('.notification');
-      
       if (notificationElement && !notificationElement.contains(clickedElement)) {
         this.showNotification = false;
+      }
+    }
+
+    if (this.showFacilitySwitcher) {
+      const switcherElement = this.elementRef.nativeElement.querySelector('.facility-switcher');
+      if (switcherElement && !switcherElement.contains(clickedElement)) {
+        this.showFacilitySwitcher = false;
       }
     }
   }

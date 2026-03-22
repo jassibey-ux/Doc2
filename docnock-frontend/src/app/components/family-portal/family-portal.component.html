@@ -14,88 +14,66 @@
   </div>
 
   <!-- Verified Family Portal -->
-  <div class="family-content" *ngIf="verified && !loading">
+  <div class="family-dashboard" *ngIf="verified && !loading">
+    <!-- Header -->
     <header class="family-header">
-      <div class="family-logo">
-        <i class="bx bx-plus-medical"></i>
-        <span>DocNock</span>
+      <div class="header-left">
+        <div class="family-logo">
+          <img src="assets/images/dash-logo.png" alt="DocNock" />
+        </div>
       </div>
-      <h2>Family Portal</h2>
+      <div class="header-center">
+        <span class="portal-title">Family Portal</span>
+      </div>
+      <div class="header-right">
+        <span class="user-greeting" *ngIf="userName">Hi, {{ userName }}</span>
+        <button class="btn-logout" (click)="logout()" title="Sign Out">
+          <i class="bx bx-log-out"></i>
+        </button>
+      </div>
     </header>
 
-    <!-- Patient Summary Loading -->
-    <div class="family-loading" *ngIf="patientLoading">
-      <i class="bx bx-loader-alt bx-spin"></i>
-      <p>Loading patient information...</p>
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <app-family-feed
+        *ngIf="activeTab === 'feed'"
+        [conversationId]="conversationId">
+      </app-family-feed>
+
+      <app-family-chat
+        *ngIf="activeTab === 'chat'"
+        [conversationId]="conversationId">
+      </app-family-chat>
+
+      <app-family-health
+        *ngIf="activeTab === 'health'"
+        [conversationId]="conversationId">
+      </app-family-health>
+
+      <app-family-video
+        *ngIf="activeTab === 'video'"
+        [conversationId]="conversationId">
+      </app-family-video>
     </div>
 
-    <div class="family-body" *ngIf="patientData && !patientLoading">
-      <!-- Patient Card -->
-      <div class="patient-card">
-        <div class="patient-name-row">
-          <i class="bx bx-user-circle"></i>
-          <div>
-            <h3>{{ patientData.patientName }}</h3>
-            <span class="relationship-badge">{{ patientData.relationship | titlecase }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Care Team -->
-      <div class="family-section">
-        <h4><i class="bx bx-group"></i> Care Team</h4>
-        <div class="care-team-list">
-          <div class="care-team-member" *ngFor="let member of patientData.careTeam">
-            <div class="member-avatar">{{ member.name?.charAt(0) }}</div>
-            <div>
-              <div class="member-name">{{ member.name }}</div>
-              <div class="member-role">{{ member.role | titlecase }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Recent Updates -->
-      <div class="family-section">
-        <h4><i class="bx bx-message-detail"></i> Recent Updates</h4>
-        <div class="updates-list" *ngIf="patientData.recentUpdates?.length; else noUpdates">
-          <div class="update-item" *ngFor="let update of patientData.recentUpdates">
-            <div class="update-from">{{ update.from | titlecase }}</div>
-            <div class="update-message">{{ update.message }}</div>
-            <div class="update-date">{{ update.date | date:'MMM d, h:mm a' }}</div>
-          </div>
-        </div>
-        <ng-template #noUpdates>
-          <p class="no-data">No recent updates available.</p>
-        </ng-template>
-      </div>
-
-      <!-- Video Visit Request -->
-      <div class="family-section">
-        <div class="video-request-success" *ngIf="videoRequestSent">
-          <i class="bx bx-check-circle"></i> Video visit request sent to the care team.
-        </div>
-
-        <button class="btn-video-request" *ngIf="!showVideoRequest && !videoRequestSent" (click)="showVideoRequest = true">
-          <i class="bx bx-video"></i> Request Video Visit
-        </button>
-
-        <div class="video-request-form" *ngIf="showVideoRequest">
-          <h4>Request a Video Visit</h4>
-          <div class="form-field">
-            <label>Preferred Time</label>
-            <input type="datetime-local" [(ngModel)]="videoPreferredTime" class="family-input" />
-          </div>
-          <div class="form-field">
-            <label>Notes (optional)</label>
-            <textarea [(ngModel)]="videoNotes" class="family-input family-textarea" placeholder="Any specific questions or concerns..."></textarea>
-          </div>
-          <div class="form-actions">
-            <button class="btn-cancel" (click)="showVideoRequest = false">Cancel</button>
-            <button class="btn-submit" (click)="requestVideoVisit()">Send Request</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Bottom Tab Bar -->
+    <nav class="tab-bar">
+      <button class="tab-item" [class.active]="activeTab === 'feed'" (click)="switchTab('feed')">
+        <i class="bx bx-news"></i>
+        <span>Feed</span>
+      </button>
+      <button class="tab-item" [class.active]="activeTab === 'chat'" (click)="switchTab('chat')">
+        <i class="bx bx-chat"></i>
+        <span>Chat</span>
+      </button>
+      <button class="tab-item" [class.active]="activeTab === 'health'" (click)="switchTab('health')">
+        <i class="bx bx-heart"></i>
+        <span>Health</span>
+      </button>
+      <button class="tab-item" [class.active]="activeTab === 'video'" (click)="switchTab('video')">
+        <i class="bx bx-video"></i>
+        <span>Video</span>
+      </button>
+    </nav>
   </div>
 </div>

@@ -38,6 +38,23 @@
     </div>
   </div>
 
+  <!-- Actions Bar -->
+  <div class="actions-bar">
+    <button class="btn-create-facility" (click)="openCreateModal()">
+      <i class="bx bx-plus"></i> Create Facility
+    </button>
+  </div>
+
+  <!-- Empty State -->
+  <div *ngIf="!loading && facilities.length === 0" class="empty-state glass-panel">
+    <i class="bx bx-buildings empty-icon"></i>
+    <h4>No Facilities Yet</h4>
+    <p>Create your first facility to start managing multi-site operations.</p>
+    <button class="btn-create-facility" (click)="openCreateModal()">
+      <i class="bx bx-plus"></i> Create Facility
+    </button>
+  </div>
+
   <div *ngIf="loading" class="loading-state">
     <i class="bx bx-loader-alt bx-spin"></i>
     <p>Loading facility data...</p>
@@ -52,10 +69,18 @@
       <div class="facility-header">
         <div>
           <h4>{{ facility.name }}</h4>
-          <span class="facility-meta"><i class="bx bx-map"></i> {{ facility.location }} &middot; {{ facility.type }}</span>
+          <span class="facility-meta"><i class="bx bx-map"></i> {{ facility.location }} &middot; {{ getTypeLabel(facility.type) }}</span>
         </div>
-        <div class="facility-status" [class]="facility.status">
-          {{ facility.status === 'attention' ? 'Needs Attention' : 'Operational' }}
+        <div class="facility-header-actions">
+          <div class="facility-status" [class]="facility.status">
+            {{ facility.status === 'attention' ? 'Needs Attention' : 'Operational' }}
+          </div>
+          <button class="btn-icon" title="Edit" (click)="openEditModal(facility, $event)">
+            <i class="bx bx-edit-alt"></i>
+          </button>
+          <button class="btn-icon btn-danger" title="Delete" (click)="confirmDelete(facility, $event)">
+            <i class="bx bx-trash"></i>
+          </button>
         </div>
       </div>
 
@@ -117,4 +142,12 @@
       </div>
     </div>
   </div>
+
+  <!-- Create/Edit Facility Modal -->
+  <app-facility-form-modal
+    *ngIf="showCreateModal"
+    [facility]="editingFacility"
+    (save)="onFacilitySaved()"
+    (close)="closeModal()"
+  ></app-facility-form-modal>
 </div>

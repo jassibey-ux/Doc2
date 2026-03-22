@@ -74,6 +74,21 @@
       </a>
     </li>
 
+    <!-- AI Tools Section -->
+    <li class="sidebar-divider"><span>AI Tools</span></li>
+    <li class="incoBx" data-label="AI Assistant" routerLinkActive="active" routerLink="/{{dynamicpath}}/ai-assistant">
+      <a>
+        <i class='bx bxs-bot'></i>
+        <span class="text">AI Assistant</span>
+      </a>
+    </li>
+    <li class="incoBx" data-label="AI Templates" routerLinkActive="active" routerLink="/{{dynamicpath}}/ai-templates">
+      <a>
+        <i class='bx bxs-bookmarks'></i>
+        <span class="text">AI Templates</span>
+      </a>
+    </li>
+
     <!-- Admin Section (superadmin only) -->
     <li class="sidebar-divider" *ngIf="dynamicpath === 'superadmin'"><span>Admin</span></li>
     <li class="incoBx" data-label="Integrations" routerLinkActive="active" routerLink="/{{dynamicpath}}/integrations" *ngIf="dynamicpath === 'superadmin'">
@@ -119,6 +134,15 @@
       <a>
         <i class='bx bxs-shield-quarter'></i>
         <span class="text">SSO / SAML</span>
+      </a>
+    </li>
+
+    <!-- Family Portal Section -->
+    <li class="sidebar-divider"><span>Family</span></li>
+    <li class="incoBx" data-label="Family Portal" routerLinkActive="active" routerLink="/{{dynamicpath}}/family-portal">
+      <a>
+        <i class='bx bx-group'></i>
+        <span class="text">Family Portal</span>
       </a>
     </li>
 

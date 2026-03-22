@@ -21,6 +21,8 @@ export class MultiFacilityComponent implements OnInit, OnDestroy {
 
   // View
   selectedFacility: any = null;
+  showCreateModal = false;
+  editingFacility: any = null;
 
   private refreshInterval: any = null;
 
@@ -42,105 +44,115 @@ export class MultiFacilityComponent implements OnInit, OnDestroy {
   loadFacilities(): void {
     this.loading = true;
 
-    this.facilities = [
-      {
-        id: 1, name: 'DocNock Central Hospital', location: 'San Francisco, CA',
-        type: 'General Hospital', beds: 320, occupancy: 87,
-        patients: 278, staff: 450, activeAlerts: 5, criticalAlerts: 1,
-        departments: [
-          { name: 'ICU', beds: 40, occupied: 38, nurses: 24 },
-          { name: 'Med-Surg', beds: 80, occupied: 68, nurses: 32 },
-          { name: 'ER', beds: 30, occupied: 22, nurses: 18 },
-          { name: 'Pediatrics', beds: 45, occupied: 35, nurses: 20 },
-          { name: 'Cardiac', beds: 35, occupied: 32, nurses: 16 },
-        ],
-        recentActivity: [
-          { type: 'alert', message: 'Critical alert: ICU bed shortage', time: '5m ago', severity: 'critical' },
-          { type: 'admission', message: '3 new admissions in last hour', time: '15m ago', severity: 'info' },
-          { type: 'discharge', message: '5 patients discharged today', time: '1h ago', severity: 'info' },
-        ],
-        status: 'operational',
-      },
-      {
-        id: 2, name: 'DocNock Westside Clinic', location: 'Oakland, CA',
-        type: 'Outpatient Clinic', beds: 80, occupancy: 62,
-        patients: 50, staff: 85, activeAlerts: 2, criticalAlerts: 0,
-        departments: [
-          { name: 'Primary Care', beds: 25, occupied: 18, nurses: 12 },
-          { name: 'Urgent Care', beds: 15, occupied: 10, nurses: 8 },
-          { name: 'Rehab', beds: 20, occupied: 14, nurses: 10 },
-          { name: 'Imaging', beds: 20, occupied: 8, nurses: 6 },
-        ],
-        recentActivity: [
-          { type: 'staffing', message: '2 nurses called in sick', time: '30m ago', severity: 'warning' },
-          { type: 'admission', message: '12 appointments scheduled', time: '1h ago', severity: 'info' },
-        ],
-        status: 'operational',
-      },
-      {
-        id: 3, name: 'DocNock Senior Living East', location: 'Berkeley, CA',
-        type: 'Senior Living Facility', beds: 150, occupancy: 93,
-        patients: 140, staff: 180, activeAlerts: 8, criticalAlerts: 2,
-        departments: [
-          { name: 'Memory Care', beds: 40, occupied: 39, nurses: 20 },
-          { name: 'Assisted Living', beds: 60, occupied: 56, nurses: 24 },
-          { name: 'Skilled Nursing', beds: 50, occupied: 45, nurses: 30 },
-        ],
-        recentActivity: [
-          { type: 'alert', message: 'Fall alert in Memory Care wing', time: '2m ago', severity: 'critical' },
-          { type: 'alert', message: 'Medication error flagged', time: '20m ago', severity: 'warning' },
-          { type: 'handoff', message: 'Night shift handoff completed', time: '2h ago', severity: 'info' },
-        ],
-        status: 'attention',
-      },
-      {
-        id: 4, name: 'DocNock North Valley', location: 'Walnut Creek, CA',
-        type: 'General Hospital', beds: 200, occupancy: 75,
-        patients: 150, staff: 280, activeAlerts: 3, criticalAlerts: 0,
-        departments: [
-          { name: 'ICU', beds: 20, occupied: 16, nurses: 12 },
-          { name: 'Med-Surg', beds: 60, occupied: 45, nurses: 24 },
-          { name: 'Maternity', beds: 30, occupied: 22, nurses: 16 },
-          { name: 'Oncology', beds: 40, occupied: 30, nurses: 18 },
-          { name: 'ER', beds: 25, occupied: 18, nurses: 14 },
-        ],
-        recentActivity: [
-          { type: 'admission', message: '2 emergency admissions', time: '10m ago', severity: 'info' },
-          { type: 'discharge', message: '8 patients discharged today', time: '3h ago', severity: 'info' },
-        ],
-        status: 'operational',
-      },
-      {
-        id: 5, name: 'DocNock Pediatric Center', location: 'Palo Alto, CA',
-        type: 'Pediatric Hospital', beds: 120, occupancy: 68,
-        patients: 82, staff: 160, activeAlerts: 1, criticalAlerts: 0,
-        departments: [
-          { name: 'NICU', beds: 30, occupied: 22, nurses: 18 },
-          { name: 'PICU', beds: 20, occupied: 14, nurses: 12 },
-          { name: 'General Peds', beds: 40, occupied: 28, nurses: 16 },
-          { name: 'Adolescent', beds: 30, occupied: 18, nurses: 10 },
-        ],
-        recentActivity: [
-          { type: 'admission', message: '4 new NICU admissions', time: '45m ago', severity: 'info' },
-        ],
-        status: 'operational',
-      },
-    ];
+    this.authService.listFacilities().subscribe({
+      next: (res: any) => {
+        const payload = res?.data;
+        let raw: any[] = [];
 
-    this.updateAggregates();
-    this.loading = false;
+        // Handle encrypted response: { data: encrypted, pagination: {...} }
+        if (payload?.data && payload?.pagination) {
+          try {
+            raw = this.coreService.decryptObjectData(
+              typeof payload.data === 'string' ? { data: [payload.data] } : payload.data
+            ) || [];
+          } catch {
+            raw = Array.isArray(payload.data) ? payload.data : [];
+          }
+        } else if (Array.isArray(payload)) {
+          raw = payload;
+        }
+
+        // Normalize facility data for display
+        this.facilities = raw.map((f: any) => ({
+          ...f,
+          id: f._id,
+          location: f.address ? `${f.address.city || ''}${f.address.state ? ', ' + f.address.state : ''}` : '',
+          beds: f.capacity?.totalBeds || 0,
+          occupancy: 0,
+          patients: 0,
+          staff: 0,
+          activeAlerts: 0,
+          criticalAlerts: 0,
+          recentActivity: [],
+          status: f.status === 'active' ? 'operational' : f.status,
+        }));
+
+        // Load stats for each facility
+        this.facilities.forEach((facility, idx) => {
+          this.authService.getFacilityStats(facility.id).subscribe({
+            next: (statsRes: any) => {
+              const stats = statsRes?.data;
+              if (stats) {
+                this.facilities[idx].staff = stats.staff || 0;
+                this.facilities[idx].activeAlerts = stats.alerts || 0;
+                this.facilities[idx].occupancy = stats.occupancy || 0;
+                this.facilities[idx].recentHandoffs = stats.recentHandoffs || [];
+                this.facilities[idx].onCallNow = stats.onCallNow || [];
+                this.updateAggregates();
+              }
+            },
+            error: () => {},
+          });
+        });
+
+        this.updateAggregates();
+        this.loading = false;
+      },
+      error: (err: any) => {
+        this.toastr.error(err?.error?.message || 'Failed to load facilities');
+        this.facilities = [];
+        this.loading = false;
+      },
+    });
   }
 
   updateAggregates(): void {
     this.totalFacilities = this.facilities.length;
-    this.totalPatients = this.facilities.reduce((sum, f) => sum + f.patients, 0);
-    this.totalStaff = this.facilities.reduce((sum, f) => sum + f.staff, 0);
-    this.totalAlerts = this.facilities.reduce((sum, f) => sum + f.activeAlerts, 0);
-    this.avgOccupancy = Math.round(this.facilities.reduce((sum, f) => sum + f.occupancy, 0) / this.facilities.length);
+    this.totalPatients = this.facilities.reduce((sum: number, f: any) => sum + (f.patients || 0), 0);
+    this.totalStaff = this.facilities.reduce((sum: number, f: any) => sum + (f.staff || 0), 0);
+    this.totalAlerts = this.facilities.reduce((sum: number, f: any) => sum + (f.activeAlerts || 0), 0);
+    const totalOcc = this.facilities.reduce((sum: number, f: any) => sum + (f.occupancy || 0), 0);
+    this.avgOccupancy = this.facilities.length > 0 ? Math.round(totalOcc / this.facilities.length) : 0;
   }
 
   selectFacility(facility: any): void {
     this.selectedFacility = this.selectedFacility?.id === facility.id ? null : facility;
+  }
+
+  openCreateModal(): void {
+    this.editingFacility = null;
+    this.showCreateModal = true;
+  }
+
+  openEditModal(facility: any, event: Event): void {
+    event.stopPropagation();
+    this.editingFacility = facility;
+    this.showCreateModal = true;
+  }
+
+  closeModal(): void {
+    this.showCreateModal = false;
+    this.editingFacility = null;
+  }
+
+  onFacilitySaved(): void {
+    this.closeModal();
+    this.loadFacilities();
+  }
+
+  confirmDelete(facility: any, event: Event): void {
+    event.stopPropagation();
+    if (!confirm(`Are you sure you want to delete "${facility.name}"? This action cannot be undone.`)) return;
+
+    this.authService.deleteFacility(facility.id).subscribe({
+      next: () => {
+        this.toastr.success('Facility deleted');
+        this.loadFacilities();
+      },
+      error: (err: any) => {
+        this.toastr.error(err?.error?.message || 'Failed to delete facility');
+      },
+    });
   }
 
   getOccupancyColor(pct: number): string {
@@ -155,5 +167,13 @@ export class MultiFacilityComponent implements OnInit, OnDestroy {
       case 'warning': return 'bx bx-error';
       default: return 'bx bx-info-circle';
     }
+  }
+
+  getTypeLabel(type: string): string {
+    const labels: any = {
+      hospital: 'Hospital', clinic: 'Clinic', senior_living: 'Senior Living',
+      rehab: 'Rehabilitation', pediatric: 'Pediatric', other: 'Other',
+    };
+    return labels[type] || type;
   }
 }

@@ -13,6 +13,49 @@
       </div> -->
     </form>
     <div class="d-flex align-items-center justify-content-end col-md-5">
+      <!-- Facility Switcher -->
+      <div class="facility-switcher" *ngIf="facilities.length > 0">
+        <button
+          type="button"
+          class="facility-switcher-btn"
+          (click)="toggleFacilitySwitcher()"
+          [attr.title]="activeFacility ? activeFacility.name : 'All Facilities'"
+        >
+          <i class="bx bx-buildings"></i>
+          <span class="facility-name">{{ activeFacility ? activeFacility.name : 'All Facilities' }}</span>
+          <i class="bx bx-chevron-down"></i>
+        </button>
+
+        <div class="facility-dropdown" *ngIf="showFacilitySwitcher">
+          <div class="facility-dropdown-header">
+            <span>Switch Facility</span>
+          </div>
+          <ul class="facility-list">
+            <li
+              *ngIf="isSuperadmin"
+              class="facility-item"
+              [class.active]="!activeFacility"
+              (click)="onClearFacility()"
+            >
+              <i class="bx bx-globe"></i>
+              <span>All Facilities</span>
+            </li>
+            <li
+              *ngFor="let f of facilities"
+              class="facility-item"
+              [class.active]="activeFacility?._id === f._id"
+              (click)="onFacilitySwitch(f._id)"
+            >
+              <i class="bx bx-building"></i>
+              <div class="facility-item-info">
+                <span class="facility-item-name">{{ f.name }}</span>
+                <span class="facility-item-type" *ngIf="f.type">{{ f.type }}</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
       <button
         type="button"
         class="theme-icon-toggle"

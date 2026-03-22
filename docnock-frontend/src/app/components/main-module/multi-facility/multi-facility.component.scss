@@ -344,3 +344,71 @@
     grid-template-columns: 1fr;
   }
 }
+
+// Actions bar
+.actions-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.btn-create-facility {
+  background: var(--primary, #4F46E5);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  &:hover { opacity: 0.9; }
+}
+
+.facility-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 4px;
+
+  &:hover { color: #4F46E5; background: rgba(79, 70, 229, 0.1); }
+  &.btn-danger:hover { color: #e74c3c; background: rgba(231, 76, 60, 0.1); }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  margin-top: 16px;
+
+  .empty-icon {
+    font-size: 48px;
+    color: var(--primary, #4F46E5);
+    display: block;
+    margin-bottom: 12px;
+  }
+
+  h4 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 8px;
+  }
+
+  p {
+    font-size: 14px;
+    color: #757575;
+    margin: 0 0 20px;
+  }
+}

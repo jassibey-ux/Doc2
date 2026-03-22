@@ -1,14 +1,16 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ToastrService } from 'ngx-toastr';
+import { Subscription } from 'rxjs';
 import { AuthServiceService } from 'src/app/services/auth-service.service';
 import { CoreService } from 'src/app/shared/core.service';
+import { FacilityContextService } from 'src/app/services/facility-context.service';
 
 @Component({
   selector: 'app-consultation-request',
   templateUrl: './consultation-request.component.html',
   styleUrls: ['./consultation-request.component.scss'],
 })
-export class ConsultationRequestComponent implements OnInit {
+export class ConsultationRequestComponent implements OnInit, OnDestroy {
   consultations: any[] = [];
   loading = true;
   totalRecords = 0;
@@ -47,14 +49,24 @@ export class ConsultationRequestComponent implements OnInit {
     'Orthopedics', 'Psychiatry', 'Surgery', 'Other',
   ];
 
+  private facilitySub!: Subscription;
+
   constructor(
     private authService: AuthServiceService,
     private toastr: ToastrService,
-    private _coreService: CoreService
+    private _coreService: CoreService,
+    private facilityContext: FacilityContextService
   ) {}
 
   ngOnInit(): void {
-    this.loadConsultations();
+    this.facilitySub = this.facilityContext.activeFacility$.subscribe(() => {
+      this.currentPage = 1;
+      this.loadConsultations();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.facilitySub?.unsubscribe();
   }
 
   loadConsultations() {
@@ -65,6 +77,8 @@ export class ConsultationRequestComponent implements OnInit {
     };
     if (this.statusFilter) params['status'] = this.statusFilter;
     if (this.priorityFilter) params['priority'] = this.priorityFilter;
+    const facilityId = this.facilityContext.currentFacilityId;
+    if (facilityId) params['facilityId'] = facilityId;
 
     this.authService.getConsultations(params).subscribe({
       next: (res: any) => {

@@ -1,0 +1,141 @@
+<div class="video-container" [class.fullscreen]="viewState === 'calling'">
+
+  <!-- Landing State -->
+  <div class="video-landing" *ngIf="viewState === 'landing'">
+    <div class="video-hero">
+      <div class="hero-icon">
+        <i class="bx bx-video"></i>
+      </div>
+      <h2>Video Visits</h2>
+      <p>Connect face-to-face with your loved one's care team through secure video calls.</p>
+    </div>
+
+    <div class="video-features">
+      <div class="feature-item">
+        <i class="bx bx-calendar-check"></i>
+        <div>
+          <strong>Flexible Scheduling</strong>
+          <p>Request your preferred time and the care team will coordinate.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <i class="bx bx-shield-quarter"></i>
+        <div>
+          <strong>Secure & Private</strong>
+          <p>All video calls are encrypted and HIPAA-compliant.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <i class="bx bx-user-voice"></i>
+        <div>
+          <strong>Face-to-Face</strong>
+          <p>See your loved one and speak with their caregivers directly.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div class="form-error" *ngIf="error">
+      <i class="bx bx-error-circle"></i> {{ error }}
+    </div>
+
+    <div class="landing-actions">
+      <button class="btn-start-call" (click)="startCall()" [disabled]="isJoining">
+        <i class="bx bx-loader-alt bx-spin" *ngIf="isJoining"></i>
+        <i class="bx bx-video" *ngIf="!isJoining"></i>
+        <span *ngIf="!isJoining">Start Video Call</span>
+        <span *ngIf="isJoining">Connecting...</span>
+      </button>
+      <button class="btn-request" (click)="openRequestForm()">
+        <i class="bx bx-calendar-plus"></i>
+        Schedule a Visit
+      </button>
+    </div>
+  </div>
+
+  <!-- Active Call State -->
+  <div class="video-call-view" *ngIf="viewState === 'calling'">
+    <!-- Remote Video (full area) -->
+    <div class="remote-video-container">
+      <div #remoteVideo class="remote-video"></div>
+      <div class="remote-placeholder" *ngIf="!hasRemoteUser">
+        <i class="bx bx-user"></i>
+        <p>Waiting for care team to join...</p>
+      </div>
+    </div>
+
+    <!-- Local Video PIP -->
+    <div class="local-video-pip" [class.video-off]="isVideoOff">
+      <div #localVideo class="local-video"></div>
+      <div class="video-off-indicator" *ngIf="isVideoOff">
+        <i class="bx bx-video-off"></i>
+      </div>
+    </div>
+
+    <!-- Call Info Bar -->
+    <div class="call-info-bar">
+      <span class="call-duration">{{ callDuration }}</span>
+    </div>
+
+    <!-- Call Controls -->
+    <div class="call-controls">
+      <button class="control-btn" [class.active]="isMuted" (click)="toggleMute()" title="Toggle microphone">
+        <i class="bx" [ngClass]="isMuted ? 'bx-microphone-off' : 'bx-microphone'"></i>
+      </button>
+      <button class="control-btn" [class.active]="isVideoOff" (click)="toggleVideo()" title="Toggle camera">
+        <i class="bx" [ngClass]="isVideoOff ? 'bx-video-off' : 'bx-video'"></i>
+      </button>
+      <button class="control-btn end-call" (click)="endCall()" title="End call">
+        <i class="bx bx-phone-off"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Request Form -->
+  <div class="video-form-card" *ngIf="viewState === 'request'">
+    <h3><i class="bx bx-video-plus"></i> Request Video Visit</h3>
+
+    <div class="form-field">
+      <label>Preferred Date & Time</label>
+      <input type="datetime-local" [(ngModel)]="preferredTime" class="form-input" />
+      <span class="field-hint">The care team will do their best to accommodate your preferred time.</span>
+    </div>
+
+    <div class="form-field">
+      <label>Notes or Questions <span class="optional">(optional)</span></label>
+      <textarea
+        [(ngModel)]="notes"
+        class="form-input form-textarea"
+        placeholder="Any specific topics you'd like to discuss or questions for the care team..."
+        rows="4"
+        maxlength="500"
+      ></textarea>
+    </div>
+
+    <div class="form-error" *ngIf="error">
+      <i class="bx bx-error-circle"></i> {{ error }}
+    </div>
+
+    <div class="form-actions">
+      <button class="btn-cancel" (click)="cancelRequest()">Cancel</button>
+      <button class="btn-submit" (click)="submitRequest()" [disabled]="sending">
+        <i class="bx bx-loader-alt bx-spin" *ngIf="sending"></i>
+        <span *ngIf="!sending">Send Request</span>
+        <span *ngIf="sending">Sending...</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Success State -->
+  <div class="video-success" *ngIf="viewState === 'success'">
+    <div class="success-icon">
+      <i class="bx bx-check-circle"></i>
+    </div>
+    <h3>Request Sent!</h3>
+    <p>Your video visit request has been sent to the care team. They'll coordinate a time and notify you.</p>
+
+    <button class="btn-another" (click)="requestAnother()">
+      <i class="bx bx-arrow-back"></i> Back to Video Visits
+    </button>
+  </div>
+</div>

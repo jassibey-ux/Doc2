@@ -1,0 +1,96 @@
+<div class="chat-container">
+  <!-- Loading -->
+  <div class="chat-loading" *ngIf="loading">
+    <i class="bx bx-loader-alt bx-spin"></i>
+    <p>Connecting to chat...</p>
+  </div>
+
+  <!-- Error -->
+  <div class="chat-error" *ngIf="error && !loading">
+    <i class="bx bx-error-circle"></i>
+    <p>{{ error }}</p>
+    <button class="retry-btn" (click)="initializeChat()">
+      <i class="bx bx-refresh"></i> Try Again
+    </button>
+  </div>
+
+  <!-- Chat View -->
+  <div class="chat-view" *ngIf="!loading && !error">
+    <!-- Chat Header -->
+    <div class="chat-header">
+      <div class="chat-header-info">
+        <i class="bx bx-chat"></i>
+        <span>{{ chatGroupName }}</span>
+      </div>
+    </div>
+
+    <!-- Messages Area -->
+    <div class="messages-area" #messageContainer>
+      <!-- Load Older -->
+      <div class="load-older" *ngIf="hasMore">
+        <button class="load-older-btn" (click)="loadOlderMessages()" [disabled]="loadingMore">
+          <i class="bx bx-loader-alt bx-spin" *ngIf="loadingMore"></i>
+          <span *ngIf="!loadingMore">Load older messages</span>
+        </button>
+      </div>
+
+      <!-- Empty Chat -->
+      <div class="chat-empty" *ngIf="messages.length === 0">
+        <i class="bx bx-message-rounded-dots"></i>
+        <p>No messages yet. Say hello to your care team!</p>
+      </div>
+
+      <!-- Message List -->
+      <ng-container *ngFor="let msg of messages; let i = index; trackBy: trackByMessageId">
+        <!-- Date Separator -->
+        <div class="date-separator" *ngIf="shouldShowDateSeparator(i)">
+          <span>{{ formatDateSeparator(msg.createdAt || msg.timestamp) }}</span>
+        </div>
+
+        <!-- Message Bubble -->
+        <div class="message-row" [class.own]="isOwnMessage(msg)" [class.other]="!isOwnMessage(msg)">
+          <div class="message-avatar" *ngIf="!isOwnMessage(msg)">
+            {{ getInitial(msg.senderName) }}
+          </div>
+          <div class="message-content">
+            <span class="message-sender" *ngIf="!isOwnMessage(msg)">{{ msg.senderName }}</span>
+            <div class="message-bubble">
+              <p>{{ msg.message }}</p>
+            </div>
+            <span class="message-time">{{ formatTime(msg.createdAt || msg.timestamp) }}</span>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- Typing Indicator -->
+      <div class="typing-indicator" *ngIf="isTyping">
+        <div class="typing-avatar">
+          <i class="bx bx-user"></i>
+        </div>
+        <div class="typing-bubble">
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Area -->
+    <div class="input-area">
+      <div class="input-wrapper">
+        <textarea
+          class="message-input"
+          [(ngModel)]="newMessage"
+          (keydown)="onKeyDown($event)"
+          (keyup)="onTyping()"
+          placeholder="Type a message..."
+          rows="1"
+          maxlength="2000"
+        ></textarea>
+        <button class="send-btn" (click)="sendMessage()" [disabled]="!newMessage.trim() || sending">
+          <i class="bx bx-send"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

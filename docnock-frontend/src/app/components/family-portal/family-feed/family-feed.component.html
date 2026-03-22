@@ -1,0 +1,96 @@
+<div class="feed-container">
+  <!-- Refresh Button -->
+  <div class="feed-refresh" *ngIf="!loading">
+    <button class="refresh-btn" (click)="refresh()" title="Refresh feed">
+      <i class="bx bx-refresh"></i>
+    </button>
+  </div>
+
+  <!-- Skeleton Loading -->
+  <div class="feed-skeleton" *ngIf="loading">
+    <div class="skeleton-card" *ngFor="let i of [1, 2, 3]">
+      <div class="skeleton-header">
+        <div class="skeleton-avatar shimmer"></div>
+        <div class="skeleton-text-block">
+          <div class="skeleton-line short shimmer"></div>
+          <div class="skeleton-line shorter shimmer"></div>
+        </div>
+      </div>
+      <div class="skeleton-image shimmer"></div>
+      <div class="skeleton-body">
+        <div class="skeleton-line shimmer"></div>
+        <div class="skeleton-line medium shimmer"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty State -->
+  <div class="feed-empty" *ngIf="!loading && posts.length === 0">
+    <i class="bx bx-photo-album"></i>
+    <h3>No updates yet</h3>
+    <p>Check back soon for activity updates, photos, and announcements from the care team.</p>
+  </div>
+
+  <!-- Feed Posts -->
+  <div class="feed-list" *ngIf="!loading && posts.length > 0">
+    <div class="feed-card" *ngFor="let post of posts; trackBy: trackByPostId">
+      <!-- Card Header -->
+      <div class="card-header">
+        <div class="author-avatar">
+          {{ getInitial(post.authorName) }}
+        </div>
+        <div class="author-info">
+          <span class="author-name">{{ post.authorName }}</span>
+          <span class="author-role" *ngIf="post.authorRole">{{ post.authorRole | titlecase }}</span>
+        </div>
+        <span class="post-time">{{ getRelativeTime(post.createdAt) }}</span>
+      </div>
+
+      <!-- Card Images -->
+      <div class="card-images" *ngIf="post.images && post.images.length > 0">
+        <div class="image-wrapper" *ngIf="post.images.length === 1">
+          <img [src]="post.images[0].url" [alt]="post.images[0].caption || post.title || 'Activity photo'" loading="lazy" />
+        </div>
+        <div class="image-carousel" *ngIf="post.images.length > 1">
+          <div class="carousel-track" (scroll)="onCarouselScroll($event, post._id)">
+            <div class="carousel-slide" *ngFor="let img of post.images">
+              <img [src]="img.url" [alt]="img.caption || 'Activity photo'" loading="lazy" />
+            </div>
+          </div>
+          <div class="carousel-dots">
+            <span class="dot" *ngFor="let img of post.images; let i = index"
+              [class.active]="i === getActiveSlide(post._id)"
+              (click)="goToSlide(post._id, i, $event)"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card Body -->
+      <div class="card-body">
+        <div class="post-meta">
+          <span class="post-type-badge" [attr.data-type]="post.type">
+            {{ getTypeLabel(post.type) }}
+          </span>
+          <span class="post-title" *ngIf="post.title">{{ post.title }}</span>
+        </div>
+        <p class="post-body">{{ post.body }}</p>
+      </div>
+
+      <!-- Card Footer -->
+      <div class="card-footer">
+        <span class="like-count" *ngIf="post.likesCount > 0">
+          <i class="bx bx-heart"></i> {{ post.likesCount }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Load More Button -->
+    <div class="load-more" *ngIf="hasMore">
+      <button class="load-more-btn" (click)="loadMore()" [disabled]="loadingMore">
+        <i class="bx bx-loader-alt bx-spin" *ngIf="loadingMore"></i>
+        <span *ngIf="!loadingMore">Load more</span>
+        <span *ngIf="loadingMore">Loading...</span>
+      </button>
+    </div>
+  </div>
+</div>
