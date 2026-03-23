@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { Router } from '@angular/router';
 import {
   ApexAxisChartSeries,
   ApexChart,
@@ -7,6 +8,7 @@ import {
 } from 'ngx-apexcharts';
 import { ToastrService } from 'ngx-toastr';
 import { AuthServiceService } from 'src/app/services/auth-service.service';
+import { ChatService } from 'src/app/services/chat.service';
 import { CoreService } from 'src/app/shared/core.service';
 @Component({
   selector: 'app-admin-dashboard',
@@ -15,6 +17,24 @@ import { CoreService } from 'src/app/shared/core.service';
 })
 export class AdminDashboardComponent {
   public chartOptions: any;
+
+  // ─── Role-based dashboard ──────────────────────────────────────────────
+  currentRole: string = '';
+
+  // KPI data for non-superadmin roles
+  myChatsCount: number = 0;
+  unreadMessagesCount: number = 0;
+  onCallStatus: string = 'Off Duty';
+  activeAlertsCount: number = 0;
+  shiftStatus: string = 'Off Duty';
+  staffCount: number = 0;
+  activeChatsCount: number = 0;
+  openAlertsCount: number = 0;
+  onlineNowCount: number = 0;
+
+  // Recent conversations
+  recentConversations: any[] = [];
+
   predefinedRoles = [
     { id: 'facility_center', name: 'Facilitycenter', moduleName: 'F' },
     { id: 'physician', name: 'Physicians', moduleName: 'P' },
@@ -127,7 +147,9 @@ export class AdminDashboardComponent {
   constructor(
     private authService: AuthServiceService,
     private toastr: ToastrService,
-    private _coreService: CoreService
+    private _coreService: CoreService,
+    private chatService: ChatService,
+    private router: Router
   ) {
     this.chartOptions = {
       series: [],
@@ -250,13 +272,23 @@ export class AdminDashboardComponent {
     };
   }
   ngOnInit(): void {
+    this.currentRole = localStorage.getItem('role') || '';
+
     const currentYear = new Date().getFullYear();
     for (let i = currentYear; i >= 2024; i--) {
       this.years.push(i);
     }
-    this.getUserDetails();
-    this.getGraph('date');
-    this.loadAnalyticsDashboard();
+
+    if (this.currentRole === 'superadmin') {
+      // Load full superadmin dashboard
+      this.getUserDetails();
+      this.getGraph('date');
+      this.loadAnalyticsDashboard();
+    } else {
+      // Load role-specific KPI data
+      this.loadRoleKpiData();
+      this.loadRecentConversations();
+    }
   }
 
   getUserDetails() {
@@ -561,5 +593,63 @@ updateChartBackground(isDark: boolean) {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return mins + 'm' + (secs > 0 ? ' ' + secs + 's' : '');
+  }
+
+  // ─── Role-specific dashboard methods ─────────────────────────────────────
+
+  loadRoleKpiData() {
+    const userId = localStorage.getItem('userId') || '';
+
+    // Load unread count
+    this.authService.getNotification(userId).subscribe({
+      next: (res: any) => {
+        this.unreadMessagesCount = res?.unreadCount || res?.data?.unreadCount || 0;
+      },
+      error: () => {}
+    });
+
+    // Load chat count from group list
+    this.chatService.getgrouplist(1, 1, userId).subscribe({
+      next: (res: any) => {
+        this.myChatsCount = res?.totalCount || res?.data?.totalCount || 0;
+        this.activeChatsCount = this.myChatsCount;
+      },
+      error: () => {}
+    });
+  }
+
+  loadRecentConversations() {
+    const userId = localStorage.getItem('userId') || '';
+    this.chatService.getgrouplist(5, 1, userId).subscribe({
+      next: (res: any) => {
+        const groups = res?.data?.data || res?.data || [];
+        this.recentConversations = (Array.isArray(groups) ? groups : []).slice(0, 5).map((g: any) => ({
+          name: g.groupName || g.name || 'Unknown',
+          lastMessage: g.lastMessage || g.last_message || 'No messages yet',
+          time: g.updatedAt || g.lastMessageTime || ''
+        }));
+      },
+      error: () => {
+        this.recentConversations = [];
+      }
+    });
+  }
+
+  navigateTo(path: string) {
+    this.router.navigate([path]);
+  }
+
+  formatTimeAgo(dateStr: string): string {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return diffMins + 'm ago';
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return diffHours + 'h ago';
+    const diffDays = Math.floor(diffHours / 24);
+    return diffDays + 'd ago';
   }
 }
