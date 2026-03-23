@@ -1,5 +1,5 @@
 import { uploadSingleProfileImage } from "../middleware/userUploads";
-import { addUser, login,resetPassword,listLoginRecords,forgotPassword,logoutUser, resendOTP,listUsers, updateUser, changeStatusAndDelete, getUserById, sendPasswordResetEmail, createPermission, getPermissionsByUserId, countUsersByRole ,changePassword,verifyOTP, getUnreadCountByReceiver, fcm_token_save, verify_link, encryption_conversion, getGraphData, getAnalyticsDashboard, refreshAccessToken, logoutAllDevices, listAuditLogs, setupMfa, verifyMfaSetup, verifyMfa, disableMfa, checkMobileExists, getMyActiveSessions, revokeMySession, revokeAllOtherSessions, requestEmailChange, confirmEmailChange, updateNotificationPreferences, getUserAuditTrail, requestAccountDeletion} from "./Controller";
+import { addUser, login,resetPassword,listLoginRecords,forgotPassword,logoutUser, resendOTP,listUsers, updateUser, changeStatusAndDelete, getUserById, sendPasswordResetEmail, createPermission, getPermissionsByUserId, countUsersByRole ,changePassword,verifyOTP, getUnreadCountByReceiver, fcm_token_save, verify_link, encryption_conversion, getGraphData, getAnalyticsDashboard, refreshAccessToken, logoutAllDevices, listAuditLogs, setupMfa, verifyMfaSetup, verifyMfa, disableMfa, checkMobileExists, getMyActiveSessions, revokeMySession, revokeAllOtherSessions, requestEmailChange, confirmEmailChange, updateNotificationPreferences, getUserAuditTrail, requestAccountDeletion, bulkValidateUsers, bulkImportUsers} from "./Controller";
 import { requireRole, ROLES } from "../middleware/rbacMiddleware";
 
 export default (router) => {
@@ -27,6 +27,8 @@ export default (router) => {
   router.post("/logout-all-devices", adminOnly, logoutAllDevices);
   router.get("/audit-logs", adminOnly, listAuditLogs);
   router.get("/users/:userId/audit-trail", adminOnly, getUserAuditTrail);
+  router.post("/users/bulk-validate", adminOnly, bulkValidateUsers);
+  router.post("/users/bulk-import", adminOnly, bulkImportUsers);
 
   // ==========================
   // Authenticated Routes (any logged-in user)

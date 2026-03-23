@@ -1,0 +1,83 @@
+<div class="bulk-import-container">
+  <div class="import-card glass-panel">
+    <h4 class="card-title">Bulk User Import</h4>
+
+    <!-- Step indicator -->
+    <div class="step-indicator">
+      <div class="step" [class.active]="currentStep >= 1" [class.done]="currentStep > 1">
+        <span class="step-num">1</span><span class="step-label">Upload</span>
+      </div>
+      <div class="step-line" [class.active]="currentStep > 1"></div>
+      <div class="step" [class.active]="currentStep >= 2" [class.done]="currentStep > 2">
+        <span class="step-num">2</span><span class="step-label">Validate</span>
+      </div>
+      <div class="step-line" [class.active]="currentStep > 2"></div>
+      <div class="step" [class.active]="currentStep >= 3">
+        <span class="step-num">3</span><span class="step-label">Results</span>
+      </div>
+    </div>
+
+    <!-- Step 1: Upload -->
+    <div *ngIf="currentStep === 1" class="step-content">
+      <div class="upload-zone" (click)="fileInput.click()" (dragover)="$event.preventDefault()" (drop)="onFileDrop($event)">
+        <i class="bx bx-cloud-upload"></i>
+        <p>Drag and drop a CSV file or click to browse</p>
+        <small>Accepted format: .csv (max 5MB)</small>
+        <input #fileInput type="file" accept=".csv" (change)="onFileSelected($event)" hidden />
+      </div>
+      <button class="cancel-btn" (click)="downloadTemplate()">
+        <i class="bx bx-download"></i> Download Template
+      </button>
+    </div>
+
+    <!-- Step 2: Validate -->
+    <div *ngIf="currentStep === 2" class="step-content">
+      <div class="validation-summary">
+        <span class="valid-count"><i class="bx bx-check-circle"></i> {{ validCount }} valid</span>
+        <span class="invalid-count" *ngIf="invalidCount > 0"><i class="bx bx-x-circle"></i> {{ invalidCount }} with errors</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm">
+          <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Mobile</th><th>Role</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let row of validationResults" [class.row-error]="!row.valid">
+              <td>{{ row.index + 1 }}</td>
+              <td>{{ row.fullName }}</td>
+              <td>{{ row.email }}</td>
+              <td>{{ row.mobile }}</td>
+              <td>{{ row.role }}</td>
+              <td>
+                <i *ngIf="row.valid" class="bx bx-check-circle text-success"></i>
+                <span *ngIf="!row.valid" class="error-text">{{ row.errors.join(', ') }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="step-actions">
+        <button class="cancel-btn" (click)="currentStep = 1">Back</button>
+        <label class="skip-errors" *ngIf="invalidCount > 0">
+          <input type="checkbox" [(ngModel)]="skipErrors" /> Skip rows with errors
+        </label>
+        <button class="add-btn" (click)="importUsers()" [disabled]="importing || validCount === 0">
+          {{ importing ? 'Importing...' : 'Import ' + validCount + ' Users' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 3: Results -->
+    <div *ngIf="currentStep === 3" class="step-content">
+      <div class="results-summary">
+        <div class="result-card success">
+          <i class="bx bx-check-circle"></i>
+          <span>{{ importResults?.created }} created</span>
+        </div>
+        <div class="result-card error" *ngIf="importResults?.failed > 0">
+          <i class="bx bx-x-circle"></i>
+          <span>{{ importResults?.failed }} failed</span>
+        </div>
+      </div>
+      <button class="add-btn" (click)="reset()">Import More</button>
+    </div>
+  </div>
+</div>

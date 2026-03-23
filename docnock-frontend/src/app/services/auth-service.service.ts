@@ -1121,6 +1121,22 @@ requestAccountDeletion() {
   });
 }
 
+// ─── Bulk User Import ──────────────────────────────────────────────────────
+
+bulkValidateUsers(users: any[]) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/users/bulk-validate`, { users }, {
+    headers: this.getHeader(token),
+  });
+}
+
+bulkImportUsers(users: any[]) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/users/bulk-import`, { users }, {
+    headers: this.getHeader(token),
+  });
+}
+
 // ─── Resend OTP ────────────────────────────────────────────────────────────
 
 resendOTP(mobile: string) {

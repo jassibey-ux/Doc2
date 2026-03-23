@@ -1,0 +1,365 @@
+@use '../../../../styles/liquid-glass' as glass;
+
+:host {
+  display: block;
+  padding: 24px;
+}
+
+.wizard-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.wizard-card {
+  @include glass.panel();
+  padding: 32px;
+}
+
+.card-title {
+  color: var(--h);
+  margin: 0 0 24px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+// Step Indicator
+.step-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+
+  .step-num {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.08);
+    color: var(--p);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    transition: all 0.25s ease;
+  }
+
+  .step-label {
+    font-size: 11px;
+    color: var(--p);
+    font-weight: 600;
+    transition: color 0.25s ease;
+  }
+
+  &.active .step-num {
+    background: var(--primary, #2F936D);
+    color: #fff;
+  }
+
+  &.active .step-label {
+    color: var(--primary, #2F936D);
+  }
+
+  &.done .step-num {
+    background: #27ae60;
+    color: #fff;
+  }
+}
+
+.step-line {
+  width: 40px;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 2px;
+  margin: 0 6px;
+  margin-bottom: 22px;
+  transition: background 0.25s ease;
+
+  &.active {
+    background: var(--primary, #2F936D);
+  }
+}
+
+// Step Content
+.step-content {
+  animation: fadeIn 0.3s ease both;
+  min-height: 200px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+// Form
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 -8px;
+}
+
+.col-md-6 {
+  width: 50%;
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+
+.col-md-12 {
+  width: 100%;
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+  .col-md-6 {
+    width: 100%;
+  }
+}
+
+.form-group {
+  margin-bottom: 16px;
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--h);
+    margin-bottom: 6px;
+  }
+
+  .required {
+    color: #e74c3c;
+  }
+}
+
+.form-control {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--h);
+  background: rgba(255, 255, 255, 0.5);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary, #2F936D);
+    box-shadow: 0 0 0 3px rgba(47, 147, 109, 0.12);
+  }
+}
+
+.form-error {
+  color: #e74c3c;
+  font-size: 12px;
+  margin-top: 4px;
+  display: block;
+}
+
+// Departments
+.dept-header-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--p);
+  padding: 0 4px;
+}
+
+.dept-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.dept-col-name {
+  flex: 2;
+}
+
+.dept-col {
+  flex: 1;
+}
+
+.dept-col-action {
+  width: 36px;
+}
+
+.btn-remove {
+  background: transparent;
+  border: none;
+  color: #e74c3c;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: rgba(231, 76, 60, 0.1);
+  }
+}
+
+.hint-text {
+  color: var(--p);
+  font-size: 13px;
+  text-align: center;
+  margin: 24px 0 8px;
+}
+
+// Buttons
+.cancel-btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--p);
+  padding: 8px 20px;
+  border-radius: 36px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: var(--primary, #2F936D);
+    color: var(--primary, #2F936D);
+  }
+}
+
+.add-btn {
+  background: var(--primary, #2F936D);
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 36px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+
+  &:hover { opacity: 0.9; transform: translateY(-1px); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+}
+
+// Wizard Nav
+.wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+// Review
+.review-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+
+  h5 {
+    color: var(--h);
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+  }
+}
+
+.edit-link {
+  background: transparent;
+  border: none;
+  color: var(--primary, #2F936D);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: rgba(47, 147, 109, 0.08);
+  }
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+
+  @media (max-width: 500px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.review-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.review-label {
+  font-size: 11px;
+  color: var(--p);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.review-value {
+  font-size: 14px;
+  color: var(--h);
+  font-weight: 500;
+}
+
+.dept-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dept-review-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.dept-review-name {
+  font-weight: 600;
+  color: var(--h);
+  font-size: 14px;
+}
+
+.dept-review-meta {
+  color: var(--p);
+  font-size: 13px;
+}

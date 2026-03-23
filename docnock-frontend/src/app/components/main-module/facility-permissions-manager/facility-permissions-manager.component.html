@@ -1,0 +1,56 @@
+<div class="permissions-container">
+  <div class="permissions-card glass-panel">
+    <div class="permissions-header">
+      <h4>Facility Permissions</h4>
+      <div class="controls">
+        <select [(ngModel)]="selectedFacilityId" (change)="onFacilitySelect(selectedFacilityId)" class="form-select">
+          <option value="">Select Facility</option>
+          <option *ngFor="let f of facilities" [value]="f._id">{{ f.name }}</option>
+        </select>
+        <input type="text" [(ngModel)]="searchQuery" placeholder="Search staff..." class="form-control search-input" />
+      </div>
+    </div>
+
+    <div class="table-responsive" *ngIf="staffMembers.length > 0">
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="th-staff">Staff Member</th>
+            <th class="th-role">Role</th>
+            <th *ngFor="let code of permissionCodes" class="th-perm" [title]="permissionLabels[code]">{{ code }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let member of filteredStaff()">
+            <td class="staff-cell">
+              <span class="staff-name">{{ member.userId?.fullName || member.fullName }}</span>
+              <span class="staff-email">{{ member.userId?.email || member.email }}</span>
+            </td>
+            <td><span class="role-badge">{{ member.role }}</span></td>
+            <td *ngFor="let code of permissionCodes" class="perm-cell">
+              <label class="toggle-sm">
+                <input type="checkbox" [checked]="member.permissions?.includes(code)" (change)="togglePermission(member, code)" />
+                <span class="slider-sm"></span>
+              </label>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="empty-state" *ngIf="selectedFacilityId && staffMembers.length === 0">
+      <i class="bx bx-group"></i>
+      <p>No staff members found for this facility.</p>
+    </div>
+    <div class="empty-state" *ngIf="!selectedFacilityId">
+      <i class="bx bx-buildings"></i>
+      <p>Select a facility to manage permissions.</p>
+    </div>
+
+    <div class="save-bar" *ngIf="staffMembers.length > 0">
+      <button class="add-btn" (click)="savePermissions()" [disabled]="saving">
+        {{ saving ? 'Saving...' : 'Save Changes' }}
+      </button>
+    </div>
+  </div>
+</div>

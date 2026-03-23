@@ -2829,3 +2829,83 @@ export const requestAccountDeletion = async (req, res) => {
     return res.status(500).json({ success: false, message: "Failed to process deletion" });
   }
 };
+
+// ─── Bulk User Import ──────────────────────────────────────────────────────
+
+export const bulkValidateUsers = async (req, res) => {
+  try {
+    const { users } = req.body;
+    if (!Array.isArray(users) || users.length === 0) {
+      return res.status(400).json({ success: false, message: "Users array is required" });
+    }
+
+    const results = [];
+    for (const [index, user] of users.entries()) {
+      const errors = [];
+      if (!user.fullName || user.fullName.length < 2) errors.push("Name is required (min 2 chars)");
+      if (!user.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)) errors.push("Invalid email");
+      if (!user.mobile || !/^\d{10}$/.test(String(user.mobile))) errors.push("Mobile must be 10 digits");
+      if (!user.role || !["physician", "nurse", "facility_center", "subadmin", "other"].includes(user.role)) errors.push("Invalid role");
+
+      if (user.email) {
+        const emailExists = await User.findOne({ email: user.email.toLowerCase(), isDeleted: false });
+        if (emailExists) errors.push("Email already registered");
+      }
+      if (user.mobile) {
+        const mobileExists = await User.findOne({ mobile: Number(user.mobile), isDeleted: false });
+        if (mobileExists) errors.push("Mobile already registered");
+      }
+
+      results.push({ index, ...user, valid: errors.length === 0, errors });
+    }
+
+    const validCount = results.filter(r => r.valid).length;
+    const invalidCount = results.filter(r => !r.valid).length;
+
+    return res.status(200).json({ success: true, data: { results, validCount, invalidCount } });
+  } catch (error) {
+    logger.error({ err: error }, "bulkValidateUsers error");
+    return res.status(500).json({ success: false, message: "Validation failed" });
+  }
+};
+
+export const bulkImportUsers = async (req, res) => {
+  try {
+    const { users } = req.body;
+    const adminId = req.user.userId || req.user.id;
+
+    const created = [];
+    const failed = [];
+
+    for (const user of users) {
+      try {
+        const randomPassword = crypto.randomBytes(32).toString("hex");
+        const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+        const newUser = await User.create({
+          fullName: user.fullName,
+          email: user.email.toLowerCase(),
+          mobile: Number(user.mobile),
+          role: user.role,
+          password: hashedPassword,
+          createdBy: adminId,
+          userIds: [adminId],
+          uniqueId: Math.floor(1000 + Math.random() * 9000),
+          status: true,
+          is_verified: false,
+        });
+        created.push({ fullName: user.fullName, email: user.email, _id: newUser._id });
+      } catch (err) {
+        failed.push({ fullName: user.fullName, email: user.email, error: err.message });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: { created: created.length, failed: failed.length, createdUsers: created, failedUsers: failed }
+    });
+  } catch (error) {
+    logger.error({ err: error }, "bulkImportUsers error");
+    return res.status(500).json({ success: false, message: "Import failed" });
+  }
+};

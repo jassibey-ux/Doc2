@@ -22,6 +22,12 @@
         <span class="text">Staff</span>
       </a>
     </li>
+    <li class="incoBx" data-label="Bulk Import" routerLinkActive="active" routerLink="/{{dynamicpath}}/bulk-import" *ngIf="dynamicpath === 'superadmin' || dynamicpath === 'sub_admin'">
+      <a>
+        <i class='bx bxs-cloud-upload'></i>
+        <span class="text">Bulk Import</span>
+      </a>
+    </li>
     <li class="incoBx" data-label="Chats" routerLinkActive="active" routerLink="/{{dynamicpath}}/chats" *ngIf="allowedModules.has('C')">
       <a>
         <i class='bx bxs-group'></i>
@@ -134,6 +140,12 @@
       <a>
         <i class='bx bxs-shield-quarter'></i>
         <span class="text">SSO / SAML</span>
+      </a>
+    </li>
+    <li class="incoBx" data-label="Facility Permissions" routerLinkActive="active" routerLink="/{{dynamicpath}}/facility-permissions" *ngIf="dynamicpath === 'superadmin'">
+      <a>
+        <i class='bx bxs-lock-alt'></i>
+        <span class="text">Facility Permissions</span>
       </a>
     </li>
 

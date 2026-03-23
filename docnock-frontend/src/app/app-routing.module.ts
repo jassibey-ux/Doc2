@@ -43,6 +43,9 @@ import { AccessDeniedComponent } from './components/common/access-denied/access-
 import { EmailVerificationComponent } from './components/auth/email-verification/email-verification.component';
 import { LinkExpiredComponent } from './components/auth/link-expired/link-expired.component';
 import { DeleteAccountComponent } from './components/main-module/delete-account/delete-account.component';
+import { BulkUserImportComponent } from './components/main-module/bulk-user-import/bulk-user-import.component';
+import { FacilitySetupWizardComponent } from './components/main-module/facility-setup-wizard/facility-setup-wizard.component';
+import { FacilityPermissionsManagerComponent } from './components/main-module/facility-permissions-manager/facility-permissions-manager.component';
 
 const routes: Routes = [
   { path: 'login', component: LoginComponent, canActivate: [AuthGuardLogin] },
@@ -91,6 +94,9 @@ const routes: Routes = [
       { path: 'system-settings', component: SystemSettingsComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
       { path: 'facilities', component: MultiFacilityComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
       { path: 'sso-settings', component: SsoSettingsComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
+      { path: 'bulk-import', component: BulkUserImportComponent, canActivate: [RoleGuard], data: { roles: ['superadmin', 'sub_admin'] } },
+      { path: 'facility-wizard', component: FacilitySetupWizardComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
+      { path: 'facility-permissions', component: FacilityPermissionsManagerComponent, canActivate: [RoleGuard], data: { roles: ['superadmin', 'facility_center'] } },
       { path: 'delete-account', component: DeleteAccountComponent },
     ],
     canActivate: [AuthGuard],

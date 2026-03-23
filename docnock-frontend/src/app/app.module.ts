@@ -78,6 +78,9 @@ import { WelcomeWizardComponent } from './components/main-module/welcome-wizard/
 import { EmailVerificationComponent } from './components/auth/email-verification/email-verification.component';
 import { LinkExpiredComponent } from './components/auth/link-expired/link-expired.component';
 import { DeleteAccountComponent } from './components/main-module/delete-account/delete-account.component';
+import { BulkUserImportComponent } from './components/main-module/bulk-user-import/bulk-user-import.component';
+import { FacilitySetupWizardComponent } from './components/main-module/facility-setup-wizard/facility-setup-wizard.component';
+import { FacilityPermissionsManagerComponent } from './components/main-module/facility-permissions-manager/facility-permissions-manager.component';
 
 @NgModule({
   declarations: [
@@ -138,6 +141,9 @@ import { DeleteAccountComponent } from './components/main-module/delete-account/
     EmailVerificationComponent,
     LinkExpiredComponent,
     DeleteAccountComponent,
+    BulkUserImportComponent,
+    FacilitySetupWizardComponent,
+    FacilityPermissionsManagerComponent,
   ],
   imports: [
     BrowserModule,
