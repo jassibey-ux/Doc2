@@ -91,28 +91,51 @@
 
       <div class="notification" (click)="toggleNotification()">
         <span class="bell-icon">
-          <img src="../../../assets/images/bell_icon.png" alt="Bell Icon" data-fallback-src="/assets/images/bell_icon.png" />
-          <span class="notification-count">{{ count }}</span>
+          <i class="bx bx-bell"></i>
+          <span class="notification-badge" *ngIf="count > 0">{{ count > 99 ? '99+' : count }}</span>
         </span>
-      
-        <!-- Notification Modal -->
-        <div class="notification-modal" *ngIf="showNotification">
-          <div class="notification-header">
-            <h4 class="notification-heading">Notifications</h4>
+
+        <!-- Notification Center Panel -->
+        <div class="notification-panel" *ngIf="showNotification" (click)="$event.stopPropagation()">
+          <div class="notification-panel-header">
+            <h4>Notifications</h4>
+            <button class="mark-all-btn" (click)="markAllRead()" *ngIf="notificationMessage.length > 0">
+              <i class="bx bx-check-double"></i> Mark all read
+            </button>
           </div>
-          <div class="scroll-container" (scroll)="onScroll($event)">
-            <ul>
-            <ng-container *ngIf="notificationMessage.length === 0">
-              <li class="no-notifications">No new notifications</li>
-            </ng-container>
-              <li *ngFor="let notification of notificationMessage">
-                <div class="noti-item"  (click)="noticlick(notification.groupid)">
-                  <div class="noti-title">{{ notification.name }}</div>
-                  <div class="noti-message">{{ notification.message }}</div>
-                </div>
-              </li>
-            </ul>
-            <div *ngIf="loading" class="loading-spinner">Loading more...</div>
+
+          <div class="notification-tabs">
+            <button [class.active]="activeTab === 'all'" (click)="activeTab = 'all'">All</button>
+            <button [class.active]="activeTab === 'messages'" (click)="activeTab = 'messages'">Messages</button>
+            <button [class.active]="activeTab === 'alerts'" (click)="activeTab = 'alerts'">Alerts</button>
+          </div>
+
+          <div class="notification-list" (scroll)="onScroll($event)">
+            <div class="notification-empty" *ngIf="notificationMessage.length === 0 && !loading">
+              <i class="bx bx-bell-off"></i>
+              <p>You're all caught up!</p>
+            </div>
+
+            <div
+              *ngFor="let notification of getFilteredNotifications()"
+              class="notification-item"
+              [class.unread]="!notification.is_read"
+              (click)="noticlick(notification.groupid)"
+            >
+              <div class="notification-icon" [ngClass]="getNotificationIconClass(notification)">
+                <i [class]="getNotificationIcon(notification)"></i>
+              </div>
+              <div class="notification-content">
+                <div class="notification-title">{{ notification.name }}</div>
+                <div class="notification-body">{{ notification.message }}</div>
+                <div class="notification-time">{{ formatTimeAgo(notification.createdAt) }}</div>
+              </div>
+              <div class="notification-dot" *ngIf="!notification.is_read"></div>
+            </div>
+
+            <div *ngIf="loading" class="notification-loading">
+              <i class="bx bx-loader-alt bx-spin"></i> Loading...
+            </div>
           </div>
         </div>
       </div>

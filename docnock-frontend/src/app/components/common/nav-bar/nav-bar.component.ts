@@ -30,6 +30,7 @@ loading: boolean = false;
 hasMore: boolean = true;
 activeCallSession: any = null;
 private callCapsuleInterval: any;
+activeTab: string = 'all';
 
 // ─── Facility Switcher ────────────────────────────────────────────────────
 facilities: FacilityInfo[] = [];
@@ -468,6 +469,49 @@ private activeFacilitySub!: Subscription;
     this.count = 0; // 🔥 instantly UI update
   });
 }
+
+  markAllRead(): void {
+    const ids = this.notificationMessage.map((n: any) => n._id);
+    if (ids.length) {
+      this.handleReadnotification(ids);
+      this.notificationMessage.forEach((n: any) => n.is_read = true);
+    }
+  }
+
+  getFilteredNotifications(): any[] {
+    if (this.activeTab === 'all') return this.notificationMessage;
+    if (this.activeTab === 'messages') {
+      return this.notificationMessage.filter((n: any) => !n.priority || n.priority === 'ROUTINE');
+    }
+    if (this.activeTab === 'alerts') {
+      return this.notificationMessage.filter((n: any) => n.priority === 'URGENT' || n.priority === 'CRITICAL');
+    }
+    return this.notificationMessage;
+  }
+
+  getNotificationIcon(notification: any): string {
+    if (notification.priority === 'CRITICAL') return 'bx bx-error-circle';
+    if (notification.priority === 'URGENT') return 'bx bx-bell';
+    return 'bx bx-message-dots';
+  }
+
+  getNotificationIconClass(notification: any): string {
+    if (notification.priority === 'CRITICAL') return 'icon-critical';
+    if (notification.priority === 'URGENT') return 'icon-urgent';
+    return 'icon-message';
+  }
+
+  formatTimeAgo(dateStr: string): string {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  }
 
   getInitials(name: string): string {
     if (!name) return '';
