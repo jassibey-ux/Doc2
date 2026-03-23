@@ -1,8 +1,8 @@
 .chat-container {
-  height: calc(100vh - 132px);
-  min-height: 620px;
+  height: calc(100vh - 60px);
   background-color: var(--bg);
   overflow: hidden;
+  display: flex;
 }
 
 .chat-call-capsule {
