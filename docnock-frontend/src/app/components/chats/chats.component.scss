@@ -342,7 +342,7 @@
 
 .right-chat-area {
   background-image: url("~src/assets/images/chat_background.png");
-  height: 87vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
 
@@ -2794,7 +2794,8 @@ section {
   min-height: 0;
   border-radius: 14px;
   overflow: hidden;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background-size: cover;
   background-position: center;
   border-right: none !important;
