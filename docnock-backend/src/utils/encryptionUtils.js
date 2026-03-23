@@ -4,6 +4,8 @@ import CryptoJS from "crypto-js";
 
 const config = require("../../config/Config").get(process.env.NODE_ENV);
 const { JWT_SECRET } = config;
+// API response encryption key — must match frontend CRYPTOSECRET
+const CRYPTO_SECRET = process.env.CRYPTO_SECRET || "DOCKNOCK@@@###";
 
 // Use a stable key from env — NOT crypto.randomBytes which changes every restart
 const STABLE_KEY_B64 = process.env.PHI_ENCRYPTION_KEY || "";
@@ -54,7 +56,7 @@ export const decrypt = ({ iv, encryptedData, authTag }) => {
 
 export const encryptData = async (data) => {
   try {
-    const encrypted = CryptoJS.AES.encrypt(data, JWT_SECRET).toString();
+    const encrypted = CryptoJS.AES.encrypt(data, CRYPTO_SECRET).toString();
     return encrypted;
   } catch (error) {
     logger.error({ err: error }, "Encryption error");
@@ -64,7 +66,7 @@ export const encryptData = async (data) => {
 
 export const decryptData = async (data) => {
   try {
-    const bytes = CryptoJS.AES.decrypt(data, JWT_SECRET);
+    const bytes = CryptoJS.AES.decrypt(data, CRYPTO_SECRET);
     const decrypted = bytes.toString(CryptoJS.enc.Utf8);
     return JSON.parse(decrypted);
   } catch (error) {
