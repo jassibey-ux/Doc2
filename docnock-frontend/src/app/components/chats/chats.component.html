@@ -717,7 +717,7 @@
         </div>
         <div class="chat-messages empty-chat-state" *ngIf="!activeGroup">No Group Selected</div>
 
-        <div class="chat-input" *ngIf="activeGroup && dynamicpath != 'superadmin'">
+        <div class="chat-input" *ngIf="activeGroup">
           <ng-container *ngIf="!recording; else recordingBar">
             <div class="input-container">
               <div class="reply-compose-preview" *ngIf="replyingTo">
