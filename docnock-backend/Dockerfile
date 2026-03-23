@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends redis-tools && 
 WORKDIR /var/www/docknockbackend
 
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install
 
 COPY . .
 
