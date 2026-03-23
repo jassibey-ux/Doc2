@@ -96,7 +96,8 @@ export class SideBarComponent implements OnInit {
       error: (err: any) => {
         // Permissions API unavailable - fall back to core modules so sidebar remains usable
         console.warn('Permissions API failed, using default modules:', err?.error?.message);
-        this.allowedModules = new Set(['C', 'D', 'SH', 'SBAR', 'CA', 'CONSULT', 'N', 'P', 'AS']);
+        // Safe minimal fallback — only show Dashboard, Chat, Account Settings
+        this.allowedModules = new Set(['D', 'C', 'AS']);
       },
     });
   }

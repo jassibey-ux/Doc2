@@ -188,7 +188,9 @@ export const addUser = async (req, res) => {
       };
       logger.debug({ profilePicture }, "profilePicture");
     }
-    const hashedPassword = await bcrypt.hash("DockNockP0ssw0rd#1234", 10);
+    // Generate a random password — user must set their own via setup email
+    const randomPassword = require("crypto").randomBytes(32).toString("hex");
+    const hashedPassword = await bcrypt.hash(randomPassword, 10);
 
     // Construct the user data
     const userData = {
@@ -1620,10 +1622,8 @@ export const verify_link = async (req, res) =>{
     }
 
     if (type === "setup_profile") {
-      // If password already set, profile is considered complete
-      const isMatch = await bcrypt.compare("DockNockP0ssw0rd#1234",user.password);
-      logger.debug({ isMatch }, "verify_link password match check");
-      if (!isMatch) {
+      // If user has already set up their profile (forcePasswordChange is false and they've logged in)
+      if (user.is_verified) {
         return res.status(400).json({ success: false, message: "Link already used (Profile already set)" });
       }
     } else if (type === "forgot_password") {
@@ -2526,6 +2526,34 @@ export const disableMfa = async (req, res) => {
     });
   } catch (error) {
     logger.error({ err: error }, "MFA disable error");
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+// ─── Check Mobile Exists ─────────────────────────────────────────────────
+export const checkMobileExists = async (req, res) => {
+  try {
+    const { mobile, excludeUserId } = req.query;
+    if (!mobile) {
+      return res.status(400).json({ success: false, message: "Mobile number is required" });
+    }
+
+    const query = { mobile: Number(mobile), isDeleted: false };
+    if (excludeUserId) {
+      query._id = { $ne: new mongoose.Types.ObjectId(excludeUserId) };
+    }
+
+    const existing = await User.findOne(query).select("fullName role").lean();
+    if (existing) {
+      return res.status(200).json({
+        exists: true,
+        userName: existing.fullName,
+        role: existing.role,
+      });
+    }
+    return res.status(200).json({ exists: false });
+  } catch (error) {
+    logger.error({ err: error }, "checkMobileExists error");
     return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };

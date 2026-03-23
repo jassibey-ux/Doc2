@@ -1,0 +1,51 @@
+.access-denied-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+  padding: 2rem;
+}
+
+.access-denied-card {
+  text-align: center;
+  background: var(--bg-light);
+  border: 1px solid var(--line);
+  border-radius: var(--border-radius-lg, 12px);
+  padding: 3rem 2rem;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+}
+
+.icon-wrapper {
+  margin-bottom: 1.5rem;
+
+  i {
+    font-size: 64px;
+    color: var(--red, #FF4145);
+    opacity: 0.8;
+  }
+}
+
+h2 {
+  color: var(--h);
+  margin-bottom: 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+p {
+  color: var(--p);
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  i {
+    font-size: 18px;
+  }
+}

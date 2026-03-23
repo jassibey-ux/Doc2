@@ -9,6 +9,7 @@ import { OtpVerificationComponent } from './components/auth/otp-verification/otp
 import { AddAssistedLivingComponent } from './components/main-module/add-assisted-living/add-assisted-living.component';
 import { AuthGuard } from './shared/auth.guard';
 import { AuthGuardLogin } from './shared/auth.loginguard';
+import { RoleGuard } from './shared/role.guard';
 import { ProfileComponent } from './components/main-module/profile/profile.component';
 import { AccountSettingComponent } from './components/main-module/account-setting/account-setting.component';
 import { SetupProfileComponent } from './components/auth/setup-profile/setup-profile.component';
@@ -38,6 +39,7 @@ import { StaffHubComponent } from './components/main-module/staff-hub/staff-hub.
 import { FamilyPortalAdminComponent } from './components/main-module/family-portal-admin/family-portal-admin.component';
 import { AiAssistantComponent } from './components/main-module/ai-assistant/ai-assistant.component';
 import { AiTemplatesComponent } from './components/main-module/ai-templates/ai-templates.component';
+import { AccessDeniedComponent } from './components/common/access-denied/access-denied.component';
 
 const routes: Routes = [
   { path: 'login', component: LoginComponent, canActivate: [AuthGuardLogin] },
@@ -54,6 +56,7 @@ const routes: Routes = [
     children: [
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
       { path: 'dashboard', component: AdminDashboardComponent },
+      { path: 'access-denied', component: AccessDeniedComponent },
       { path: 'role-permission', component: RolePermissionComponent },
       { path: 'chats', component: ChatsComponent },
       { path: 'video-call', component: VideoCallComponent },
@@ -65,11 +68,6 @@ const routes: Routes = [
       { path: 'form-builder', component: FormBuilderComponent },
       { path: 'profile', component: ProfileComponent },
       { path: 'setting', component: AccountSettingComponent },
-      { path: 'integrations', component: IntegrationMonitorComponent },
-      { path: 'audit-logs', component: AuditLogViewerComponent },
-      { path: 'system-health', component: SystemHealthComponent },
-      { path: 'security', component: SecurityMonitorComponent },
-      { path: 'system-settings', component: SystemSettingsComponent },
       { path: 'staff', component: StaffHubComponent },
       { path: 'clinical', component: ClinicalHubComponent },
       { path: 'shift-handoff', component: ShiftHandoffComponent },
@@ -77,11 +75,17 @@ const routes: Routes = [
       { path: 'clinical-alerts', component: ClinicalAlertsComponent },
       { path: 'consultations', component: ConsultationRequestComponent },
       { path: 'patient-board', component: PatientStatusBoardComponent },
-      { path: 'facilities', component: MultiFacilityComponent },
-      { path: 'sso-settings', component: SsoSettingsComponent },
       { path: 'family-portal', component: FamilyPortalAdminComponent },
       { path: 'ai-assistant', component: AiAssistantComponent },
       { path: 'ai-templates', component: AiTemplatesComponent },
+      // Superadmin-only routes
+      { path: 'integrations', component: IntegrationMonitorComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
+      { path: 'audit-logs', component: AuditLogViewerComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
+      { path: 'system-health', component: SystemHealthComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
+      { path: 'security', component: SecurityMonitorComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
+      { path: 'system-settings', component: SystemSettingsComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
+      { path: 'facilities', component: MultiFacilityComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
+      { path: 'sso-settings', component: SsoSettingsComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
     ],
     canActivate: [AuthGuard],
   },

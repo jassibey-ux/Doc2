@@ -60,12 +60,34 @@ const userSchema = new mongoose.Schema(
     mobile: {
       type: Number,
       required: false,
+      unique: true,
+      sparse: true,
       validate: {
         validator: function(v) {
           if (!v && this.role === "family_member") return true;
           return /^\d{10}$/.test(v);
         },
         message: "Mobile number must be 10 digits.",
+      },
+    },
+    forcePasswordChange: {
+      type: Boolean,
+      default: false,
+    },
+    hasCompletedOnboarding: {
+      type: Boolean,
+      default: false,
+    },
+    notificationPreferences: {
+      dndEnabled: { type: Boolean, default: false },
+      dndStart: { type: String },
+      dndEnd: { type: String },
+      allowCriticalDuringDnd: { type: Boolean, default: true },
+      channels: {
+        messages: { inApp: { type: Boolean, default: true }, email: { type: Boolean, default: false }, push: { type: Boolean, default: true } },
+        alerts: { inApp: { type: Boolean, default: true }, email: { type: Boolean, default: true }, push: { type: Boolean, default: true } },
+        escalations: { inApp: { type: Boolean, default: true }, email: { type: Boolean, default: true }, push: { type: Boolean, default: true } },
+        system: { inApp: { type: Boolean, default: true }, email: { type: Boolean, default: false }, push: { type: Boolean, default: false } },
       },
     },
     otp: {

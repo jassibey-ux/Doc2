@@ -890,6 +890,24 @@ exports = module.exports = function (io) {
           return;
         }
 
+        // ─── Authorization: verify sender is a member of the conversation ───
+        try {
+          const conv = await Conversation.findById(groupId).select("userlist").lean();
+          if (!conv) {
+            socket.emit("messageError", { error: "not_found", message: "Conversation not found", messageId });
+            return;
+          }
+          const isMember = conv.userlist?.some(
+            (u) => u.userid?.toString() === senderID.toString()
+          );
+          if (!isMember) {
+            socket.emit("messageError", { error: "unauthorized", message: "Not a member of this conversation", messageId });
+            return;
+          }
+        } catch (authErr) {
+          console.error("Socket auth check error:", authErr.message);
+        }
+
         // Smart on-call routing: if onCallRole is provided, resolve to current on-call user
         if (onCallRole) {
           try {
@@ -1251,7 +1269,13 @@ exports = module.exports = function (io) {
 
     socket.on("markAsRead", async ({ groupId, userId }, callback) => {
       try {
-        // 🛡️ Validate inputs
+        // Authorization: verify user is a member
+        const convCheck = await Conversation.findById(groupId).select("userlist").lean();
+        if (convCheck && !convCheck.userlist?.some((u) => u.userid?.toString() === userId.toString())) {
+          return callback?.(new Error("Not a member of this conversation"));
+        }
+
+        // Validate inputs
         if (!groupId || !userId) {
           console.warn("Invalid markAsRead data:", { groupId, userId });
           return callback(new Error("Invalid data"));

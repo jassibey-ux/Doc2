@@ -71,6 +71,7 @@ import { FamilyFeedCreatorComponent } from './components/family-feed-creator/fam
 import { FamilyPortalAdminComponent } from './components/main-module/family-portal-admin/family-portal-admin.component';
 import { AiAssistantComponent } from './components/main-module/ai-assistant/ai-assistant.component';
 import { AiTemplatesComponent } from './components/main-module/ai-templates/ai-templates.component';
+import { AccessDeniedComponent } from './components/common/access-denied/access-denied.component';
 
 @NgModule({
   declarations: [
@@ -124,6 +125,7 @@ import { AiTemplatesComponent } from './components/main-module/ai-templates/ai-t
     FamilyPortalAdminComponent,
     AiAssistantComponent,
     AiTemplatesComponent,
+    AccessDeniedComponent,
   ],
   imports: [
     BrowserModule,

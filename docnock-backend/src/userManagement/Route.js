@@ -1,5 +1,5 @@
 import { uploadSingleProfileImage } from "../middleware/userUploads";
-import { addUser, login,resetPassword,listLoginRecords,forgotPassword,logoutUser, resendOTP,listUsers, updateUser, changeStatusAndDelete, getUserById, sendPasswordResetEmail, createPermission, getPermissionsByUserId, countUsersByRole ,changePassword,verifyOTP, getUnreadCountByReceiver, fcm_token_save, verify_link, encryption_conversion, getGraphData, getAnalyticsDashboard, refreshAccessToken, logoutAllDevices, listAuditLogs, setupMfa, verifyMfaSetup, verifyMfa, disableMfa} from "./Controller";
+import { addUser, login,resetPassword,listLoginRecords,forgotPassword,logoutUser, resendOTP,listUsers, updateUser, changeStatusAndDelete, getUserById, sendPasswordResetEmail, createPermission, getPermissionsByUserId, countUsersByRole ,changePassword,verifyOTP, getUnreadCountByReceiver, fcm_token_save, verify_link, encryption_conversion, getGraphData, getAnalyticsDashboard, refreshAccessToken, logoutAllDevices, listAuditLogs, setupMfa, verifyMfaSetup, verifyMfa, disableMfa, checkMobileExists} from "./Controller";
 import { requireRole, ROLES } from "../middleware/rbacMiddleware";
 
 export default (router) => {
@@ -33,6 +33,7 @@ export default (router) => {
   router.post("/updateUser", uploadSingleProfileImage("profileImage"), updateUser);
   router.get("/listUsers", listUsers);
   router.get("/getUserById", getUserById);
+  router.get("/checkMobileExists", checkMobileExists);
   router.post("/changePassword", changePassword);
   router.post("/verifyOTP", verifyOTP);
   router.post("/resendOTP", resendOTP);

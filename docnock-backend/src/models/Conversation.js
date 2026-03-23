@@ -95,6 +95,21 @@ const conversationSchema = new mongoose.Schema(
       pinnedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       pinnedAt: { type: Date, default: Date.now },
     }],
+    // ─── Facility Scoping ──────────────────────────────────────────────────
+    facilityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Facility",
+      index: true,
+    },
+    crossFacility: {
+      type: Boolean,
+      default: false,
+    },
+    groupType: {
+      type: String,
+      enum: ["open", "clinical_team", "admin_only", "custom"],
+      default: "open",
+    },
     // messageCount: { type: Number, default: 0 }, // Track total messages
     // unreadCount: {
     //   type: Map,
