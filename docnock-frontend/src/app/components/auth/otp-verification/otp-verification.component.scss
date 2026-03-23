@@ -21,3 +21,19 @@
 .login-page .login-btn {
   font-weight: 600;
 }
+
+.resend-text {
+  font-size: 14px;
+  color: var(--p);
+}
+
+.resend-countdown {
+  color: var(--h);
+  font-weight: 600;
+}
+
+.resend-disabled {
+  color: var(--h);
+  opacity: 0.5;
+  font-size: 13px;
+}

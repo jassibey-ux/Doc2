@@ -22,6 +22,16 @@
         >
           Change Password
         </button>
+        <button
+          class="add-btn"
+          [ngClass]="{
+            active: activeTab === 'security',
+            nonactive: activeTab !== 'security'
+          }"
+          (click)="showTab('security')"
+        >
+          Security
+        </button>
       </div>
 
       <!-- Profile Section -->
@@ -273,6 +283,103 @@
             <button type="submit" class="add-btn">Update</button>
           </div>
         </form>
+      </div>
+
+      <!-- Security Section -->
+      <div *ngIf="activeTab === 'security'" class="security-section">
+        <!-- Two-Factor Authentication -->
+        <div class="security-block">
+          <h6 class="security-block-title">Two-Factor Authentication</h6>
+          <div class="d-flex align-items-center gap-3 flex-wrap">
+            <span class="mfa-badge" [ngClass]="mfaEnabled ? 'mfa-enabled' : 'mfa-disabled'">
+              {{ mfaEnabled ? 'Enabled' : 'Disabled' }}
+            </span>
+            <button
+              class="add-btn"
+              [disabled]="mfaLoading"
+              (click)="toggleMfa()"
+            >
+              {{ mfaEnabled ? 'Disable 2FA' : 'Enable 2FA' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Active Sessions -->
+        <div class="security-block">
+          <h6 class="security-block-title">Active Sessions</h6>
+          <div *ngIf="sessionsLoading" class="text-center py-3">
+            <span class="text-muted">Loading sessions...</span>
+          </div>
+          <div *ngIf="!sessionsLoading && activeSessions.length === 0" class="text-muted py-2">
+            No active sessions found.
+          </div>
+          <div class="session-list" *ngIf="!sessionsLoading && activeSessions.length > 0">
+            <div
+              class="session-card"
+              *ngFor="let session of activeSessions"
+              [ngClass]="{ 'session-current': isCurrentSession(session) }"
+            >
+              <div class="session-info">
+                <i [class]="getDeviceIcon(session.userAgent)" class="session-icon"></i>
+                <div class="session-details">
+                  <span class="session-agent">{{ session.userAgent || 'Unknown device' }}</span>
+                  <span class="session-meta">
+                    IP: {{ session.ipAddress || 'N/A' }}
+                    <span *ngIf="isCurrentSession(session)" class="current-label">(Current session)</span>
+                  </span>
+                  <span class="session-meta" *ngIf="session.lastActive">
+                    Last active: {{ session.lastActive | date:'medium' }}
+                  </span>
+                </div>
+              </div>
+              <button
+                class="cancel-btn"
+                *ngIf="!isCurrentSession(session)"
+                (click)="revokeSessionById(session._id || session.sessionId)"
+              >
+                Revoke
+              </button>
+            </div>
+          </div>
+          <div class="mt-3" *ngIf="activeSessions.length > 1">
+            <button class="cancel-btn" (click)="revokeAllOtherSessions()">
+              Sign Out All Other Devices
+            </button>
+          </div>
+        </div>
+
+        <!-- Login History -->
+        <div class="security-block">
+          <h6 class="security-block-title">Login History</h6>
+          <div *ngIf="loginHistoryLoading" class="text-center py-3">
+            <span class="text-muted">Loading history...</span>
+          </div>
+          <div *ngIf="!loginHistoryLoading && loginHistory.length === 0" class="text-muted py-2">
+            No login records found.
+          </div>
+          <div class="table-responsive" *ngIf="!loginHistoryLoading && loginHistory.length > 0">
+            <table class="table login-history-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>IP</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let record of loginHistory">
+                  <td>{{ record.createdAt | date:'medium' }}</td>
+                  <td>{{ record.ipAddress || 'N/A' }}</td>
+                  <td>
+                    <span class="status-badge" [ngClass]="record.status === 'success' ? 'status-success' : 'status-failed'">
+                      {{ record.status || 'N/A' }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>

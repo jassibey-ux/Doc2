@@ -1,5 +1,5 @@
 import { uploadSingleProfileImage } from "../middleware/userUploads";
-import { addUser, login,resetPassword,listLoginRecords,forgotPassword,logoutUser, resendOTP,listUsers, updateUser, changeStatusAndDelete, getUserById, sendPasswordResetEmail, createPermission, getPermissionsByUserId, countUsersByRole ,changePassword,verifyOTP, getUnreadCountByReceiver, fcm_token_save, verify_link, encryption_conversion, getGraphData, getAnalyticsDashboard, refreshAccessToken, logoutAllDevices, listAuditLogs, setupMfa, verifyMfaSetup, verifyMfa, disableMfa, checkMobileExists} from "./Controller";
+import { addUser, login,resetPassword,listLoginRecords,forgotPassword,logoutUser, resendOTP,listUsers, updateUser, changeStatusAndDelete, getUserById, sendPasswordResetEmail, createPermission, getPermissionsByUserId, countUsersByRole ,changePassword,verifyOTP, getUnreadCountByReceiver, fcm_token_save, verify_link, encryption_conversion, getGraphData, getAnalyticsDashboard, refreshAccessToken, logoutAllDevices, listAuditLogs, setupMfa, verifyMfaSetup, verifyMfa, disableMfa, checkMobileExists, getMyActiveSessions, revokeMySession, revokeAllOtherSessions, requestEmailChange, confirmEmailChange, updateNotificationPreferences} from "./Controller";
 import { requireRole, ROLES } from "../middleware/rbacMiddleware";
 
 export default (router) => {
@@ -49,6 +49,18 @@ export default (router) => {
   router.post("/verify-mfa-setup", verifyMfaSetup);
   router.post("/verify-mfa", verifyMfa);       // Public (uses mfaSessionToken)
   router.post("/disable-mfa", disableMfa);
+
+  // Session management (user self-service)
+  router.get("/sessions/active", getMyActiveSessions);
+  router.delete("/sessions/:sessionId", revokeMySession);
+  router.delete("/sessions/revoke-all-others", revokeAllOtherSessions);
+
+  // Email change with verification
+  router.post("/users/request-email-change", requestEmailChange);
+  router.post("/users/confirm-email-change", confirmEmailChange);
+
+  // Notification preferences
+  router.put("/users/notification-preferences", updateNotificationPreferences);
 
   return router;
 };

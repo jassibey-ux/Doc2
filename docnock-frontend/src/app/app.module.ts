@@ -72,6 +72,7 @@ import { FamilyPortalAdminComponent } from './components/main-module/family-port
 import { AiAssistantComponent } from './components/main-module/ai-assistant/ai-assistant.component';
 import { AiTemplatesComponent } from './components/main-module/ai-templates/ai-templates.component';
 import { AccessDeniedComponent } from './components/common/access-denied/access-denied.component';
+import { FacilityInvitationBannerComponent } from './components/common/facility-invitation-banner/facility-invitation-banner.component';
 
 @NgModule({
   declarations: [
@@ -126,6 +127,7 @@ import { AccessDeniedComponent } from './components/common/access-denied/access-
     AiAssistantComponent,
     AiTemplatesComponent,
     AccessDeniedComponent,
+    FacilityInvitationBannerComponent,
   ],
   imports: [
     BrowserModule,

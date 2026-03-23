@@ -1,0 +1,47 @@
+<div class="invitation-banner" *ngIf="invitations.length > 0">
+  <!-- Single invitation -->
+  <div class="invitation-single" *ngIf="invitations.length === 1">
+    <div class="invitation-info">
+      <i class="bx bx-building"></i>
+      <span>
+        You have been invited to join
+        <strong>{{ invitations[0].facilityName }}</strong>
+        by {{ invitations[0].inviterName }}
+      </span>
+    </div>
+    <div class="invitation-actions">
+      <button class="add-btn" (click)="acceptInvitation(invitations[0]._id)">Accept</button>
+      <button class="cancel-btn" (click)="declineInvitation(invitations[0]._id)">Decline</button>
+    </div>
+  </div>
+
+  <!-- Multiple invitations -->
+  <div class="invitation-multiple" *ngIf="invitations.length > 1">
+    <div class="invitation-summary" *ngIf="!showAll">
+      <div class="invitation-info">
+        <i class="bx bx-building"></i>
+        <span>You have <strong>{{ invitations.length }}</strong> pending facility invitations</span>
+      </div>
+      <button class="add-btn" (click)="toggleShowAll()">View All</button>
+    </div>
+
+    <div class="invitation-list" *ngIf="showAll">
+      <div class="invitation-list-header">
+        <span><strong>{{ invitations.length }}</strong> Pending Invitations</span>
+        <button class="cancel-btn" (click)="toggleShowAll()">Hide</button>
+      </div>
+      <div class="invitation-item" *ngFor="let inv of invitations">
+        <div class="invitation-info">
+          <i class="bx bx-building"></i>
+          <span>
+            <strong>{{ inv.facilityName }}</strong> — invited by {{ inv.inviterName }}
+          </span>
+        </div>
+        <div class="invitation-actions">
+          <button class="add-btn" (click)="acceptInvitation(inv._id)">Accept</button>
+          <button class="cancel-btn" (click)="declineInvitation(inv._id)">Decline</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

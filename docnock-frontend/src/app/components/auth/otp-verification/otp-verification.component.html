@@ -28,11 +28,24 @@
 
           <div class="row">
             <div class="col-12">
-              <p>
+              <p class="resend-text">
                 I didn't receive the code.
-                <a style="cursor: pointer">
+                <span *ngIf="!canResend" class="resend-countdown">
+                  Resend in {{ formattedCountdown }}
+                </span>
+                <a
+                  *ngIf="canResend && resendAttempts < maxResendAttempts"
+                  style="cursor: pointer"
+                  (click)="resendOTP()"
+                >
                   <b>Resend Code</b>
                 </a>
+                <span
+                  *ngIf="resendAttempts >= maxResendAttempts"
+                  class="resend-disabled"
+                >
+                  Max resend attempts reached
+                </span>
               </p>
             </div>
           </div>

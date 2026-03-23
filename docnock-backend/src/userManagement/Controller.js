@@ -2557,3 +2557,149 @@ export const checkMobileExists = async (req, res) => {
     return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+
+// ─── User Session Management ─────────────────────────────────────────────────
+
+export const getMyActiveSessions = async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const sessions = await RefreshToken.find({
+      userId,
+      expiresAt: { $gt: new Date() },
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const formatted = sessions.map((s) => ({
+      _id: s._id,
+      userAgent: s.userAgent || "Unknown device",
+      ip: s.ip || "Unknown",
+      createdAt: s.createdAt,
+      lastActive: s.updatedAt || s.createdAt,
+    }));
+
+    return res.status(200).json({ success: true, data: formatted });
+  } catch (error) {
+    logger.error({ err: error }, "getMyActiveSessions error");
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+export const revokeMySession = async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { sessionId } = req.params;
+
+    const session = await RefreshToken.findById(sessionId);
+    if (!session || session.userId.toString() !== userId.toString()) {
+      return res.status(404).json({ success: false, message: "Session not found" });
+    }
+
+    await RefreshToken.findByIdAndDelete(sessionId);
+    return res.status(200).json({ success: true, message: "Session revoked" });
+  } catch (error) {
+    logger.error({ err: error }, "revokeMySession error");
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+export const revokeAllOtherSessions = async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const currentToken = req.headers.authorization?.split(" ")[1];
+
+    // Delete all refresh tokens except the current one
+    await RefreshToken.deleteMany({
+      userId,
+      token: { $ne: currentToken },
+    });
+
+    return res.status(200).json({ success: true, message: "All other sessions revoked" });
+  } catch (error) {
+    logger.error({ err: error }, "revokeAllOtherSessions error");
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+// ─── Email Change with Verification ──────────────────────────────────────────
+
+export const requestEmailChange = async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { newEmail } = req.body;
+
+    if (!newEmail) {
+      return res.status(400).json({ success: false, message: "New email is required" });
+    }
+
+    // Check if email already in use
+    const existing = await User.findOne({ email: newEmail.toLowerCase(), isDeleted: false });
+    if (existing) {
+      return res.status(400).json({ success: false, message: "This email is already registered" });
+    }
+
+    // Generate OTP and send to new email
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const user = await User.findById(userId);
+    user.otp = otp;
+    user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    await user.save();
+
+    // Send OTP to the NEW email
+    sendOTPEmail(newEmail, otp);
+
+    return res.status(200).json({ success: true, message: "Verification code sent to new email" });
+  } catch (error) {
+    logger.error({ err: error }, "requestEmailChange error");
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+export const confirmEmailChange = async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { newEmail, otp } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (!user.otp || user.otp !== otp) {
+      return res.status(400).json({ success: false, message: "Invalid verification code" });
+    }
+
+    if (user.otpExpires && user.otpExpires < new Date()) {
+      return res.status(400).json({ success: false, message: "Verification code has expired" });
+    }
+
+    const oldEmail = user.email;
+    user.email = newEmail.toLowerCase();
+    user.otp = undefined;
+    user.otpExpires = undefined;
+    await user.save();
+
+    logger.info({ userId, oldEmail, newEmail }, "Email changed successfully");
+
+    return res.status(200).json({ success: true, message: "Email updated successfully" });
+  } catch (error) {
+    logger.error({ err: error }, "confirmEmailChange error");
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+// ─── Notification Preferences ────────────────────────────────────────────────
+
+export const updateNotificationPreferences = async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { notificationPreferences } = req.body;
+
+    await User.findByIdAndUpdate(userId, { notificationPreferences });
+
+    return res.status(200).json({ success: true, message: "Notification preferences updated" });
+  } catch (error) {
+    logger.error({ err: error }, "updateNotificationPreferences error");
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};

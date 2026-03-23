@@ -22,15 +22,27 @@ export class AccountSettingComponent {
   backendUrl = environment.backEndUrl;
 
   activeTab: string = 'profile'; // Default active tab
-  public hasAddressChanged = false; 
+  public hasAddressChanged = false;
   latitude:any=0;
   longitude:any=0;
   previewUrl: string | ArrayBuffer | null = null;
   profileName: any;
   role: any;
 
+  // Security tab
+  mfaEnabled: boolean = false;
+  mfaLoading: boolean = false;
+  activeSessions: any[] = [];
+  sessionsLoading: boolean = false;
+  loginHistory: any[] = [];
+  loginHistoryLoading: boolean = false;
+  currentSessionId: string = '';
+
   showTab(tab: string) {
     this.activeTab = tab; // Update active tab
+    if (tab === 'security') {
+      this.loadSecurityData();
+    }
   }
 
   constructor(
@@ -247,5 +259,109 @@ export class AccountSettingComponent {
         ?.setErrors({ invalidAddress: true });
     console.log("User modified the location, isEdited set to:", this.hasAddressChanged);
   }
-  
+
+  // ─── Security Tab ──────────────────────────────────────────────────────────
+
+  loadSecurityData() {
+    this.currentSessionId = localStorage.getItem('loginsessionid') || '';
+    this.loadActiveSessions();
+    this.loadLoginHistory();
+  }
+
+  toggleMfa() {
+    this.mfaLoading = true;
+    if (this.mfaEnabled) {
+      // Disable MFA
+      this.authService.setupMfa().subscribe({
+        next: (res: any) => {
+          this.mfaEnabled = false;
+          this.mfaLoading = false;
+          this.toastr.success('Two-Factor Authentication disabled');
+        },
+        error: (err: any) => {
+          this.mfaLoading = false;
+          this.toastr.error(err?.error?.message || 'Failed to disable 2FA');
+        }
+      });
+    } else {
+      // Enable MFA
+      this.authService.setupMfa().subscribe({
+        next: (res: any) => {
+          this.mfaEnabled = true;
+          this.mfaLoading = false;
+          this.toastr.success('Two-Factor Authentication enabled');
+        },
+        error: (err: any) => {
+          this.mfaLoading = false;
+          this.toastr.error(err?.error?.message || 'Failed to enable 2FA');
+        }
+      });
+    }
+  }
+
+  loadActiveSessions() {
+    this.sessionsLoading = true;
+    this.authService.getMyActiveSessions().subscribe({
+      next: (res: any) => {
+        this.activeSessions = res?.data || [];
+        this.sessionsLoading = false;
+      },
+      error: (err: any) => {
+        this.sessionsLoading = false;
+        console.error('Failed to load sessions', err);
+      }
+    });
+  }
+
+  isCurrentSession(session: any): boolean {
+    return session._id === this.currentSessionId || session.sessionId === this.currentSessionId;
+  }
+
+  getDeviceIcon(userAgent: string): string {
+    if (!userAgent) return 'bx bx-laptop';
+    const ua = userAgent.toLowerCase();
+    if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) {
+      return 'bx bx-mobile';
+    }
+    return 'bx bx-laptop';
+  }
+
+  revokeSessionById(sessionId: string) {
+    this.authService.revokeMySession(sessionId).subscribe({
+      next: (res: any) => {
+        this.toastr.success(res?.message || 'Session revoked');
+        this.loadActiveSessions();
+      },
+      error: (err: any) => {
+        this.toastr.error(err?.error?.message || 'Failed to revoke session');
+      }
+    });
+  }
+
+  revokeAllOtherSessions() {
+    this.authService.revokeAllOtherSessions().subscribe({
+      next: (res: any) => {
+        this.toastr.success(res?.message || 'All other sessions revoked');
+        this.loadActiveSessions();
+      },
+      error: (err: any) => {
+        this.toastr.error(err?.error?.message || 'Failed to revoke sessions');
+      }
+    });
+  }
+
+  loadLoginHistory() {
+    this.loginHistoryLoading = true;
+    const userId = localStorage.getItem('userId') || '';
+    this.authService.listLoginRecords(userId).subscribe({
+      next: (res: any) => {
+        this.loginHistory = res?.data || [];
+        this.loginHistoryLoading = false;
+      },
+      error: (err: any) => {
+        this.loginHistoryLoading = false;
+        console.error('Failed to load login history', err);
+      }
+    });
+  }
 }

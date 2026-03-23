@@ -454,3 +454,81 @@ export const switchFacility = async (req, res) => {
     return Error(res, 500, "Failed to switch facility", err.message);
   }
 };
+
+// ─── Facility Invitation Management ──────────────────────────────────────────
+
+export const getMyInvitations = async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const invitations = await FacilityMembership.find({
+      userId,
+      status: "invited",
+    })
+      .populate("facilityId", "name type address")
+      .populate("invitedBy", "fullName")
+      .lean();
+
+    return Success(res, 200, "Invitations retrieved", invitations);
+  } catch (err) {
+    return Error(res, 500, "Failed to fetch invitations", err.message);
+  }
+};
+
+export const acceptInvitation = async (req, res) => {
+  try {
+    const { membershipId } = req.params;
+    const userId = req.user.userId || req.user.id;
+
+    const membership = await FacilityMembership.findById(membershipId);
+    if (!membership) {
+      return Error(res, 404, "Invitation not found");
+    }
+    if (membership.userId.toString() !== userId.toString()) {
+      return Error(res, 403, "This invitation is not for you");
+    }
+    if (membership.status !== "invited") {
+      return Error(res, 400, "Invitation already processed");
+    }
+
+    membership.status = "active";
+    membership.joinedAt = new Date();
+    await membership.save();
+
+    const facility = await Facility.findById(membership.facilityId).select("name").lean();
+
+    await createAuditEntry(req, {
+      action: "FACILITY_JOINED",
+      resourceType: "FacilityMembership",
+      resourceId: membership._id,
+      details: { facilityName: facility?.name },
+    });
+
+    return Success(res, 200, `Joined ${facility?.name || "facility"} successfully`);
+  } catch (err) {
+    return Error(res, 500, "Failed to accept invitation", err.message);
+  }
+};
+
+export const declineInvitation = async (req, res) => {
+  try {
+    const { membershipId } = req.params;
+    const userId = req.user.userId || req.user.id;
+
+    const membership = await FacilityMembership.findById(membershipId);
+    if (!membership) {
+      return Error(res, 404, "Invitation not found");
+    }
+    if (membership.userId.toString() !== userId.toString()) {
+      return Error(res, 403, "This invitation is not for you");
+    }
+    if (membership.status !== "invited") {
+      return Error(res, 400, "Invitation already processed");
+    }
+
+    await FacilityMembership.findByIdAndDelete(membershipId);
+
+    return Success(res, 200, "Invitation declined");
+  } catch (err) {
+    return Error(res, 500, "Failed to decline invitation", err.message);
+  }
+};

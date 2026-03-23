@@ -11,6 +11,9 @@ import {
   removeStaffFromFacility,
   getMyFacilities,
   switchFacility,
+  getMyInvitations,
+  acceptInvitation,
+  declineInvitation,
 } from "./Controller";
 import rateLimit from "express-rate-limit";
 import { requireRole, ROLES } from "../middleware/rbacMiddleware";
@@ -40,6 +43,9 @@ export default (router) => {
   // ─── User-Facing (any authenticated) ──────────────────────────────────────
   router.get("/facilities/mine", facilityRateLimiter, getMyFacilities);
   router.post("/facilities/switch", facilityRateLimiter, switchFacility);
+  router.get("/facilities/my-invitations", facilityRateLimiter, getMyInvitations);
+  router.post("/facilities/invitations/:membershipId/accept", facilityWriteRateLimiter, acceptInvitation);
+  router.post("/facilities/invitations/:membershipId/decline", facilityWriteRateLimiter, declineInvitation);
 
   // ─── Facility CRUD (admin only) ───────────────────────────────────────────
   router.post("/admin/facilities", facilityWriteRateLimiter, superadminOnly, createFacility);

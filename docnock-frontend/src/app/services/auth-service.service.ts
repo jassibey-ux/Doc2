@@ -1032,6 +1032,92 @@ removeStaffFromFacility(facilityId: string, userId: string) {
   return this.http.delete(`${this.baseUrl}/admin/facilities/${facilityId}/staff/${userId}`, { headers: this.getHeader(token) });
 }
 
+// ─── Facility Invitations ──────────────────────────────────────────────────
+
+getMyInvitations() {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/facilities/my-invitations`, {
+    headers: this.getHeader(token),
+  });
+}
+
+acceptFacilityInvitation(membershipId: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/facilities/invitations/${membershipId}/accept`, {}, {
+    headers: this.getHeader(token),
+  });
+}
+
+declineFacilityInvitation(membershipId: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/facilities/invitations/${membershipId}/decline`, {}, {
+    headers: this.getHeader(token),
+  });
+}
+
+// ─── Session Management (User) ─────────────────────────────────────────────
+
+getMyActiveSessions() {
+  const token = this.getToken();
+  return this.http.get(`${this.baseUrl}/sessions/active`, {
+    headers: this.getHeader(token),
+  });
+}
+
+revokeMySession(sessionId: string) {
+  const token = this.getToken();
+  return this.http.delete(`${this.baseUrl}/sessions/${sessionId}`, {
+    headers: this.getHeader(token),
+  });
+}
+
+revokeAllOtherSessions() {
+  const token = this.getToken();
+  return this.http.delete(`${this.baseUrl}/sessions/revoke-all-others`, {
+    headers: this.getHeader(token),
+  });
+}
+
+// ─── MFA Setup ─────────────────────────────────────────────────────────────
+
+setupMfa() {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/setup-mfa`, {}, {
+    headers: this.getHeader(token),
+  });
+}
+
+// ─── Email Change ──────────────────────────────────────────────────────────
+
+requestEmailChange(newEmail: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/users/request-email-change`, { newEmail }, {
+    headers: this.getHeader(token),
+  });
+}
+
+confirmEmailChange(newEmail: string, otp: string) {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/users/confirm-email-change`, { newEmail, otp }, {
+    headers: this.getHeader(token),
+  });
+}
+
+// ─── Notification Preferences ──────────────────────────────────────────────
+
+updateNotificationPreferences(prefs: any) {
+  const token = this.getToken();
+  return this.http.put(`${this.baseUrl}/users/notification-preferences`, { notificationPreferences: prefs }, {
+    headers: this.getHeader(token),
+  });
+}
+
+// ─── Resend OTP ────────────────────────────────────────────────────────────
+
+resendOTP(mobile: string) {
+  return this.http.post<any>(`${this.baseUrl}/resendOTP`, { mobile });
+}
+
 }
 
 
