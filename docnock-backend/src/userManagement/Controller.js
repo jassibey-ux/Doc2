@@ -704,12 +704,60 @@ export const changeStatusAndDelete = async (req, res) => {
       userId = req.user.userId;
     }
 
+    // Support both legacy 'type' param and new 'action' param
+    const { action } = req.body;
     const validtype = ["status", "delete", "geolocation"];
+    const validActions = ["suspend", "deactivate", "reactivate", "delete"];
+
+    // Handle new action-based flow
+    if (action && validActions.includes(action)) {
+      logger.debug({ userId, action }, "changeStatusAndDelete action-based");
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID is required",
+        });
+      }
+
+      const userrecord = await User.findOne({ _id: userId });
+      if (!userrecord) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      let message = "";
+      switch (action) {
+        case "suspend":
+          userrecord.status = false;
+          message = "User suspended successfully";
+          break;
+        case "deactivate":
+          userrecord.status = false;
+          message = "User deactivated successfully";
+          break;
+        case "reactivate":
+          userrecord.status = true;
+          message = "User reactivated successfully";
+          break;
+        case "delete":
+          userrecord.isDeleted = true;
+          message = "User deleted successfully";
+          break;
+      }
+
+      await userrecord.save();
+      return res.status(200).json({ success: true, message });
+    }
+
+    // Legacy type-based flow
     if (!validtype.includes(type)) {
       return res.status(400).json({
         success: false,
         message:
-          "Invalid type value. type values are 'status', 'delete','geolocation.",
+          "Invalid type value. type values are 'status', 'delete','geolocation. Or use action: 'suspend'|'deactivate'|'reactivate'|'delete'.",
       });
     }
     logger.debug({ userId, status }, "changeStatusAndDelete");
@@ -2701,5 +2749,27 @@ export const updateNotificationPreferences = async (req, res) => {
   } catch (error) {
     logger.error({ err: error }, "updateNotificationPreferences error");
     return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 3 (P2) — User Audit Trail
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const getUserAuditTrail = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const AuditLog = (await import('../models/auditLog')).default;
+    const logs = await AuditLog.find({
+      $or: [{ userId }, { resourceId: userId }]
+    })
+      .sort({ timestamp: -1 })
+      .limit(50)
+      .lean();
+
+    return res.status(200).json({ success: true, data: logs });
+  } catch (error) {
+    logger.error({ err: error }, "getUserAuditTrail error");
+    return res.status(500).json({ success: false, message: "Failed to fetch audit trail" });
   }
 };

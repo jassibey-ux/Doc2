@@ -872,3 +872,62 @@ export const getMessageReactions = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 3 (P2) — Message Search & Unsend
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── Search Messages ─────────────────────────────────────────────────────
+export const searchMessages = async (req, res) => {
+  try {
+    const { q, conversationId, limit = 10, page = 1 } = req.query;
+    if (!q) return res.status(400).json({ success: false, message: "Search query required" });
+
+    const query = { message: { $regex: q, $options: 'i' }, isDeleted: false };
+    if (conversationId) query.conversationId = conversationId;
+
+    const skip = (page - 1) * limit;
+    const messages = await Message.find(query)
+      .populate('senderID', 'fullName profilePicture')
+      .populate('conversationId', 'groupName')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .lean();
+
+    return res.status(200).json({ success: true, data: messages });
+  } catch (error) {
+    logger.error({ err: error }, "searchMessages error");
+    return res.status(500).json({ success: false, message: "Search failed" });
+  }
+};
+
+// ─── Unsend Message ──────────────────────────────────────────────────────
+export const unsendMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.userId || req.user.id;
+
+    const message = await Message.findById(messageId);
+    if (!message) return res.status(404).json({ success: false, message: "Message not found" });
+    if (message.senderID.toString() !== userId.toString()) {
+      return res.status(403).json({ success: false, message: "Can only unsend your own messages" });
+    }
+
+    // 5 minute time limit
+    const fiveMinutes = 5 * 60 * 1000;
+    if (Date.now() - new Date(message.createdAt).getTime() > fiveMinutes) {
+      return res.status(400).json({ success: false, message: "Can only unsend messages within 5 minutes" });
+    }
+
+    message.message = null;
+    message.isDeleted = true;
+    message.attachments = [];
+    await message.save();
+
+    return res.status(200).json({ success: true, message: "Message unsent" });
+  } catch (error) {
+    logger.error({ err: error }, "unsendMessage error");
+    return res.status(500).json({ success: false, message: "Failed to unsend message" });
+  }
+};

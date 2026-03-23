@@ -1,5 +1,5 @@
 import { uploadSingleProfileImage } from "../middleware/userUploads";
-import { addUser, login,resetPassword,listLoginRecords,forgotPassword,logoutUser, resendOTP,listUsers, updateUser, changeStatusAndDelete, getUserById, sendPasswordResetEmail, createPermission, getPermissionsByUserId, countUsersByRole ,changePassword,verifyOTP, getUnreadCountByReceiver, fcm_token_save, verify_link, encryption_conversion, getGraphData, getAnalyticsDashboard, refreshAccessToken, logoutAllDevices, listAuditLogs, setupMfa, verifyMfaSetup, verifyMfa, disableMfa, checkMobileExists, getMyActiveSessions, revokeMySession, revokeAllOtherSessions, requestEmailChange, confirmEmailChange, updateNotificationPreferences} from "./Controller";
+import { addUser, login,resetPassword,listLoginRecords,forgotPassword,logoutUser, resendOTP,listUsers, updateUser, changeStatusAndDelete, getUserById, sendPasswordResetEmail, createPermission, getPermissionsByUserId, countUsersByRole ,changePassword,verifyOTP, getUnreadCountByReceiver, fcm_token_save, verify_link, encryption_conversion, getGraphData, getAnalyticsDashboard, refreshAccessToken, logoutAllDevices, listAuditLogs, setupMfa, verifyMfaSetup, verifyMfa, disableMfa, checkMobileExists, getMyActiveSessions, revokeMySession, revokeAllOtherSessions, requestEmailChange, confirmEmailChange, updateNotificationPreferences, getUserAuditTrail} from "./Controller";
 import { requireRole, ROLES } from "../middleware/rbacMiddleware";
 
 export default (router) => {
@@ -26,6 +26,7 @@ export default (router) => {
   router.get('/analytics/dashboard', adminOnly, getAnalyticsDashboard);
   router.post("/logout-all-devices", adminOnly, logoutAllDevices);
   router.get("/audit-logs", adminOnly, listAuditLogs);
+  router.get("/users/:userId/audit-trail", adminOnly, getUserAuditTrail);
 
   // ==========================
   // Authenticated Routes (any logged-in user)

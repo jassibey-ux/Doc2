@@ -14,7 +14,7 @@
     </form>
     <div class="d-flex align-items-center justify-content-end col-md-5">
       <!-- Facility Switcher -->
-      <div class="facility-switcher" *ngIf="facilities.length > 0">
+      <div class="facility-switcher" *ngIf="facilities.length > 1 || isSuperadmin">
         <button
           type="button"
           class="facility-switcher-btn"

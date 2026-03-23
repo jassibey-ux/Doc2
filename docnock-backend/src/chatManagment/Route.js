@@ -1,5 +1,5 @@
 import { uploadSingleProfileImage } from "../middleware/userUploads";
-import { createConversation, getConversationsByUserId, generatAgoraToken, UpdateImageName, updateGroupMembers, exportChat, listNotifications, ReadNotification, uploadImage, getPinnedMessages, getMentionableUsers, getMessageReactions } from "./Controller";
+import { createConversation, getConversationsByUserId, generatAgoraToken, UpdateImageName, updateGroupMembers, exportChat, listNotifications, ReadNotification, uploadImage, getPinnedMessages, getMentionableUsers, getMessageReactions, searchMessages, unsendMessage } from "./Controller";
 import multer from 'multer';
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -22,6 +22,10 @@ export default (router) => {
   router.get('/conversations/:conversationId/pins', getPinnedMessages);
   router.get('/conversations/:conversationId/mentionable', getMentionableUsers);
   router.get('/messages/:messageId/reactions', getMessageReactions);
+
+  // ─── Phase 3 (P2): Message Search & Unsend ─────────────────────────────
+  router.get("/messages/search", searchMessages);
+  router.post("/messages/:messageId/unsend", unsendMessage);
 
   return router;
 };

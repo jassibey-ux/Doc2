@@ -104,6 +104,7 @@
                     <div *ngIf="profileSetup.controls['password'].errors?.['minlength'] && profileSetup.controls['password'].touched" class="text-danger">
                       Password must be at least 6 characters long.
                     </div>
+                    <app-password-strength-meter [password]="profileSetup.controls['password'].value"></app-password-strength-meter>
                   </div>
                 </div>
               </div>

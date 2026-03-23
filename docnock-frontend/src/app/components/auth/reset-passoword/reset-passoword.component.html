@@ -35,6 +35,7 @@
             <div *ngIf="resetPassword.controls['newpassword'].errors?.['minlength'] && resetPassword.controls['newpassword'].touched" class="text-danger">
               Password must be at least 6 characters long.
             </div>
+            <app-password-strength-meter [password]="resetPassword.controls['newpassword'].value"></app-password-strength-meter>
           </div>
           <div class="mb-3 form-box">
             <label for="confirm-password" class="text-left"

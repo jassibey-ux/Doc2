@@ -73,6 +73,7 @@ import { AiAssistantComponent } from './components/main-module/ai-assistant/ai-a
 import { AiTemplatesComponent } from './components/main-module/ai-templates/ai-templates.component';
 import { AccessDeniedComponent } from './components/common/access-denied/access-denied.component';
 import { FacilityInvitationBannerComponent } from './components/common/facility-invitation-banner/facility-invitation-banner.component';
+import { PasswordStrengthMeterComponent } from './shared/password-strength-meter/password-strength-meter.component';
 
 @NgModule({
   declarations: [
@@ -128,6 +129,7 @@ import { FacilityInvitationBannerComponent } from './components/common/facility-
     AiTemplatesComponent,
     AccessDeniedComponent,
     FacilityInvitationBannerComponent,
+    PasswordStrengthMeterComponent,
   ],
   imports: [
     BrowserModule,
