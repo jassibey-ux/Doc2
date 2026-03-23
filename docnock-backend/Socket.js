@@ -9,6 +9,7 @@ import User from "./src/models/user";
 import { sendAndroidVoipCall, sendAndroidNonVoipCall, sendIosVoipCall, sendPriorityNotification } from "./src/utils/firebase_fcm"
 import { encryptPHI, safeDecryptPHI } from "./src/utils/phiEncryption"
 import EscalationChain from "./src/models/EscalationChain";
+import UnreadCount from "./src/models/UnreadCount";
 import mongoose from "mongoose";
 import cron from "node-cron"
 import { findOnCallNow } from "./src/scheduleManagement/Controller";
@@ -857,6 +858,12 @@ exports = module.exports = function (io) {
         }
         // Reset unread count to 0 in Redis
         await redis.hset("unread_counts", `${groupId}:${userId}`, 0);
+        // Persist reset to MongoDB
+        UnreadCount.findOneAndUpdate(
+          { conversationId: groupId, userId },
+          { count: 0 },
+          { upsert: true }
+        ).catch(err => console.error("Unread persist error:", err.message));
 
         console.log(`Unread count reset for ${userId} in group ${groupId}`);
 
@@ -1048,6 +1055,12 @@ exports = module.exports = function (io) {
               // const activeChat = await redis.hget("active_chats", userId);
               // if (activeChat !== groupId) {
               await redis.hincrby("unread_counts", `${groupId}:${userId}`, 1);
+              // Persist unread count to MongoDB
+              UnreadCount.findOneAndUpdate(
+                { conversationId: groupId, userId: userId },
+                { $inc: { count: 1 } },
+                { upsert: true }
+              ).catch(err => console.error("Unread persist error:", err.message));
               // await Conversation.updateOne(
               //   { _id: groupId },
               //   { $inc: { [`unreadCount.${userId}`]: 1 } }
@@ -1319,6 +1332,12 @@ exports = module.exports = function (io) {
 
         // Reset unread count in Redis
         await redis.hset(`unread_counts`, `${groupId}:${userId}`, 0);
+        // Persist reset to MongoDB
+        UnreadCount.findOneAndUpdate(
+          { conversationId: groupId, userId },
+          { count: 0 },
+          { upsert: true }
+        ).catch(err => console.error("Unread persist error:", err.message));
 
         // Mark related notifications as read for this user/group
         await Notification.updateMany(

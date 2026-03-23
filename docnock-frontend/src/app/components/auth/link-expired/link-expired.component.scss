@@ -1,0 +1,28 @@
+.link-expired-icon {
+  margin-bottom: 20px;
+  i {
+    font-size: 56px;
+    color: #e6a817;
+  }
+}
+
+.login-page .form-2-wrapper {
+  border: 1px solid var(--line);
+}
+
+.login-page .form-2-wrapper h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--h);
+  margin-bottom: 12px;
+}
+
+.login-page .form-2-wrapper p {
+  font-size: 14px;
+  color: var(--p);
+  line-height: 1.6;
+}
+
+.login-page .login-btn {
+  font-weight: 600;
+}

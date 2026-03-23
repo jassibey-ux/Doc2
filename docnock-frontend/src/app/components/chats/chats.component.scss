@@ -4143,3 +4143,88 @@ section {
   }
   .mention-item:hover { background: rgba(47, 147, 109, 0.1); }
 }
+
+// ═══ Chat Search ═══
+.chat-search-toggle-btn {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--p);
+  font-size: 16px;
+  transition: all 0.2s ease;
+  &:hover, &.active {
+    color: var(--primary);
+    border-color: var(--primary);
+    background: rgba(47, 147, 109, 0.06);
+  }
+}
+
+.chat-search-bar {
+  background: var(--bg-light);
+  border-bottom: 1px solid var(--line);
+  padding: 8px 16px;
+  .chat-search-bar-inner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .chat-search-input-field {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--h);
+    outline: none;
+    &:focus {
+      border-color: var(--primary);
+    }
+  }
+  .search-btn, .close-search-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    color: var(--p);
+    padding: 4px;
+    &:hover {
+      color: var(--primary);
+    }
+  }
+}
+
+.search-results {
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--bg-light);
+  border-bottom: 1px solid var(--line);
+  .search-result-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--line);
+    transition: background 0.15s ease;
+    &:hover {
+      background: rgba(47, 147, 109, 0.06);
+    }
+    strong {
+      font-size: 13px;
+      color: var(--h);
+    }
+    p {
+      font-size: 12px;
+      color: var(--p);
+      margin: 2px 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    small {
+      font-size: 11px;
+      color: var(--p);
+      opacity: 0.7;
+    }
+  }
+}

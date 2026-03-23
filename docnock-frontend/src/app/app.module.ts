@@ -74,6 +74,9 @@ import { AiTemplatesComponent } from './components/main-module/ai-templates/ai-t
 import { AccessDeniedComponent } from './components/common/access-denied/access-denied.component';
 import { FacilityInvitationBannerComponent } from './components/common/facility-invitation-banner/facility-invitation-banner.component';
 import { PasswordStrengthMeterComponent } from './shared/password-strength-meter/password-strength-meter.component';
+import { WelcomeWizardComponent } from './components/main-module/welcome-wizard/welcome-wizard.component';
+import { EmailVerificationComponent } from './components/auth/email-verification/email-verification.component';
+import { LinkExpiredComponent } from './components/auth/link-expired/link-expired.component';
 
 @NgModule({
   declarations: [
@@ -130,6 +133,9 @@ import { PasswordStrengthMeterComponent } from './shared/password-strength-meter
     AccessDeniedComponent,
     FacilityInvitationBannerComponent,
     PasswordStrengthMeterComponent,
+    WelcomeWizardComponent,
+    EmailVerificationComponent,
+    LinkExpiredComponent,
   ],
   imports: [
     BrowserModule,

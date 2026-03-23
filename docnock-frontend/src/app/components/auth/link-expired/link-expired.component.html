@@ -1,0 +1,41 @@
+<section class="login-page">
+  <div class="bg_container">
+    <div class="logo-main">
+      <img src="../../assets/images/logo.png" alt="" />
+    </div>
+    <div class="bg-image"></div>
+  </div>
+
+  <div class="row w-100">
+    <div class="col-lg-6 desc justify-content-center col-6 text-left px-5 py-3">
+      <h2>Doc-Nock</h2>
+      <p class="text-bold">Professional communication for modern healthcare teams</p>
+      <p>Streamlines discussions, reduces delays, and enhances overall care delivery efficiency.</p>
+    </div>
+    <div class="col-lg-6 d-flex align-items-center justify-content-center">
+      <div class="form-2-wrapper p-5 text-center">
+        <div class="link-expired-icon">
+          <i class="bx bx-error-circle"></i>
+        </div>
+        <h2>This Link Has Been Used</h2>
+        <p>
+          The link you followed has already been used or has expired.
+          Please request a new link to continue.
+        </p>
+        <button
+          type="button"
+          class="btn btn-outline-secondary login-btn w-100 mb-3"
+          (click)="requestNewLink()"
+        >
+          Request New Link
+        </button>
+        <div class="mt-3">
+          <p>
+            Back to login?
+            <a class="bold" href="/login">Log in</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

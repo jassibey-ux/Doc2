@@ -40,6 +40,8 @@ import { FamilyPortalAdminComponent } from './components/main-module/family-port
 import { AiAssistantComponent } from './components/main-module/ai-assistant/ai-assistant.component';
 import { AiTemplatesComponent } from './components/main-module/ai-templates/ai-templates.component';
 import { AccessDeniedComponent } from './components/common/access-denied/access-denied.component';
+import { EmailVerificationComponent } from './components/auth/email-verification/email-verification.component';
+import { LinkExpiredComponent } from './components/auth/link-expired/link-expired.component';
 
 const routes: Routes = [
   { path: 'login', component: LoginComponent, canActivate: [AuthGuardLogin] },
@@ -47,6 +49,8 @@ const routes: Routes = [
   { path: 'setup-profile', component: SetupProfileComponent },
   { path: 'forgot-password', component: ForgetPassowordComponent },
   { path: 'reset-password', component: ResetPassowordComponent },
+  { path: 'email-verification', component: EmailVerificationComponent },
+  { path: 'link-expired', component: LinkExpiredComponent },
   { path: 'family/verify/:token', component: FamilyPortalComponent },
   { path: 'family/portal', component: FamilyPortalComponent },
 

@@ -85,6 +85,12 @@ export class ChatsComponent {
   showPatientContext = false;
   showDocumentPanel = false;
 
+  // Chat Search
+  showSearch = false;
+  searchQuery = '';
+  searchResults: any[] = [];
+  searchLoading = false;
+
   constructor(
     private route: ActivatedRoute,
     private authService: AuthServiceService,
@@ -3420,6 +3426,43 @@ export class ChatsComponent {
   togglePinnedPanel() {
     this.showPinnedPanel = !this.showPinnedPanel;
     if (this.showPinnedPanel) this.loadPinnedMessages();
+  }
+
+  // ═══ Chat Search ═══
+  toggleSearch() {
+    this.showSearch = !this.showSearch;
+    if (!this.showSearch) {
+      this.searchQuery = '';
+      this.searchResults = [];
+    }
+  }
+
+  onSearch() {
+    if (!this.searchQuery.trim()) return;
+    this.searchLoading = true;
+    const convId = this.activeGroup?.groupId || undefined;
+    this.chatservice.searchMessages(this.searchQuery, convId).subscribe({
+      next: (res: any) => {
+        this.searchResults = res.data || res.messages || [];
+        this.searchLoading = false;
+      },
+      error: () => {
+        this.searchLoading = false;
+        this.searchResults = [];
+      }
+    });
+  }
+
+  goToSearchResult(result: any) {
+    if (result.conversationId) {
+      const group = this.groupList.find((g: any) => g.groupId === result.conversationId);
+      if (group) {
+        this.selectGroup(group);
+      }
+    }
+    this.showSearch = false;
+    this.searchQuery = '';
+    this.searchResults = [];
   }
 
   loadPinnedMessages() {

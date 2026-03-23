@@ -1,0 +1,39 @@
+.otp-container {
+  display: flex;
+  justify-content: center;
+}
+
+.otp-input {
+  width: 40px;
+  height: 40px;
+  text-align: center;
+  border: 1px solid var(--line);
+  margin: 5px;
+  border-radius: var(--border-radius-md);
+  background: var(--bg-light);
+  color: var(--h);
+}
+
+.login-page .form-2-wrapper {
+  border: 1px solid var(--line);
+}
+
+.login-page .login-btn {
+  font-weight: 600;
+}
+
+.resend-text {
+  font-size: 14px;
+  color: var(--p);
+}
+
+.resend-countdown {
+  color: var(--h);
+  font-weight: 600;
+}
+
+.resend-disabled {
+  color: var(--h);
+  opacity: 0.5;
+  font-size: 13px;
+}

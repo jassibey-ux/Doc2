@@ -1,0 +1,28 @@
+<div class="wizard-overlay" *ngIf="visible" (click)="$event.stopPropagation()">
+  <a class="wizard-skip" (click)="skipWizard()">Skip</a>
+
+  <div class="wizard-card">
+    <div class="wizard-slide" *ngFor="let slide of slides; let i = index" [class.active]="i === currentSlide">
+      <div class="wizard-slide-content" *ngIf="i === currentSlide">
+        <div class="wizard-icon-wrap">
+          <i [class]="slide.icon"></i>
+        </div>
+        <h2>{{ slide.title }}</h2>
+        <p>{{ slide.description }}</p>
+        <div class="wizard-actions">
+          <button *ngIf="currentSlide > 0" class="btn wizard-btn-back" (click)="prevSlide()">Back</button>
+          <button class="btn wizard-btn-next" (click)="nextSlide()">{{ slide.buttonText }}</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="wizard-dots">
+      <span
+        *ngFor="let slide of slides; let i = index"
+        class="wizard-dot"
+        [class.active]="i === currentSlide"
+        (click)="goToSlide(i)"
+      ></span>
+    </div>
+  </div>
+</div>

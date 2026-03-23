@@ -286,6 +286,33 @@
           >
             <i class="bx bx-user-plus"></i>
           </button>
+
+          <!-- Search Messages -->
+          <button
+            *ngIf="activeGroup"
+            class="chat-search-toggle-btn"
+            [class.active]="showSearch"
+            (click)="toggleSearch()"
+            title="Search Messages"
+          >
+            <i class="bx bx-search"></i>
+          </button>
+        </div>
+
+        <!-- Chat Search Bar -->
+        <div class="chat-search-bar" *ngIf="showSearch">
+          <div class="chat-search-bar-inner">
+            <input type="text" [(ngModel)]="searchQuery" placeholder="Search messages..." (keyup.enter)="onSearch()" class="chat-search-input-field" />
+            <button (click)="onSearch()" class="search-btn" [disabled]="searchLoading"><i class="bx" [ngClass]="searchLoading ? 'bx-loader-alt bx-spin' : 'bx-search'"></i></button>
+            <button (click)="toggleSearch()" class="close-search-btn"><i class="bx bx-x"></i></button>
+          </div>
+        </div>
+        <div class="search-results" *ngIf="searchResults.length > 0">
+          <div *ngFor="let result of searchResults" class="search-result-item" (click)="goToSearchResult(result)">
+            <strong>{{ result.senderID?.fullName }}</strong>
+            <p>{{ result.message }}</p>
+            <small>{{ result.createdAt | date:'short' }}</small>
+          </div>
         </div>
         <!-- Topic Bar -->
         <div class="topic-bar" *ngIf="activeGroup?.group">

@@ -98,8 +98,13 @@ export class ChatService {
     );
   }
 
-
-
-
+  searchMessages(query: string, conversationId?: string, limit = 10, page = 1) {
+    let token = this.getToken();
+    let params = `?q=${encodeURIComponent(query)}&limit=${limit}&page=${page}`;
+    if (conversationId) params += `&conversationId=${conversationId}`;
+    return this.http.get(`${this.baseUrl}/messages/search${params}`, {
+      headers: this.getHeader(token),
+    });
+  }
 
 }
