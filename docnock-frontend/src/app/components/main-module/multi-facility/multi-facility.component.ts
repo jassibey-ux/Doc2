@@ -24,6 +24,12 @@ export class MultiFacilityComponent implements OnInit, OnDestroy {
   showCreateModal = false;
   editingFacility: any = null;
 
+  // Department editor
+  showDeptModal = false;
+  editingFacilityId = '';
+  editingDepartments: any[] = [];
+  savingDepartments = false;
+
   private refreshInterval: any = null;
 
   constructor(
@@ -175,5 +181,50 @@ export class MultiFacilityComponent implements OnInit, OnDestroy {
       rehab: 'Rehabilitation', pediatric: 'Pediatric', other: 'Other',
     };
     return labels[type] || type;
+  }
+
+  // ─── Department Editor ───────────────────────────────────────────────────
+  openDeptEditor(facility: any, event: Event): void {
+    event.stopPropagation();
+    this.editingFacilityId = facility.id;
+    this.editingDepartments = (facility.departments || []).map((d: any) => ({
+      name: d.name || '',
+      beds: d.beds || 0,
+      occupied: d.occupied || 0,
+      nurses: d.nurses || 0,
+    }));
+    this.showDeptModal = true;
+  }
+
+  closeDeptModal(): void {
+    this.showDeptModal = false;
+    this.editingFacilityId = '';
+    this.editingDepartments = [];
+  }
+
+  addDepartment(): void {
+    this.editingDepartments.push({ name: '', beds: 0, occupied: 0, nurses: 0 });
+  }
+
+  removeDepartment(index: number): void {
+    this.editingDepartments.splice(index, 1);
+  }
+
+  saveDepartments(): void {
+    this.savingDepartments = true;
+    this.authService.updateFacility(this.editingFacilityId, {
+      departments: this.editingDepartments,
+    }).subscribe({
+      next: () => {
+        this.toastr.success('Departments updated');
+        this.savingDepartments = false;
+        this.closeDeptModal();
+        this.loadFacilities();
+      },
+      error: (err: any) => {
+        this.savingDepartments = false;
+        this.toastr.error(err?.error?.message || 'Failed to update departments');
+      },
+    });
   }
 }

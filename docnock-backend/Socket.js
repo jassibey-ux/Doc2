@@ -891,7 +891,7 @@ exports = module.exports = function (io) {
     // Handle messaging in group
     socket.on(
       "sendMessage",
-      async ({ groupId, senderID, message, timestamp, attachment, isImportant, messageId, priority, onCallRole }) => {
+      async ({ groupId, senderID, message, timestamp, attachment, isImportant, messageId, priority, onCallRole, replyToMessageId }) => {
         if (!groupId || !senderID || !timestamp || !messageId || attachment == undefined || isImportant == undefined) {
           console.warn("Invalid sendMessage data:", { groupId, senderID, message, timestamp, attachment });
           return;
@@ -1005,9 +1005,23 @@ exports = module.exports = function (io) {
           priority: msgPriority,
           encrypted: !!encryptedMsg,
           encryptedMessage: encryptedMsg,
+          threadId: replyToMessageId || null,
         });
         // Save the message in MongoDB
         var result = await newMessage.save();
+
+        // Update parent message thread counters
+        if (replyToMessageId) {
+          try {
+            await Message.findByIdAndUpdate(replyToMessageId, {
+              $inc: { threadReplyCount: 1 },
+              threadLastReplyAt: new Date(),
+              $addToSet: { threadParticipants: userId },
+            });
+          } catch (threadErr) {
+            console.error("Thread counter update error:", threadErr.message);
+          }
+        }
         result = await result.populate('senderID');
         var callername = conversationGroup?.isGroup ? conversationGroup?.groupName :result?.senderID?.fullName;
         const messageData = {

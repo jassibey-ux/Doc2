@@ -231,7 +231,8 @@ registerUser() {
     attachment: any,
     isImportant:any,
     messageId:any,
-    priority: string = 'ROUTINE'
+    priority: string = 'ROUTINE',
+    replyToMessageId: string | null = null
   ) {
     this.socket.emit('sendMessage', {
       groupId: groupId,
@@ -241,7 +242,8 @@ registerUser() {
       attachment: attachment,
       isImportant,
       messageId,
-      priority
+      priority,
+      replyToMessageId
     });
   }
 

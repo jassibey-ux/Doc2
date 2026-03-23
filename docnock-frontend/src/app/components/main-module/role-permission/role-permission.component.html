@@ -1,4 +1,29 @@
 <div id="content" class="backdrop">
+  <!-- Permission Code Reference -->
+  <div class="permission-reference">
+    <div class="ref-header" (click)="showReference = !showReference">
+      <h5><i class="bx bx-info-circle"></i> Permission Code Reference</h5>
+      <i [class]="showReference ? 'bx bx-chevron-up' : 'bx bx-chevron-down'"></i>
+    </div>
+    <div class="ref-body" *ngIf="showReference">
+      <table class="table table-sm">
+        <thead><tr><th>Code</th><th>Module</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><strong>D</strong></td><td>Dashboard</td><td>View dashboard analytics</td></tr>
+          <tr><td><strong>F</strong></td><td>Facility</td><td>Manage facility centers</td></tr>
+          <tr><td><strong>P</strong></td><td>Physician</td><td>Manage physicians</td></tr>
+          <tr><td><strong>N</strong></td><td>Nurse</td><td>Manage nurses</td></tr>
+          <tr><td><strong>C</strong></td><td>Chat</td><td>Access messaging</td></tr>
+          <tr><td><strong>R</strong></td><td>Role &amp; Permission</td><td>Assign roles and permissions</td></tr>
+          <tr><td><strong>S</strong></td><td>Sub Admin</td><td>Manage sub-administrators</td></tr>
+          <tr><td><strong>O</strong></td><td>Other</td><td>Manage other staff types</td></tr>
+          <tr><td><strong>V</strong></td><td>Video</td><td>Video/audio calling</td></tr>
+          <tr><td><strong>AS</strong></td><td>Account Settings</td><td>Personal account settings</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="container cardMain">
     <div class="row">
       <div class="col-md-4 colPadding">

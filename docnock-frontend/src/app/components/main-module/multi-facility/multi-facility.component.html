@@ -117,7 +117,12 @@
 
       <!-- Expanded Detail -->
       <div *ngIf="selectedFacility?.id === facility.id" class="facility-detail">
-        <h5>Departments</h5>
+        <div class="dept-title-row">
+          <h5>Departments</h5>
+          <button class="btn-edit-dept" (click)="openDeptEditor(facility, $event)">
+            <i class="bx bx-edit-alt"></i> Edit Departments
+          </button>
+        </div>
         <div class="dept-grid">
           <div *ngFor="let dept of facility.departments" class="dept-item">
             <div class="dept-header">
@@ -150,4 +155,40 @@
     (save)="onFacilitySaved()"
     (close)="closeModal()"
   ></app-facility-form-modal>
+
+  <!-- Department Editor Modal -->
+  <div class="dept-modal-backdrop" *ngIf="showDeptModal" (click)="closeDeptModal()">
+    <div class="dept-modal" (click)="$event.stopPropagation()">
+      <div class="dept-modal-header">
+        <h4>Edit Departments</h4>
+        <button class="btn-close-modal" (click)="closeDeptModal()"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="dept-modal-body">
+        <div class="dept-row dept-row-header" *ngIf="editingDepartments.length > 0">
+          <span class="dept-col-name">Name</span>
+          <span class="dept-col">Beds</span>
+          <span class="dept-col">Occupied</span>
+          <span class="dept-col">Nurses</span>
+          <span class="dept-col-action"></span>
+        </div>
+        <div class="dept-row" *ngFor="let dept of editingDepartments; let i = index">
+          <input type="text" class="dept-input dept-col-name" [(ngModel)]="dept.name" placeholder="Department name" />
+          <input type="number" class="dept-input dept-col" [(ngModel)]="dept.beds" min="0" />
+          <input type="number" class="dept-input dept-col" [(ngModel)]="dept.occupied" min="0" />
+          <input type="number" class="dept-input dept-col" [(ngModel)]="dept.nurses" min="0" />
+          <button class="btn-remove-dept" (click)="removeDepartment(i)" title="Remove"><i class="bx bx-trash"></i></button>
+        </div>
+        <button class="btn-add-dept" (click)="addDepartment()">
+          <i class="bx bx-plus"></i> Add Department
+        </button>
+      </div>
+      <div class="dept-modal-footer">
+        <button class="btn-cancel" (click)="closeDeptModal()">Cancel</button>
+        <button class="btn-save-dept" [disabled]="savingDepartments" (click)="saveDepartments()">
+          <i class="bx bx-loader-alt bx-spin" *ngIf="savingDepartments"></i>
+          Save
+        </button>
+      </div>
+    </div>
+  </div>
 </div>

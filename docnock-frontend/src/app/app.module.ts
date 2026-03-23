@@ -77,6 +77,7 @@ import { PasswordStrengthMeterComponent } from './shared/password-strength-meter
 import { WelcomeWizardComponent } from './components/main-module/welcome-wizard/welcome-wizard.component';
 import { EmailVerificationComponent } from './components/auth/email-verification/email-verification.component';
 import { LinkExpiredComponent } from './components/auth/link-expired/link-expired.component';
+import { DeleteAccountComponent } from './components/main-module/delete-account/delete-account.component';
 
 @NgModule({
   declarations: [
@@ -136,6 +137,7 @@ import { LinkExpiredComponent } from './components/auth/link-expired/link-expire
     WelcomeWizardComponent,
     EmailVerificationComponent,
     LinkExpiredComponent,
+    DeleteAccountComponent,
   ],
   imports: [
     BrowserModule,

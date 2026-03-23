@@ -1112,6 +1112,15 @@ updateNotificationPreferences(prefs: any) {
   });
 }
 
+// ─── Account Deletion ──────────────────────────────────────────────────────
+
+requestAccountDeletion() {
+  const token = this.getToken();
+  return this.http.post(`${this.baseUrl}/users/request-deletion`, {}, {
+    headers: this.getHeader(token),
+  });
+}
+
 // ─── Resend OTP ────────────────────────────────────────────────────────────
 
 resendOTP(mobile: string) {

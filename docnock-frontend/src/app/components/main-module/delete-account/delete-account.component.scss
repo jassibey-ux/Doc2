@@ -1,0 +1,155 @@
+:host {
+  display: block;
+  padding: 24px;
+}
+
+.delete-account-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 60vh;
+  padding: 40px 16px;
+}
+
+.delete-card {
+  max-width: 520px;
+  width: 100%;
+  background: var(--bg);
+  border: 2px solid #e74c3c;
+  border-radius: 16px;
+  padding: 36px 32px;
+  text-align: center;
+
+  h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--h);
+    margin: 16px 0 8px;
+  }
+
+  .description {
+    font-size: 14px;
+    color: var(--p);
+    line-height: 1.5;
+    margin-bottom: 24px;
+  }
+}
+
+.warning-icon {
+  i {
+    font-size: 48px;
+    color: #e74c3c;
+  }
+}
+
+.delete-checklist {
+  text-align: left;
+  margin-bottom: 24px;
+
+  .check-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--h);
+    padding: 6px 0;
+
+    i {
+      color: #e74c3c;
+      font-size: 18px;
+    }
+  }
+}
+
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-light);
+  color: var(--h);
+  border: 1px solid var(--line);
+  border-radius: 36px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: 24px;
+  transition: background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(47, 147, 109, 0.08);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.confirm-section {
+  text-align: left;
+  margin-bottom: 20px;
+
+  label {
+    display: block;
+    font-size: 14px;
+    color: var(--h);
+    margin-bottom: 8px;
+  }
+
+  input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--h);
+    background: var(--bg);
+    outline: none;
+    transition: border-color 0.15s ease;
+
+    &:focus {
+      border-color: #e74c3c;
+    }
+  }
+}
+
+.delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  background: #e74c3c;
+  color: #fff;
+  border: none;
+  border-radius: 36px;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: #c0392b;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+// Dark mode
+:host-context(.dark-mode) {
+  .delete-card {
+    background: #1e1e1e;
+    border-color: #c0392b;
+  }
+
+  .confirm-section input {
+    background: #2a2a2a;
+    border-color: #444;
+    color: #eee;
+  }
+}

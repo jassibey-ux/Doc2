@@ -739,6 +739,7 @@ export class ChatsComponent {
 
     this.replyingTo = {
       messageId: message?.messageId,
+      _id: message?._id || null,
       sender: this.getReplySenderLabel(message),
       preview: this.getReplyPreviewForMessage(message)
     };
@@ -1665,6 +1666,7 @@ export class ChatsComponent {
 
     const messagePriority = this.selectedPriority;
     const messageImportant = this.isImportant;
+    const replyToMessageId = this.replyingTo?._id || null;
     const outboundMessageText = this.buildOutgoingMessageText(this.message);
     const parsedOutgoing = this.parseReplyFromMessage(outboundMessageText);
     const replyMetaForMessage = parsedOutgoing.replyMeta;
@@ -1737,7 +1739,8 @@ export class ChatsComponent {
           uploadedImages,
           messageImportant,
           messageId,
-          messagePriority
+          messagePriority,
+          replyToMessageId
         );
       }).catch((error: any) => {
         console.error('Upload error:', error);
@@ -1762,7 +1765,7 @@ export class ChatsComponent {
         }
       });
     } else {
-      this.sendMessageWithAttachments(this.selectedimage, outboundMessageText, displayMessageText, replyMetaForMessage);
+      this.sendMessageWithAttachments(this.selectedimage, outboundMessageText, displayMessageText, replyMetaForMessage, replyToMessageId);
     }
   }
 
@@ -1898,7 +1901,7 @@ export class ChatsComponent {
     attachment.uploadProgress = progress;
   }
 
-  sendMessageWithAttachments(attachments: any[], outboundMessageText: string = this.message, displayMessageText: string = this.message, replyMeta: any = null) {
+  sendMessageWithAttachments(attachments: any[], outboundMessageText: string = this.message, displayMessageText: string = this.message, replyMeta: any = null, replyToMsgId: string | null = null) {
     const timestamp = Date.now();
     const uid = Math.floor(Math.random() * 10000);
     const messageId = uid + timestamp;
@@ -1925,7 +1928,8 @@ export class ChatsComponent {
       attachments,
       this.isImportant,
       messageId,
-      msgPriority
+      msgPriority,
+      replyToMsgId
     );
     this.message = '';
     this.isImportant = false;

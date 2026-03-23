@@ -494,6 +494,21 @@ export const login = async (req, res) => {
       ip: req.ip,
     });
 
+    // Enforce session limit (max 5 concurrent sessions)
+    const MAX_SESSIONS = 5;
+    try {
+      const sessionCount = await RefreshToken.countDocuments({ userId: user._id, expiresAt: { $gt: new Date() } });
+      if (sessionCount > MAX_SESSIONS) {
+        const oldestSessions = await RefreshToken.find({ userId: user._id, expiresAt: { $gt: new Date() } })
+          .sort({ createdAt: 1 })
+          .limit(sessionCount - MAX_SESSIONS);
+        const idsToDelete = oldestSessions.map(s => s._id);
+        await RefreshToken.deleteMany({ _id: { $in: idsToDelete } });
+      }
+    } catch (sessionErr) {
+      logger.error({ err: sessionErr }, "Session limit enforcement error");
+    }
+
     user.login_attempts = 0;
     user.save();
 
@@ -2771,5 +2786,46 @@ export const getUserAuditTrail = async (req, res) => {
   } catch (error) {
     logger.error({ err: error }, "getUserAuditTrail error");
     return res.status(500).json({ success: false, message: "Failed to fetch audit trail" });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 3 (P2) — Account Deletion Request (A5)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const requestAccountDeletion = async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    // Check not the only superadmin
+    if (user.role === 'superadmin') {
+      const superadminCount = await User.countDocuments({ role: 'superadmin', isDeleted: false });
+      if (superadminCount <= 1) {
+        return res.status(400).json({ success: false, message: "Cannot delete the only superadmin account" });
+      }
+    }
+
+    user.isDeleted = true;
+    user.status = false;
+    await user.save();
+
+    // Audit: account deletion requested
+    createAuditEntry({
+      userId: user._id,
+      userRole: user.role,
+      action: "ACCOUNT_DELETION_REQUESTED",
+      resourceType: "User",
+      resourceId: user._id,
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+      success: true,
+    });
+
+    return res.status(200).json({ success: true, message: "Account scheduled for deletion" });
+  } catch (error) {
+    logger.error({ err: error }, "requestAccountDeletion error");
+    return res.status(500).json({ success: false, message: "Failed to process deletion" });
   }
 };

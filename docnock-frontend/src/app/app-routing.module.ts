@@ -42,6 +42,7 @@ import { AiTemplatesComponent } from './components/main-module/ai-templates/ai-t
 import { AccessDeniedComponent } from './components/common/access-denied/access-denied.component';
 import { EmailVerificationComponent } from './components/auth/email-verification/email-verification.component';
 import { LinkExpiredComponent } from './components/auth/link-expired/link-expired.component';
+import { DeleteAccountComponent } from './components/main-module/delete-account/delete-account.component';
 
 const routes: Routes = [
   { path: 'login', component: LoginComponent, canActivate: [AuthGuardLogin] },
@@ -90,6 +91,7 @@ const routes: Routes = [
       { path: 'system-settings', component: SystemSettingsComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
       { path: 'facilities', component: MultiFacilityComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
       { path: 'sso-settings', component: SsoSettingsComponent, canActivate: [RoleGuard], data: { roles: ['superadmin'] } },
+      { path: 'delete-account', component: DeleteAccountComponent },
     ],
     canActivate: [AuthGuard],
   },

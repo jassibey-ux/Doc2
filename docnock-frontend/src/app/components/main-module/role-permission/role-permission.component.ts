@@ -35,6 +35,7 @@ export class RolePermissionComponent {
     { id: 'other', name: 'Other User', moduleName: 'O' },
   ]
 
+  showReference = false;
   selectedRole: string = '';
   page = 1;
   limit = 10;

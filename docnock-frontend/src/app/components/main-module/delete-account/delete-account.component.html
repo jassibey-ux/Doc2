@@ -1,0 +1,29 @@
+<div class="delete-account-container">
+  <div class="delete-card">
+    <div class="warning-icon"><i class="bx bx-error-circle"></i></div>
+    <h2>Delete Your Account</h2>
+    <p class="description">This will permanently delete your account after a 30-day grace period. During this time, you can cancel by logging back in.</p>
+
+    <div class="delete-checklist">
+      <div class="check-item"><i class="bx bx-check"></i> Profile and personal data</div>
+      <div class="check-item"><i class="bx bx-check"></i> Chat history</div>
+      <div class="check-item"><i class="bx bx-check"></i> File uploads</div>
+      <div class="check-item"><i class="bx bx-check"></i> Notification history</div>
+    </div>
+
+    <button class="export-btn" (click)="exportData()" [disabled]="exporting">
+      <i class="bx bx-download"></i> Export My Data
+    </button>
+
+    <div class="confirm-section">
+      <label>Type <strong>DELETE</strong> to confirm:</label>
+      <input type="text" [(ngModel)]="confirmText" placeholder="Type DELETE" />
+    </div>
+
+    <button class="delete-btn" [disabled]="!canDelete() || deleting" (click)="deleteAccount()">
+      <i class="bx bx-trash" *ngIf="!deleting"></i>
+      <i class="bx bx-loader-alt bx-spin" *ngIf="deleting"></i>
+      Delete My Account
+    </button>
+  </div>
+</div>
