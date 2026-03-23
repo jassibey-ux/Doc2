@@ -1,0 +1,78 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docnock-backend/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docnock-backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: docnock-backend
+        run: npm ci
+
+      - name: Run tests
+        working-directory: docnock-backend
+        run: npm test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/docnock
+            git pull origin main
+
+            # Write production env from secrets
+            cat > docnock-backend/.env.production << 'ENVEOF'
+            NODE_ENV=production
+            PORT=8055
+            SOCKETPORT=9056
+            DB_HOST=mongo
+            DB_PORT=27017
+            DB_NAME=docnock
+            DB_USERNAME=
+            DB_PASSWORD=
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_REFRESH_SECRET=${{ secrets.JWT_REFRESH_SECRET }}
+            JWT_EXPIRY=24h
+            REFRESH_EXPIRY=7d
+            PATIENT_UPLOAD_PATH=user-uploads/images
+            USER_PROFILE_PATH=user-uploads/profiles
+            ALLOWED_ORIGINS=https://docnock.com,https://www.docnock.com
+            PHI_ENCRYPTION_KEY=${{ secrets.PHI_ENCRYPTION_KEY }}
+            REDIS_HOST=redis
+            REDIS_PORT=6379
+            BASE_PATH=https://docnock.com/
+            FRONTEND_URL=https://docnock.com/
+            ENVEOF
+
+            # Rebuild and restart API container only
+            docker compose build api
+            docker compose up -d --no-deps api
+
+            # Cleanup old images
+            docker system prune -f
+
+            # Health check
+            sleep 5
+            curl -sf http://localhost:8055/health || echo "WARNING: Health check failed"

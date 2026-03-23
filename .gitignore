@@ -41,18 +41,29 @@ nul
 *.backup
 *.bak
 
-# DocNock build/dependency artifacts
-.angular/
+# Environment files
 .env
-.env.*
+.env.local
+.env.*.local
+# Keep .env.production (template with placeholder secrets)
+!.env.production
+
+# Credentials
 *.p8
 *ServiceKey.json
 *ServiceAccountKey.json
-package-lock.json
-yarn.lock
+
+# Build/dependency artifacts
+.angular/
 *.tsbuildinfo
 coverage/
 .nyc_output/
-android/
+
+# Mobile (iOS only — android/ must be tracked for CI builds)
 ios/
 Pods/
+
+# Broken symlinks (analysis artifacts)
+docnock-backend/DocNockBackend-main
+docnock-frontend/DocNockFrontend-main
+docnock-mobile/DocnockMobile-pradeep_dev_mobile

@@ -1,0 +1,86 @@
+name: Full Stack Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_backup:
+        description: 'Skip MongoDB backup'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Full deployment to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 30m
+          script: |
+            set -e
+            cd /home/ubuntu/docnock
+
+            # Backup MongoDB (unless skipped)
+            if [ "${{ inputs.skip_backup }}" != "true" ]; then
+              echo "=== Backing up MongoDB ==="
+              BACKUP_FILE="backup-$(date +%Y%m%d-%H%M%S).archive"
+              docker compose exec -T mongo mongodump --archive=/data/db/$BACKUP_FILE --gzip
+              echo "Backup saved: $BACKUP_FILE"
+            fi
+
+            # Pull latest code
+            echo "=== Pulling latest code ==="
+            git pull origin main
+
+            # Write production env from secrets
+            cat > docnock-backend/.env.production << 'ENVEOF'
+            NODE_ENV=production
+            PORT=8055
+            SOCKETPORT=9056
+            DB_HOST=mongo
+            DB_PORT=27017
+            DB_NAME=docnock
+            DB_USERNAME=
+            DB_PASSWORD=
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_REFRESH_SECRET=${{ secrets.JWT_REFRESH_SECRET }}
+            JWT_EXPIRY=24h
+            REFRESH_EXPIRY=7d
+            PATIENT_UPLOAD_PATH=user-uploads/images
+            USER_PROFILE_PATH=user-uploads/profiles
+            ALLOWED_ORIGINS=https://docnock.com,https://www.docnock.com
+            PHI_ENCRYPTION_KEY=${{ secrets.PHI_ENCRYPTION_KEY }}
+            REDIS_HOST=redis
+            REDIS_PORT=6379
+            BASE_PATH=https://docnock.com/
+            FRONTEND_URL=https://docnock.com/
+            ENVEOF
+
+            # Build frontend
+            echo "=== Building frontend ==="
+            cd docnock-frontend
+            npm install
+            npx ng build --configuration production
+            cd ..
+
+            # Rebuild and restart all services
+            echo "=== Starting Docker Compose ==="
+            docker compose up -d --build
+
+            # Cleanup
+            docker system prune -f
+
+            # Health checks
+            echo "=== Health checks ==="
+            sleep 10
+            docker compose ps
+            curl -sf http://localhost:8055/health && echo "API: OK" || echo "API: FAILED"
+            curl -sf https://docnock.com -o /dev/null && echo "Site: OK" || echo "Site: FAILED"
+
+            echo "=== Deployment complete ==="

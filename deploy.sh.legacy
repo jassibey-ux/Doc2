@@ -1,0 +1,84 @@
+#!/bin/bash
+set -e
+
+SERVER_IP="100.24.208.138"
+SSH_KEY="~/.ssh/docnock-key.pem"
+SSH_USER="ubuntu"
+DOMAIN="docnock.com"
+
+echo "=== DocNock Deployment Script ==="
+
+# 1. Install Docker and dependencies on EC2
+echo "[1/5] Installing Docker and dependencies on server..."
+ssh -o StrictHostKeyChecking=no -i $SSH_KEY $SSH_USER@$SERVER_IP << 'REMOTE_SETUP'
+sudo apt-get update -y
+sudo apt-get install -y ca-certificates curl gnupg lsb-release
+
+# Docker
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update -y
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker ubuntu
+
+# Certbot for SSL
+sudo apt-get install -y certbot
+echo "Setup complete!"
+REMOTE_SETUP
+
+# 2. Sync project files to server
+echo "[2/5] Syncing project files..."
+rsync -avz --progress \
+  --exclude 'node_modules' \
+  --exclude '.git' \
+  --exclude '.claude' \
+  --exclude 'cloud' \
+  --exclude 'electron' \
+  -e "ssh -i $SSH_KEY" \
+  . $SSH_USER@$SERVER_IP:/home/ubuntu/docnock/
+
+# 3. Build frontend on server
+echo "[3/5] Building frontend on server..."
+ssh -i $SSH_KEY $SSH_USER@$SERVER_IP << 'REMOTE_BUILD'
+cd /home/ubuntu/docnock/docnock-frontend
+# Install Node.js 18
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+npm install
+npx ng build --configuration production
+echo "Frontend built!"
+REMOTE_BUILD
+
+# 4. Get SSL certificate
+echo "[4/5] Getting SSL certificate..."
+ssh -i $SSH_KEY $SSH_USER@$SERVER_IP << REMOTE_SSL
+sudo certbot certonly --standalone -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos --email admin@$DOMAIN
+echo "SSL certificate obtained!"
+REMOTE_SSL
+
+# 5. Start Docker Compose
+echo "[5/5] Starting Docker Compose..."
+ssh -i $SSH_KEY $SSH_USER@$SERVER_IP << 'REMOTE_START'
+cd /home/ubuntu/docnock
+
+# Generate production secrets
+JWT_SECRET=$(openssl rand -base64 48)
+JWT_REFRESH_SECRET=$(openssl rand -base64 48)
+PHI_KEY=$(openssl rand -hex 16)
+
+# Update .env.production with real secrets
+sed -i "s|JWT_SECRET=CHANGE_ME_ON_SERVER|JWT_SECRET=$JWT_SECRET|" docnock-backend/.env.production
+sed -i "s|JWT_REFRESH_SECRET=CHANGE_ME_ON_SERVER|JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET|" docnock-backend/.env.production
+sed -i "s|PHI_ENCRYPTION_KEY=CHANGE_ME_ON_SERVER|PHI_ENCRYPTION_KEY=$PHI_KEY|" docnock-backend/.env.production
+
+# Start everything
+docker compose up -d --build
+echo "DocNock is live!"
+REMOTE_START
+
+echo ""
+echo "=== Deployment Complete ==="
+echo "Site: https://$DOMAIN"
+echo "Server: $SERVER_IP"
