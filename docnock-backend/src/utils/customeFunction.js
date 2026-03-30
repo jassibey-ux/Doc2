@@ -34,7 +34,7 @@ export const getRandomId = () =>
     logger.debug("sendOTPEmail invoked");
 
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
+      host: emailconfig.host || 'smtp.gmail.com',
         secure: false,
         port: emailconfig.port,
         auth: {
@@ -61,7 +61,7 @@ export const sendPasswordSetEmail = async (email,html,subject) => {
   logger.debug("sendPasswordSetEmail invoked");
 
   const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
+    host: emailconfig.host || 'smtp.gmail.com',
       secure: false,
       port: emailconfig.port,
       auth: {

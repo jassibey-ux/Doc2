@@ -219,32 +219,36 @@ export const addUser = async (req, res) => {
       expiresIn: "1d",
     });
 
-    // new change 29jan start
-    logger.debug("generating branch.io link for password setup");
+    // Generate setup link — use Branch.io if configured, else direct URL
+    let resetLink;
+    if (branchkey) {
+      try {
+        logger.debug("generating branch.io link for password setup");
+        const { data } = await axios.post("https://api2.branch.io/v1/url", {
+          branch_key: branchkey,
+          data: {
+            $canonical_url: `${frontend_url}setup-profile`,
+            $desktop_url: `${frontend_url}setup-profile`,
+            $ios_url: "https://apps.apple.com/in/app/docnock/id6443465279",
+            $android_url: "",
+            $fallback_url: `${frontend_url}`,
+            custom_data: { token: resetToken, type: "setup_profile" },
+          },
+        });
+        resetLink = data.url;
+        logger.debug({ url: resetLink }, "branch.io link created");
+      } catch (branchErr) {
+        logger.warn({ err: branchErr.message }, "Branch.io failed, using direct URL");
+        resetLink = `${frontend_url}setup-profile?token=${resetToken}`;
+      }
+    } else {
+      resetLink = `${frontend_url}setup-profile?token=${resetToken}`;
+      logger.debug({ url: resetLink }, "using direct setup URL (no Branch.io key)");
+    }
 
-    const { data } = await axios.post("https://api2.branch.io/v1/url", {
-      branch_key: branchkey,
-      data: {
-        $canonical_url: `${frontend_url}setup-profile`,
-        $desktop_url: `${frontend_url}setup-profile`,
-        $ios_url: "https://apps.apple.com/in/app/docnock/id6443465279",
-        $android_url: "",
-        $fallback_url: `${frontend_url}`,
-        custom_data: {
-          token: resetToken,
-          type: "setup_profile",
-        },
-      },
-    });
-    logger.debug({ url: data?.url }, "branch.io link created");
-    // return;
-
-    // Create a reset link
-    var resetLink = data.url;
-    var html = `<p>Click <a href="${resetLink}">here</a> to Setup your password.</p>`;
-    var subject = "Password Setup Request";
+    var html = `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#f9f9f9;border-radius:8px;"><h2 style="color:#2c3e50;margin:0 0 16px;">Welcome to DocNock</h2><p style="color:#555;font-size:15px;">Your account has been created. Click below to set up your password:</p><div style="text-align:center;margin:24px 0;"><a href="${resetLink}" style="display:inline-block;background:#4CAF50;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">Set Up Password</a></div><p style="color:#888;font-size:13px;">This link expires in 24 hours. If you didn't expect this email, please ignore it.</p></div>`;
+    var subject = "DocNock - Set Up Your Account";
     sendPasswordSetEmail(email, html, subject);
-    // new change 29jan end
 
     // Respond with success
     return res.status(201).json({
@@ -421,8 +425,8 @@ export const login = async (req, res) => {
       user.otp = otp;
       user.otpExpires = Date.now() + 10 * 60 * 1000; // OTP valid for 10 minutes
       await user.save();
-      var html = "New otp" + otp;
-      var subject = "OTP";
+      var html = `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#f9f9f9;border-radius:8px;"><h2 style="color:#2c3e50;margin:0 0 16px;">DocNock Login Verification</h2><p style="color:#555;font-size:15px;">Your one-time verification code:</p><div style="background:#fff;border:2px solid #4CAF50;border-radius:8px;padding:16px;text-align:center;margin:16px 0;"><span style="font-size:32px;font-weight:700;letter-spacing:8px;color:#2c3e50;">${otp}</span></div><p style="color:#888;font-size:13px;">This code expires in 10 minutes. Do not share it with anyone.</p></div>`;
+      var subject = "DocNock - Login Verification Code";
       await sendOTPEmail(user.email, html, subject);
 
       return res.status(200).json({
@@ -1086,25 +1090,31 @@ export const sendPasswordResetEmail = async (req, res) => {
       expiresIn: "2h",
     });
 
-    const { data } = await axios.post("https://api2.branch.io/v1/url", {
-      branch_key: branchkey,
-      data: {
-        $canonical_url: `${frontend_url}setup-profile`,
-        $desktop_url: `${frontend_url}setup-profile`,
-        $ios_url: "https://apps.apple.com/in/app/docnock/id6443465279",
-        $android_url: "",
-        $fallback_url: `${frontend_url}`,
-        custom_data: {
-          token: resetToken,
-          type: "setup_profile",
-        },
-      },
-    });
-    // Create a reset link
-    var resetLink = data.url;
+    let resetLink;
+    if (branchkey) {
+      try {
+        const { data } = await axios.post("https://api2.branch.io/v1/url", {
+          branch_key: branchkey,
+          data: {
+            $canonical_url: `${frontend_url}setup-profile`,
+            $desktop_url: `${frontend_url}setup-profile`,
+            $ios_url: "https://apps.apple.com/in/app/docnock/id6443465279",
+            $android_url: "",
+            $fallback_url: `${frontend_url}`,
+            custom_data: { token: resetToken, type: "setup_profile" },
+          },
+        });
+        resetLink = data.url;
+      } catch (branchErr) {
+        logger.warn({ err: branchErr.message }, "Branch.io failed, using direct URL");
+        resetLink = `${frontend_url}setup-profile?token=${resetToken}`;
+      }
+    } else {
+      resetLink = `${frontend_url}setup-profile?token=${resetToken}`;
+    }
     var email = user.email;
-    var html = `<p>Click <a href="${resetLink}">here</a> to Setup your password.</p>`;
-    var subject = "Password Setup Request";
+    var html = `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#f9f9f9;border-radius:8px;"><h2 style="color:#2c3e50;margin:0 0 16px;">Password Reset</h2><p style="color:#555;font-size:15px;">Click below to reset your DocNock password:</p><div style="text-align:center;margin:24px 0;"><a href="${resetLink}" style="display:inline-block;background:#4CAF50;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">Reset Password</a></div><p style="color:#888;font-size:13px;">This link expires in 2 hours.</p></div>`;
+    var subject = "DocNock - Password Reset";
     sendPasswordSetEmail(email, html, subject);
 
     return res.status(200).json({
@@ -1447,26 +1457,30 @@ export const forgotPassword = async (req, res) => {
       expiresIn: "2h",
     });
 
-    const { data } = await axios.post("https://api2.branch.io/v1/url", {
-      branch_key: branchkey,
-      data: {
-        $canonical_url: `${frontend_url}reset-password`,
-        $desktop_url: `${frontend_url}reset-password`,
-        $ios_url: "https://apps.apple.com/in/app/docnock/id6443465279",
-        $android_url: "",
-        $fallback_url: `${frontend_url}`,
-        custom_data: {
-          token: resetToken,
-          type: "forgot_password",
-        },
-      },
-    });
-    // return;
-
-    // Create a reset link
-    var resetLink = data.url;
-    var html = `<p>Click <a href="${resetLink}">here</a> to reset your password.</p>`;
-    var subject = "Forgot Password Request";
+    let resetLink;
+    if (branchkey) {
+      try {
+        const { data } = await axios.post("https://api2.branch.io/v1/url", {
+          branch_key: branchkey,
+          data: {
+            $canonical_url: `${frontend_url}reset-password`,
+            $desktop_url: `${frontend_url}reset-password`,
+            $ios_url: "https://apps.apple.com/in/app/docnock/id6443465279",
+            $android_url: "",
+            $fallback_url: `${frontend_url}`,
+            custom_data: { token: resetToken, type: "forgot_password" },
+          },
+        });
+        resetLink = data.url;
+      } catch (branchErr) {
+        logger.warn({ err: branchErr.message }, "Branch.io failed, using direct URL");
+        resetLink = `${frontend_url}reset-password?token=${resetToken}`;
+      }
+    } else {
+      resetLink = `${frontend_url}reset-password?token=${resetToken}`;
+    }
+    var html = `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#f9f9f9;border-radius:8px;"><h2 style="color:#2c3e50;margin:0 0 16px;">Forgot Password</h2><p style="color:#555;font-size:15px;">Click below to reset your DocNock password:</p><div style="text-align:center;margin:24px 0;"><a href="${resetLink}" style="display:inline-block;background:#4CAF50;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">Reset Password</a></div><p style="color:#888;font-size:13px;">This link expires in 2 hours. If you didn't request this, ignore this email.</p></div>`;
+    var subject = "DocNock - Reset Your Password";
     sendPasswordSetEmail(user.email, html, subject);
     // ✅ Set forgot_password flag to true
     user.forgot_password = true;
@@ -1508,9 +1522,9 @@ export const resendOTP = async (req, res) => {
     user.otp = otp;
     user.otpExpires = Date.now() + 10 * 60 * 1000; // OTP valid for 10 minutes
     await user.save();
-    var html = "New otp" + otp;
-    var subject = "OTP";
-    await sendOTPEmail(user.email, otp);
+    var html = `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#f9f9f9;border-radius:8px;"><h2 style="color:#2c3e50;margin:0 0 16px;">DocNock Verification Code</h2><p style="color:#555;font-size:15px;">Your one-time verification code is:</p><div style="background:#fff;border:2px solid #4CAF50;border-radius:8px;padding:16px;text-align:center;margin:16px 0;"><span style="font-size:32px;font-weight:700;letter-spacing:8px;color:#2c3e50;">${otp}</span></div><p style="color:#888;font-size:13px;">This code expires in 10 minutes. Do not share it with anyone.</p></div>`;
+    var subject = "DocNock - Verification Code";
+    await sendOTPEmail(user.email, html, subject);
 
     return res.status(200).json({
       success: true,
@@ -2709,7 +2723,8 @@ export const requestEmailChange = async (req, res) => {
     await user.save();
 
     // Send OTP to the NEW email
-    sendOTPEmail(newEmail, otp);
+    var html = `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#f9f9f9;border-radius:8px;"><h2 style="color:#2c3e50;margin:0 0 16px;">DocNock Email Verification</h2><p style="color:#555;font-size:15px;">Your verification code for email change:</p><div style="background:#fff;border:2px solid #4CAF50;border-radius:8px;padding:16px;text-align:center;margin:16px 0;"><span style="font-size:32px;font-weight:700;letter-spacing:8px;color:#2c3e50;">${otp}</span></div><p style="color:#888;font-size:13px;">This code expires in 10 minutes.</p></div>`;
+    await sendOTPEmail(newEmail, html, "DocNock - Email Verification");
 
     return res.status(200).json({ success: true, message: "Verification code sent to new email" });
   } catch (error) {
