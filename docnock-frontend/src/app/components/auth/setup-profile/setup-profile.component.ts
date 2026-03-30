@@ -10,7 +10,7 @@ import {
 } from '@angular/forms';
 import { BranchService } from 'src/app/services/branch.service';
 import { ToastrService } from 'ngx-toastr';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 @Component({
   selector: 'app-setup-profile',
   templateUrl: './setup-profile.component.html',
@@ -33,7 +33,8 @@ export class SetupProfileComponent {
     private _coreService: CoreService,
     private branchService: BranchService,
     private toastr: ToastrService,
-    private router: Router
+    private router: Router,
+    private route: ActivatedRoute
   ) {}
 
   applyTheme(isDarkMode: boolean): void {
@@ -69,32 +70,54 @@ export class SetupProfileComponent {
     if(this.authService.getToken() != null){
       this.error = true
     }
-    this.branchService.getBranchData()
-      .then((data) => {
-        console.log('Branch Data:', data.data);
-        if (data && data.data) {
-         this.branchToken = JSON.parse(data.data).custom_data.token; // JWT token
-         let type = JSON.parse(data.data).custom_data.type;
-         this.authService.verifylink({ token: this.branchToken, type: type }).subscribe({
-          next: (res: any) => {
-            if (res.success) {
-              this.getUserById(this.branchToken);
-              this.errorshow = true;
-            } else {
-              this.errorshow = false;
-              this.message = res.message;
-            }
-          },
-          error: (err: any) => {
+    // Try URL query param first (direct link without Branch.io)
+    const urlToken = this.route.snapshot.queryParamMap.get('token');
+    if (urlToken) {
+      this.branchToken = urlToken;
+      this.authService.verifylink({ token: urlToken, type: 'setup_profile' }).subscribe({
+        next: (res: any) => {
+          if (res.success) {
+            this.getUserById(urlToken);
+            this.errorshow = true;
+          } else {
             this.errorshow = false;
-            this.message = err?.error?.message || 'Something went wrong';
+            this.message = res.message;
           }
-        });
+        },
+        error: (err: any) => {
+          this.errorshow = false;
+          this.message = err?.error?.message || 'Link expired or invalid';
         }
-      })
-      .catch((error) => {
-        console.error('Error getting Branch data:', error);
       });
+    } else {
+      // Fallback to Branch.io deep link
+      this.branchService.getBranchData()
+        .then((data) => {
+          console.log('Branch Data:', data.data);
+          if (data && data.data) {
+           this.branchToken = JSON.parse(data.data).custom_data.token;
+           let type = JSON.parse(data.data).custom_data.type;
+           this.authService.verifylink({ token: this.branchToken, type: type }).subscribe({
+            next: (res: any) => {
+              if (res.success) {
+                this.getUserById(this.branchToken);
+                this.errorshow = true;
+              } else {
+                this.errorshow = false;
+                this.message = res.message;
+              }
+            },
+            error: (err: any) => {
+              this.errorshow = false;
+              this.message = err?.error?.message || 'Something went wrong';
+            }
+          });
+          }
+        })
+        .catch((error) => {
+          console.error('Error getting Branch data:', error);
+        });
+    }
     const isDarkMode = localStorage.getItem('darkMode') === 'true';
     this.applyTheme(isDarkMode);  // Apply the stored theme preference
     const darkModeToggle = document.getElementById('darkModeToggle') as HTMLInputElement;
