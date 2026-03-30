@@ -21,7 +21,7 @@
       <label class="field-label">Facility</label>
       <select class="select-input" [(ngModel)]="selectedFacilityId" (ngModelChange)="onFacilityChange()">
         <option value="">Select a facility…</option>
-        <option *ngFor="let f of facilities" [value]="f._id">{{ f.fullName }}</option>
+        <option *ngFor="let f of facilities" [value]="f._id">{{ f.name || f.fullName }}</option>
       </select>
     </div>
 

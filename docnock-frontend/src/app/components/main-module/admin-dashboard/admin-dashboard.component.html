@@ -2,9 +2,63 @@
   <main>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
+         DEMO DASHBOARD
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <ng-container *ngIf="isDemo">
+      <div class="demo-dashboard">
+        <div class="demo-welcome">
+          <h2>Welcome to DocNock</h2>
+          <p>Secure healthcare communication platform</p>
+        </div>
+
+        <div class="demo-stats-row">
+          <div class="demo-stat-card" routerLink="/{{currentRole}}/chats">
+            <i class='bx bxs-chat' style="font-size: 2rem; color: #4CAF50;"></i>
+            <div class="demo-stat-info">
+              <span class="demo-stat-value">{{ myChatsCount }}</span>
+              <span class="demo-stat-label">Active Chats</span>
+            </div>
+          </div>
+          <div class="demo-stat-card" routerLink="/{{currentRole}}/fax-inbox">
+            <i class='bx bxs-printer' style="font-size: 2rem; color: #2196F3;"></i>
+            <div class="demo-stat-info">
+              <span class="demo-stat-value">{{ unreadMessagesCount }}</span>
+              <span class="demo-stat-label">Fax Inbox</span>
+            </div>
+          </div>
+          <div class="demo-stat-card" routerLink="/{{currentRole}}/ai-assistant">
+            <i class='bx bxs-bot' style="font-size: 2rem; color: #9C27B0;"></i>
+            <div class="demo-stat-info">
+              <span class="demo-stat-value">AI</span>
+              <span class="demo-stat-label">Document Assistant</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-quick-actions">
+          <h4>Quick Actions</h4>
+          <div class="demo-actions-row">
+            <button class="demo-action-btn" routerLink="/{{currentRole}}/chats">
+              <i class='bx bxs-message-dots'></i> Start Chat
+            </button>
+            <button class="demo-action-btn" routerLink="/{{currentRole}}/fax-inbox">
+              <i class='bx bxs-printer'></i> View Fax Inbox
+            </button>
+            <button class="demo-action-btn" routerLink="/{{currentRole}}/ai-assistant">
+              <i class='bx bxs-bot'></i> Ask AI
+            </button>
+            <button class="demo-action-btn" routerLink="/{{currentRole}}/ai-templates">
+              <i class='bx bxs-bookmarks'></i> AI Templates
+            </button>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
          SUPERADMIN DASHBOARD
          ═══════════════════════════════════════════════════════════════════════ -->
-    <ng-container *ngIf="currentRole === 'superadmin'">
+    <ng-container *ngIf="!isDemo && currentRole === 'superadmin'">
       <div class="head-title pb-3 dashboard-toolbar">
         <div class="left">
           <h4>Dashboard</h4>
@@ -242,7 +296,7 @@
     <!-- ═══════════════════════════════════════════════════════════════════════
          PHYSICIAN DASHBOARD
          ═══════════════════════════════════════════════════════════════════════ -->
-    <ng-container *ngIf="currentRole === 'physician'">
+    <ng-container *ngIf="!isDemo && currentRole === 'physician'">
       <div class="head-title pb-3 dashboard-toolbar">
         <div class="left">
           <h4>Physician Dashboard</h4>
@@ -344,7 +398,7 @@
     <!-- ═══════════════════════════════════════════════════════════════════════
          NURSE DASHBOARD
          ═══════════════════════════════════════════════════════════════════════ -->
-    <ng-container *ngIf="currentRole === 'nurse'">
+    <ng-container *ngIf="!isDemo && currentRole === 'nurse'">
       <div class="head-title pb-3 dashboard-toolbar">
         <div class="left">
           <h4>Nurse Dashboard</h4>
@@ -446,7 +500,7 @@
     <!-- ═══════════════════════════════════════════════════════════════════════
          FACILITY CENTER DASHBOARD
          ═══════════════════════════════════════════════════════════════════════ -->
-    <ng-container *ngIf="currentRole === 'facility_center'">
+    <ng-container *ngIf="!isDemo && currentRole === 'facility_center'">
       <div class="head-title pb-3 dashboard-toolbar">
         <div class="left">
           <h4>Facility Dashboard</h4>

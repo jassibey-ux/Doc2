@@ -406,7 +406,7 @@ export class ChatsComponent {
   ngOnInit(): void {
     this.dynamicpath = this.authService.getRole();
     this.getPermission();
-    this.getgrouplist(0, 1, "ngon");
+    this.getgrouplist(50, 1, "ngon");
     this.joingroup();
     this.newMessage();
     this.socketgroup();
@@ -1153,7 +1153,7 @@ export class ChatsComponent {
       },
     });
   }
-  getgrouplist(limit = 0, page = 1, type = '') {
+  getgrouplist(limit = 50, page = 1, type = '') {
     this.chatservice.getgrouplist(limit, page, '', this.searchgroupname).subscribe({
       next: (res: any) => {
         if (res.success) {

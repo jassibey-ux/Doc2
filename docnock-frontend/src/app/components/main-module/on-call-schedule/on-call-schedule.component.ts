@@ -224,9 +224,17 @@ export class OnCallScheduleComponent implements OnInit {
   }
 
   loadFacilities(): void {
-    this.authService.listUsers({ role: 'facility_center', limit: 200 }).subscribe({
+    this.authService.getMyFacilities().subscribe({
       next: (res: any) => {
-        this.facilities = res?.data?.data ?? res?.data ?? [];
+        let facilities: any[] = [];
+        if (res.success) {
+          const encData = res.encryptDatauserdata || res.data;
+          const decrypted = (typeof encData === 'string')
+            ? this.coreService.decryptObjectData({ data: encData })
+            : encData;
+          facilities = Array.isArray(decrypted) ? decrypted : [];
+        }
+        this.facilities = facilities;
       },
       error: () => this.toastr.error('Failed to load facilities'),
     });
@@ -243,7 +251,12 @@ export class OnCallScheduleComponent implements OnInit {
   loadFacilityUsers(): void {
     this.authService.listUsers({ limit: 500 }).subscribe({
       next: (res: any) => {
-        this.allUsers = res?.data?.data ?? res?.data ?? [];
+        const encData = res?.encryptDatauserdata || res?.data;
+        if (typeof encData === 'string') {
+          this.allUsers = this.coreService.decryptObjectData({ data: encData }) || [];
+        } else {
+          this.allUsers = res?.data?.data ?? res?.data ?? [];
+        }
       },
       error: () => {},
     });
@@ -405,9 +418,13 @@ export class OnCallScheduleComponent implements OnInit {
     });
   }
 
-  getUserName(userId: string): string {
-    const user = this.allUsers.find((u) => u._id === userId);
-    return user?.fullName ?? userId;
+  getUserName(userId: any): string {
+    if (!userId) return 'Unassigned';
+    // Handle populated object (userId might be {_id, fullName, ...})
+    if (typeof userId === 'object' && userId.fullName) return userId.fullName;
+    const id = typeof userId === 'object' ? (userId._id || userId.toString()) : userId;
+    const user = this.allUsers.find((u: any) => (u._id || '').toString() === id.toString());
+    return user?.fullName ?? id?.toString()?.substring(0, 8) ?? 'Unknown';
   }
 
   formatTime(iso: string): string {

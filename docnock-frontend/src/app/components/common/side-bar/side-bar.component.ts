@@ -3,6 +3,7 @@ import { ToastrService } from 'ngx-toastr';
 import { AuthServiceService } from 'src/app/services/auth-service.service';
 import { WebsocketService } from 'src/app/services/websocket.service';
 import { CoreService } from 'src/app/shared/core.service';
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-side-bar',
@@ -16,6 +17,7 @@ export class SideBarComponent implements OnInit {
   role: any;
   dynamicpath:any= "";
   allowedModules: Set<string> = new Set();
+  isDemo: boolean = (environment as any).isDemo || false;
 
   constructor(
     private authService: AuthServiceService,

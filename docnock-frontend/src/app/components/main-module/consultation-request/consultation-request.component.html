@@ -66,7 +66,7 @@
             <td>{{ c.consultantType || c.specialty || '-' }}</td>
             <td class="reason-cell">{{ c.reason | slice:0:50 }}{{ c.reason?.length > 50 ? '...' : '' }}</td>
             <td>
-              <span class="user-name">{{ c.createdBy?.fullName || c.requestedBy || 'Unknown' }}</span>
+              <span class="user-name">{{ c.createdBy?.fullName || c.requestedBy?.fullName || 'Unknown' }}</span>
             </td>
             <td>
               <span class="status-badge" [ngClass]="getStatusClass(c.status)">

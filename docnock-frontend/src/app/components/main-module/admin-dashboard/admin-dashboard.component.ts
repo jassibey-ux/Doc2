@@ -10,6 +10,7 @@ import { ToastrService } from 'ngx-toastr';
 import { AuthServiceService } from 'src/app/services/auth-service.service';
 import { ChatService } from 'src/app/services/chat.service';
 import { CoreService } from 'src/app/shared/core.service';
+import { environment } from 'src/environments/environment';
 @Component({
   selector: 'app-admin-dashboard',
   templateUrl: './admin-dashboard.component.html',
@@ -19,6 +20,7 @@ export class AdminDashboardComponent {
   public chartOptions: any;
 
   // ─── Role-based dashboard ──────────────────────────────────────────────
+  isDemo: boolean = (environment as any).isDemo || false;
   currentRole: string = '';
 
   // KPI data for non-superadmin roles

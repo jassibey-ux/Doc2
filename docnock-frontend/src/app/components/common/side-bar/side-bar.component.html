@@ -22,7 +22,7 @@
         <span class="text">Staff</span>
       </a>
     </li>
-    <li class="incoBx" data-label="Bulk Import" routerLinkActive="active" routerLink="/{{dynamicpath}}/bulk-import" *ngIf="dynamicpath === 'superadmin' || dynamicpath === 'sub_admin'">
+    <li class="incoBx" data-label="Bulk Import" routerLinkActive="active" routerLink="/{{dynamicpath}}/bulk-import" *ngIf="!isDemo && (dynamicpath === 'superadmin' || dynamicpath === 'sub_admin')">
       <a>
         <i class='bx bxs-cloud-upload'></i>
         <span class="text">Bulk Import</span>
@@ -48,14 +48,14 @@
         <span class="text">Sub Admin</span>
       </a>
     </li>
-    <li class="incoBx" data-label="Others" routerLinkActive="active" routerLink="/{{dynamicpath}}/other/list" *ngIf="allowedModules.has('O')">
+    <li class="incoBx" data-label="Others" routerLinkActive="active" routerLink="/{{dynamicpath}}/other/list" *ngIf="!isDemo && allowedModules.has('O')">
       <a>
         <i class='bx bxs-group'></i>
         <span class="text">Others</span>
       </a>
     </li>
     <!-- Clinical Hub -->
-    <li class="incoBx" data-label="Clinical" routerLinkActive="active" routerLink="/{{dynamicpath}}/clinical">
+    <li class="incoBx" data-label="Clinical" routerLinkActive="active" routerLink="/{{dynamicpath}}/clinical" *ngIf="!isDemo">
       <a>
         <i class='bx bxs-first-aid'></i>
         <span class="text">Clinical</span>
@@ -67,13 +67,13 @@
         <span class="text">Fax</span>
       </a>
     </li>
-    <li class="incoBx" data-label="On-Call" routerLinkActive="active" routerLink="/{{dynamicpath}}/on-call-schedule">
+    <li class="incoBx" data-label="On-Call" routerLinkActive="active" routerLink="/{{dynamicpath}}/on-call-schedule" *ngIf="!isDemo">
       <a>
         <i class='bx bxs-calendar'></i>
         <span class="text">On-Call</span>
       </a>
     </li>
-    <li class="incoBx" data-label="Forms" routerLinkActive="active" routerLink="/{{dynamicpath}}/form-builder">
+    <li class="incoBx" data-label="Forms" routerLinkActive="active" routerLink="/{{dynamicpath}}/form-builder" *ngIf="!isDemo">
       <a>
         <i class='bx bxs-file-plus'></i>
         <span class="text">Forms</span>
@@ -128,30 +128,30 @@
       </a>
     </li>
 
-    <!-- Enterprise Section (superadmin only) -->
-    <li class="sidebar-divider" *ngIf="dynamicpath === 'superadmin'"><span>Enterprise</span></li>
-    <li class="incoBx" data-label="Multi-Facility" routerLinkActive="active" routerLink="/{{dynamicpath}}/facilities" *ngIf="dynamicpath === 'superadmin'">
+    <!-- Enterprise Section (superadmin only, hidden in demo) -->
+    <li class="sidebar-divider" *ngIf="!isDemo && dynamicpath === 'superadmin'"><span>Enterprise</span></li>
+    <li class="incoBx" data-label="Multi-Facility" routerLinkActive="active" routerLink="/{{dynamicpath}}/facilities" *ngIf="!isDemo && dynamicpath === 'superadmin'">
       <a>
         <i class='bx bxs-buildings'></i>
         <span class="text">Multi-Facility</span>
       </a>
     </li>
-    <li class="incoBx" data-label="SSO / SAML" routerLinkActive="active" routerLink="/{{dynamicpath}}/sso-settings" *ngIf="dynamicpath === 'superadmin'">
+    <li class="incoBx" data-label="SSO / SAML" routerLinkActive="active" routerLink="/{{dynamicpath}}/sso-settings" *ngIf="!isDemo && dynamicpath === 'superadmin'">
       <a>
         <i class='bx bxs-shield-quarter'></i>
         <span class="text">SSO / SAML</span>
       </a>
     </li>
-    <li class="incoBx" data-label="Facility Permissions" routerLinkActive="active" routerLink="/{{dynamicpath}}/facility-permissions" *ngIf="dynamicpath === 'superadmin'">
+    <li class="incoBx" data-label="Facility Permissions" routerLinkActive="active" routerLink="/{{dynamicpath}}/facility-permissions" *ngIf="!isDemo && dynamicpath === 'superadmin'">
       <a>
         <i class='bx bxs-lock-alt'></i>
         <span class="text">Facility Permissions</span>
       </a>
     </li>
 
-    <!-- Family Portal Section -->
-    <li class="sidebar-divider"><span>Family</span></li>
-    <li class="incoBx" data-label="Family Portal" routerLinkActive="active" routerLink="/{{dynamicpath}}/family-portal">
+    <!-- Family Portal Section (hidden in demo) -->
+    <li class="sidebar-divider" *ngIf="!isDemo"><span>Family</span></li>
+    <li class="incoBx" data-label="Family Portal" routerLinkActive="active" routerLink="/{{dynamicpath}}/family-portal" *ngIf="!isDemo">
       <a>
         <i class='bx bx-group'></i>
         <span class="text">Family Portal</span>

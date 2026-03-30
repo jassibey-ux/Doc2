@@ -3,6 +3,7 @@
 // The list of file replacements can be found in `angular.json`.
 export const environment = {
   production: false,
+  isDemo: false,
   apiUrl: `http://localhost:8055/api/v1`,
   socketURl: `http://localhost:8056`,
   CRYPTOSECRET: 'DOCKNOCK@@@###',
